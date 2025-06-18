@@ -1,2 +1,2 @@
 # AFOProject
-This workflow works for treadmill
+This workflow works for the treadmill
