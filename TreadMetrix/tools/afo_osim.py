@@ -33,21 +33,7 @@ class Util:
             columns.append("{1}_Y{0}".format(index_m[c], c))
             columns.append("{1}_Z{0}".format(index_m[c], c))
             idx+=1
-        # marker_set = {c: pd.DataFrame(data=np.atleast_2d(k0[c].to_numpy()), columns=["X{0}".format(index_m[c]),
-        #                                                    "Y{0}".format(index_m[c]),
-        #                                                    "Z{0}".format(index_m[c]),
-        #                                                    ])for c in k0.columns}
-        # k = np.zeros([1, (len(marker_set.keys())*3)+2])
-        # k[0, 0] = 1
-        # k[0, 1] = 0.0
-        # cx = 2
-        # for c in marker_set:
-        #     d = marker_set[c].iloc[0, :].to_numpy()
-        #     k[0, cx:cx+3] = d
-        #     cx += 3
-        # df = pd.DataFrame(data=k, columns=columns)
-        # trc = TRC(df)
-        # trc.update()
+        
         m = OSIMStorage.read(mot_path)
         frame_rate = int(1/m.store.dt)
 
