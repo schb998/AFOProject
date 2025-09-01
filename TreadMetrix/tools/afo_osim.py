@@ -12,7 +12,6 @@ class Util:
 
     @staticmethod
     def add_geo_search_path(custom_geometry_path):
-        # todo need to add to ptb
         osim.ModelVisualizer.addDirToGeometrySearchPaths(custom_geometry_path)
 
     @staticmethod
@@ -66,6 +65,10 @@ class Util:
 
 
 if __name__ == '__main__':
+    # two ways to export
     Util.marker_data_from_mot(r"C:\Users\ty8on\test_data\S17_scaledmodelIM.osim",
                               r"C:\Users\ty8on\test_data\Inverse Kinematics\walk08 IK.mot")
+
+    osmodel = OsimHelper(r"C:\Users\ty8on\test_data\S17_scaledmodelIM.osim")
+    osmodel.export_marker_data_from_motion(r"C:\Users\ty8on\test_data\Inverse Kinematics\walk07 IK.mot")
     pass
