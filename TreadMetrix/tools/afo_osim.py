@@ -1,7 +1,4 @@
-import os
-
 import numpy as np
-from bokeh.layouts import column
 from ptb.util.gait.helpers import OsimHelper
 from ptb.util.osim.osim_store import OSIMStorage
 import opensim as osim
@@ -22,7 +19,6 @@ class Util:
     def marker_data_from_mot(model_file_path, mot_path, geometry_path=r"C:\OpenSim 4.5\Geometry"):
         Util.add_geo_search_path(geometry_path)
         opens_model = OsimHelper(model_file_path)
-        p = [c for c in opens_model.state_variable_names_processed if 'N_A' not in c]
         k0 = copy.deepcopy(opens_model.markerset)
         idx = 1
         index_m = {}
@@ -33,7 +29,7 @@ class Util:
             columns.append("{1}_Y{0}".format(index_m[c], c))
             columns.append("{1}_Z{0}".format(index_m[c], c))
             idx+=1
-        
+
         m = OSIMStorage.read(mot_path)
         frame_rate = int(1/m.store.dt)
 
