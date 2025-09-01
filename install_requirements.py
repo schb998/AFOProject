@@ -33,7 +33,9 @@ class Requirements:
         print("\n\tInstalling ABI-MMG's PTB package...")
         wget_spec = importlib.util.find_spec("wget")
         found = wget_spec is not None
-        file_Path = './resources/wheels/ptb/latest.txt'
+        if not os.path.exists('./resources/wheels/ptb/'):
+            os.makedirs('./resources/wheels/ptb/')
+        file_path = './resources/wheels/ptb/latest.txt'
         if not found:
             os.system('python -m pip install wget')
         wget = importlib.import_module('wget')
@@ -45,13 +47,13 @@ class Requirements:
             print("\nDone .... Please Rerun Script to continue!")
             sys.exit(0)
         url = 'https://raw.githubusercontent.com/tedcty/ptb/refs/heads/main/python_lib/ptb_src/dist/latest.txt'
-        if os.path.exists(file_Path):
-            os.remove(file_Path)
-        wget.download(url, file_Path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        wget.download(url, file_path)
 
         os.listdir('./resources/wheels/ptb/')
-        if os.path.exists(file_Path):
-            with open(file_Path) as f:
+        if os.path.exists(file_path):
+            with open(file_path) as f:
                 version = f.read()
             print(version)
 
