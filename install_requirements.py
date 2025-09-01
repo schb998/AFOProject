@@ -4,18 +4,26 @@ import sys
 
 
 class Requirements:
+    line = "\n##################################################\n"
     @staticmethod
-    def windows():
-        print("Installing Requirements")
-        os.system('python -m pip install build toml')
-        print("\n\tInstalling dependencies that needs to be install by conda.")
-        os.system('conda install -y PySide6 vtk')
-        print("\n\tInstalling Mayavi")
-        os.system('conda install -y mayavi')
-        print("\n\tInstalling Opensim")
-        os.system('conda install -y -c opensim-org opensim')
+    def windows_and_linux():
+        print("Installing Requirements:\n\nPlease ensure cuda sdk is not install in your computer. "
+              "Cuda sdk from the nvidia website will cause a conflict that will prevent numba from running.\n")
+        print("{0}\n\tInstalling dependencies that needs to be install by conda.\n{0}\n\n".format(Requirements.line))
+        print("{0}\n\tInstalling tsfresh ...\n{0}".format(Requirements.line))
+        os.system("conda install -y conda-forge::tsfresh")
 
-        print("\n\tInstalling Gias3...")
+        os.system('python -m pip install build toml')
+        print("{0}\n\tInstalling PySide6 and vtk...\n{0}".format(Requirements.line))
+        os.system('conda install -y PySide6 vtk')
+
+        print("{0}\n\tInstalling Mayavi...\n{0}".format(Requirements.line))
+        os.system('conda install -y mayavi')
+        print("{0}\n\tInstalling Opensim ...\n{0}".format(Requirements.line))
+        os.system('conda install -y -c opensim-org opensim')
+        os.system('conda install -y conda-forge::pyvista')
+
+        print("{0}\n\tInstalling Gias3...\n{0}".format(Requirements.line))
         gias = {
             "pydicom:": 'python -m pip install pydicom==2.4.4',
             "gias3": 'python -m pip install gias3',
@@ -30,7 +38,7 @@ class Requirements:
         for g in gias:
             os.system(gias[g])
 
-        print("\n\tInstalling ABI-MMG's PTB package...")
+        print("{0}\n\tInstalling ABI-MMG's PTB package...\n{0}".format(Requirements.line))
         wget_spec = importlib.util.find_spec("wget")
         found = wget_spec is not None
         if not os.path.exists('./resources/wheels/ptb/'):
@@ -61,10 +69,6 @@ class Requirements:
         os.system('python -m pip install {0}'.format(latest_ptb))
 
     @staticmethod
-    def linux():
-        print("Not Implemented - todo")
-
-    @staticmethod
     def macos():
         print("Not Implemented - todo")
 
@@ -73,10 +77,10 @@ if __name__ == '__main__':
     print(f"OS platform: {os_platform}")
     if os_platform == 'win32':
         print("Running on Windows")
-        Requirements.windows()
+        Requirements.windows_and_linux()
     elif os_platform == 'linux':
         print("Running on Linux")
-        Requirements.linux()
+        Requirements.windows_and_linux()
     elif os_platform == 'darwin':
         print("Running on macOS")
         Requirements.macos()
