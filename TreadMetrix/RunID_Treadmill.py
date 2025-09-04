@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import opensim as osim
-from read_trc import read_trc
+from ptb.util.io.mocap.file_formats import TRC
 
 # OpenSim
 opensim_path = r"C:/OpenSim 4.4/bin"
@@ -45,7 +45,7 @@ for side in ["Right", "Left"]:
             continue
 
         # Read start/end time from TRC
-        trc_data = read_trc(trc_file_path)
+        trc_data = TRC.read(trc_file_path)
         start_time = float(trc_data[0]['Data']['Time'][0])
         end_time = float(trc_data[0]['Data']['Time'][-1])
 

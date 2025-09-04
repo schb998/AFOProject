@@ -3,7 +3,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
-from yatpkg.util.data import TRC as YatTRC
+from ptb.util.data import TRC as YatTRC
 
 class CustomTRC:
     def __init__(self, data, marker_set, column_labels, dt):
