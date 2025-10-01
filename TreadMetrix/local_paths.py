@@ -1,18 +1,21 @@
 import os
+import sys
 import local as loc
 
-opensim_path = loc.get_opensim_path()
-base_path = loc.get_base_path()
+opensim_path      = loc.get_opensim_path()
+base_path         = loc.get_base_path()
 model_folder_path = loc.get_osim_path()
-model_file_name = loc.get_osim_model_file_name()
-raw_mot_path = loc.get_raw_mot_path()
-raw_trc_path = loc.get_raw_trc_path()
-frame_rate_mot = loc.get_frame_rate_mot()
-frame_rate_trc = loc.get_frame_rate_trc()
+model_file_name   = loc.get_osim_model_file_name()
+raw_mot_path      = loc.get_raw_mot_path()
+raw_trc_path      = loc.get_raw_trc_path()
+frame_rate_mot    = loc.get_frame_rate_mot()
+frame_rate_trc    = loc.get_frame_rate_trc()
 
 def configure_opensim():
     os.environ['OPENSIM_HOME'] = opensim_path
     os.add_dll_directory(opensim_path)
+    sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
+    os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
 
 def get_rates():
     """
