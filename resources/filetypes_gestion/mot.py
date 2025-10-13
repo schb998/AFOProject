@@ -5,12 +5,12 @@ import numpy as np
 import ast
 import random
 
-path = os.path.join( os.path.dirname(os.path.abspath(__file__)), "testing_files" )
+path   = os.path.join( os.path.dirname(os.path.abspath(__file__)), "testing_files" )
 output = os.path.join(path, "test_output")
 
 # working files:
-filename_standard  = "MOT_standard.mot"
-filename_nan  = "MOT_nan.mot"      # missing data should be handled
+filename_standard = "MOT_standard.mot"
+filename_nan      = "MOT_nan.mot"      # missing data should be handled
 
 class MOT:
     """MOT object.
@@ -101,12 +101,16 @@ class MOT:
                 line         = next(file).strip("\n")
                 while line != "endheader":
                     temp = line.split('=')
-                    header_lines[ temp[0].strip() ] = ast.literal_eval(temp[1].strip())
+                    md = temp[1].strip()
+                    try:
+                        header_lines[ temp[0].strip() ] = ast.literal_eval(md)
+                    except ValueError:
+                        header_lines[ temp[0].strip() ] = md
                     line = next(file).strip("\n")
                 data = pd.read_csv(file, sep=r'\s', engine='python')
                 file.close()
                 return cls(name, filename, header_lines, data)
-        except OSError as e:
+        except Exception as e:
             raise OSError(error_message + str(e))
 
     def rename(self, name=None, filename=None):
@@ -455,6 +459,5 @@ class Test:
 if __name__ == "__main__":
     Test.main()
     print("All done.")
-
 
 # todo: further testing with nested load/write & segmentation
