@@ -29,8 +29,15 @@ def read_mot_files(data_path_mot):
         print(f"Reading file: {file_path}")
         try:
             with open(file_path, 'r') as file:
-                header_lines = [next(file) for _ in range(6)]  # Read first 6 lines
-                data         = pd.read_csv(file, sep=r'\s+')
+                header_lines = []
+                line = next(file).strip("\n")
+                while line != "endheader":
+                    header_lines.append(line)
+                    line = next(file).strip("\n")
+                line = next(file)
+                while line == "":
+                    line = next(file)
+                data = pd.read_csv(file, sep=r'\s+')
             motion_data_list.append({
                 'fileName':    filename,
                 'headerLines': header_lines,
@@ -286,7 +293,7 @@ if __name__ == "__main__":
 
     for file in mot_data:
         df   = pd.DataFrame(file['rawData'], columns=file['colNames'])
-        time = df['time'].values
+        time = df['Time'].values
         fs   = 1 / np.mean(np.diff(time))
 
         print(f"\nProcessing: {file['fileName']}")

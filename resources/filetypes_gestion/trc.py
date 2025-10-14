@@ -217,7 +217,7 @@ class TRC:
             TRC object
         """
         copy = deepcopy(self)
-        copy.filename = copy.filename.replace(".mot", "_copy.mot")
+        copy.filename = copy.filename.replace(".trc", "_copy.trc")
         return copy
 
     def sample(self, first_frame, last_frame):
@@ -544,7 +544,7 @@ class Test:
         for i in range(100):
             nb_segment = random.randint(1, 10)
             rands = []
-            for i in range(nb_segment):
+            for j in range(nb_segment):
                 rands.append(random.randint(1, length - 1))
             rands = sorted(rands)
 
