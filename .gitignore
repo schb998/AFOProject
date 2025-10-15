@@ -1,4 +1,2 @@
 .idea/
-
-# uncomment following line when local.py file has been filled/updated:
-# local.py
+.local.json

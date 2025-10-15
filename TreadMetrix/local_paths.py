@@ -1,15 +1,17 @@
 import os
 import sys
-import local as loc
+import json
 
-opensim_path      = loc.get_opensim_path()
-base_path         = loc.get_base_path()
-model_folder_path = loc.get_osim_path()
-model_file_name   = loc.get_osim_model_file_name()
-raw_mot_path      = loc.get_raw_mot_path()
-raw_trc_path      = loc.get_raw_trc_path()
-frame_rate_mot    = loc.get_frame_rate_mot()
-frame_rate_trc    = loc.get_frame_rate_trc()
+with open(".local.json") as json_loc :
+    LOCAL = json.load(json_loc)
+
+opensim_path      = LOCAL['opensim_path']
+model_file_name   = LOCAL['osim_model_file_name']
+base_path         = LOCAL['base_path']
+
+# FILL/REPLACE WHERE NEEDED:
+frame_rate_mot       = 1000         # NUMBER OF FRAMES BY SECOND FOR MOT FILES
+frame_rate_trc       = 100          # NUMBER OF FRAMES BY SECOND FOR TRC FILES
 
 def configure_opensim():
     os.environ['OPENSIM_HOME'] = opensim_path
@@ -19,7 +21,9 @@ def configure_opensim():
 
 def get_rates():
     """
-    Return frame rates fo MOT files and TRC files.
+    Return frame rates for MOT files and TRC files.
+
+    Left here until trc.cut.steps is updated with getters to safer frame rates.
 
     Returns:
         int, frame rate of MOT files
@@ -32,31 +36,32 @@ def get_base_path():
     return base_path
 
 def get_model_file():
+    model_folder_path = LOCAL['model_folder_path'] if 'model_folder_path' in LOCAL else base_path
     return os.path.join(model_folder_path, model_file_name)
 
 def get_raw_mot_path():
-    return raw_mot_path
+    return LOCAL['raw_mot_path'] if 'raw_mot_path' in LOCAL else os.path.join(base_path, 'raw')
 
 def get_corrected_mot_path():
-    return os.path.join(base_path, "corrected_mot")
+    return LOCAL['corrected_mot_path'] if 'corrected_mot_path' in LOCAL else os.path.join(base_path, 'corrected_mot')
 
 def get_segmented_mot_path():
-    return os.path.join(base_path, "segmented_mot")
+    return LOCAL['segmented_mot_path'] if 'segmented_mot_path' in LOCAL else os.path.join(base_path, 'segmented\\mot')
 
 def get_raw_trc_path():
-    return raw_trc_path
+    return LOCAL['raw_trc_path'] if 'raw_trc_path' in LOCAL else os.path.join(base_path, 'raw')
 
 def get_segmented_trc_path():
-    return os.path.join(base_path, "segmented_trc")
+    return LOCAL['segmented_trc_path'] if 'segmented_trc_path' in LOCAL else os.path.join(base_path, 'segmented\\trc')
 
 def get_external_loads_path():
-    return os.path.join(base_path, "external_loads")
+    return LOCAL['external_loads_path'] if 'external_loads_path' in LOCAL else os.path.join(base_path, 'external_loads')
 
 def get_ik_results_path():
-    return os.path.join(base_path, "IK_results")
+    return LOCAL['ik_results_path'] if 'ik_results_path' in LOCAL else os.path.join(base_path, 'ik_results')
 
 def get_id_results_path():
-    return os.path.join(base_path, "ID_results")
+    return LOCAL['id_results_path'] if 'id_results_path' in LOCAL else os.path.join(base_path, 'id_results')
 
 def get_power_filtered_path():
-    return os.path.join(base_path, "Power_Filtered")
+    return LOCAL['power_filtered_path'] if 'power_filtered_path' in LOCAL else os.path.join(base_path, 'power_filtered')
