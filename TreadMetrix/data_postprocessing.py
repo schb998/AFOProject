@@ -1,5 +1,4 @@
 from resources.filetypes_gestion.mot import MOT
-import local_paths as local
 
 import os
 from copy import deepcopy
@@ -66,7 +65,7 @@ def baseline_correct_debug(mot, fz_col, related_cols, output_path, show=False):
     plt.ylabel("Force [N]")
     plt.legend()
     plt.grid(True)
-    plt.savefig(os.path.join(output_path, f"{ mot.filename.replace('.m', '') }_baseline_correction_{fz_col}.png"),
+    plt.savefig(os.path.join(output_path, f"{ mot.filename.replace('.mot', '') }_baseline_correction_{fz_col}.png"),
                 bbox_inches='tight')
     mot.data = corrected_df
     if show:
@@ -213,34 +212,35 @@ def zero_swing_phase(mot_df, toe_offs, heel_strikes, side):
     mot_df.data = df_corrected
     return None
 
-def plot_grf_details(mot, heel_strikes, toe_offs, show=False):
+def plot_grf_details(mot, heel_strikes, toe_offs, output, show=False):
     """Saves plot of the vertical forces with toe offs and heel strikes.
 
     Args:
         mot           (MOT): MOT object of the data.
         heel_strikes (dict): heel strikes moment.
         toe_offs     (dict): toe offs moment.
+        output        (str): output directory name.
         show         (bool): whether to show the figure when method is called.
 
     """
     plt.figure(figsize=(14, 6))
-    right_fy = mot.data['ground_force2_vy']
-    left_fy  = mot.data['ground_force1_vy']
-    time     = mot.data['time']
+    time_scale = mot.data['time'] if 'time' in mot.data.columns.tolist() else np.arange(mot.data.shape[0])
+    right_fy   = mot.data['ground_force2_vy']
+    left_fy    = mot.data['ground_force1_vy']
 
-    plt.plot(time, right_fy, label='Right Fy', alpha=0.7)
-    plt.plot(time, left_fy, label='Left Fy', alpha=0.7)
+    plt.plot(time_scale, right_fy, label='Right Fy', alpha=0.7)
+    plt.plot(time_scale, left_fy, label='Left Fy', alpha=0.7)
 
     # Toe-offs
-    plt.scatter([time[i] for i in toe_offs['R']], [right_fy[i] for i in toe_offs['R']],
+    plt.scatter([time_scale[i] for i in toe_offs['R']], [right_fy[i] for i in toe_offs['R']],
                 color='red', marker='x', label='Right Toe-Offs')
-    plt.scatter([time[i] for i in toe_offs['L']], [left_fy[i] for i in toe_offs['L']],
+    plt.scatter([time_scale[i] for i in toe_offs['L']], [left_fy[i] for i in toe_offs['L']],
                 color='green', marker='x', label='Left Toe-Offs')
 
     # Heel strikes
-    plt.scatter([time[i] for i in heel_strikes['R']], [right_fy[i] for i in heel_strikes['R']],
+    plt.scatter([time_scale[i] for i in heel_strikes['R']], [right_fy[i] for i in heel_strikes['R']],
                 color='blue', marker='o', label='Right Heel Strikes')
-    plt.scatter([time[i] for i in heel_strikes['L']], [left_fy[i] for i in heel_strikes['L']],
+    plt.scatter([time_scale[i] for i in heel_strikes['L']], [left_fy[i] for i in heel_strikes['L']],
                 color='purple', marker='o', label='Left Heel Strikes')
 
     plt.title(f"Vertical GRFs with Toe-Offs and Heel Strikes: {mot.filename}")
@@ -250,34 +250,8 @@ def plot_grf_details(mot, heel_strikes, toe_offs, show=False):
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(os.path.join(output,
-                             f"{mot.filename.replace('.m', '')}_vertical_grfs_with_toeoffs_heelstrikes.png"),
+                             f"{mot.filename.replace('.mot', '')}_vertical_grfs_with_toeoffs_heelstrikes.png"),
                 bbox_inches='tight')
     if show:
         plt.show()
     return None
-
-if __name__ == "__main__":
-    raw_data_path = local.get_raw_mot_path()
-    output        = local.get_corrected_mot_path()
-    os.makedirs(output, exist_ok=True)
-    file_list = sorted(f for f in os.listdir(raw_data_path) if f.endswith('.mot'))
-    files     = [file for file in file_list if not "static" in file.lower()]
-    mots = []
-    for file in files:
-        mots.append(MOT.load(raw_data_path, file))
-    for m in mots:
-        time       = m.data['time']
-        frame_rate = 1 / np.mean(np.diff(time))
-        print(f"\nProcessing: {m.filename} with sampling frequency: {frame_rate:.2f} Hz.")
-        filter_grf(m, frame_rate)
-        baseline_correct_debug(m, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'], output)
-        baseline_correct_debug(m, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'], output)
-        toe_off_moments     = detect_toe_offs(m, frame_rate)
-        heel_strike_moments = detect_heel_strikes(m, frame_rate)
-        zero_swing_phase(m, toe_off_moments, heel_strike_moments, 'right')
-        zero_swing_phase(m, toe_off_moments, heel_strike_moments, 'left')
-        m.rename(name =m.filename.replace('.mot', '') + "-corrected",
-                 filename = m.filename.replace('.mot', '_corrected.mot'), )
-        plot_grf_details(m, heel_strike_moments, toe_off_moments)
-        m.save(output)
-    print("All files were processed.")
