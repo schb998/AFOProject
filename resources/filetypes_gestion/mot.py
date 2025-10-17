@@ -5,12 +5,14 @@ import numpy as np
 import ast
 import random
 
-path   = os.path.join( os.path.dirname(os.path.abspath(__file__)), "testing_files" )
+# todo: further testing with nested load/write & segmentation
+
+path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
 
 # working files:
 filename_standard = "MOT_standard.mot"
-filename_nan      = "MOT_nan.mot"      # missing data should be handled
+filename_nan = "MOT_nan.mot"  # missing data should be handled
 
 class MOT:
     """MOT object.
@@ -24,7 +26,7 @@ class MOT:
         first_frame:  Integer corresponding to the first frame of the data set. Default value = 0.
     """
 
-    def __init__(self, name, filename, header_lines, data, first_frame = 0):
+    def __init__(self, name, filename, header_lines, data, first_frame=0):
         self.name = name
         self.filename = filename
         self.header_lines = header_lines
@@ -45,9 +47,9 @@ class MOT:
         """
         if not isinstance(other, MOT):
             return False
-        if (self.header_lines        != other.header_lines) \
-                or (self.col_names   != other.col_names)    \
-                or (self.first_frame != other.first_frame)  \
+        if (self.header_lines != other.header_lines) \
+                or (self.col_names != other.col_names) \
+                or (self.first_frame != other.first_frame) \
                 or not (self.data.equals(other.data)):
             return False
         return True
@@ -96,16 +98,16 @@ class MOT:
         # read the file:
         try:
             with open(filepath, 'r') as file:
-                name         = next(file).strip("\n").strip('.mot')
+                name = next(file).strip("\n").strip('.mot')
                 header_lines = {}
-                line         = next(file).strip("\n")
+                line = next(file).strip("\n")
                 while line != "endheader":
                     temp = line.split('=')
                     md = temp[1].strip()
                     try:
-                        header_lines[ temp[0].strip() ] = ast.literal_eval(md)
+                        header_lines[temp[0].strip()] = ast.literal_eval(md)
                     except ValueError:
-                        header_lines[ temp[0].strip() ] = md
+                        header_lines[temp[0].strip()] = md
                     line = next(file).strip("\n")
                 data = pd.read_csv(file, sep=r'\s', engine='python')
                 file.close()
@@ -156,7 +158,7 @@ class MOT:
         full_path = os.path.join(file_path, file_name)
 
         # prepare content to be written:
-        content   = [self.name + "\n"]
+        content = [self.name + "\n"]
         for line in self.header_lines:
             content.append(line + "=" + str(self.header_lines[line]) + "\n")
         content.append("endheader" + "\n")
@@ -165,7 +167,7 @@ class MOT:
         content.append("\n")
         for line in range(self.first_frame, self.first_frame + self.data.shape[0]):
             for col in self.data.columns.to_list():
-                d  = self.data[col][line]
+                d = self.data[col][line]
                 d0 = str(d) if not np.isnan(d) else ""
                 content.append(d0 + "\t")
             content.append("\n")
@@ -186,9 +188,9 @@ class MOT:
         Returns:
             MOT: Copied MOT object.
         """
-        copy          = deepcopy(self)
+        copy = deepcopy(self)
         copy.filename = copy.filename.replace(".mot", "_copy.mot")
-        copy.name    += '_copy'
+        copy.name += '_copy'
         return copy
 
     def sample(self, first_frame, last_frame):
@@ -206,14 +208,14 @@ class MOT:
         """
         frames = sorted((first_frame, last_frame))
         first_frame = frames[0]
-        last_frame  = frames[1]
+        last_frame = frames[1]
 
-        if (first_frame < 0) or (last_frame > self.data.shape[0]) :
+        if (first_frame < 0) or (last_frame > self.data.shape[0]):
             raise IndexError("Cannot cut at given frames: out of bound index.")
 
-        headers          = deepcopy(self.header_lines)
+        headers = deepcopy(self.header_lines)
         headers['nRows'] = last_frame - first_frame
-        name      = self.name + "_segmented_" + str(first_frame) + "-" + str(last_frame - 1)
+        name = self.name + "_segmented_" + str(first_frame) + "-" + str(last_frame - 1)
         file_name = name + ".mot"
         d = {}
         for col in self.data.columns.to_list():
@@ -242,13 +244,13 @@ class MOT:
         points.insert(0, 0)
 
         resulting_mots = []
-        headers        = deepcopy(self.header_lines)
+        headers = deepcopy(self.header_lines)
 
         # segment the file:
-        for i in range(len(points)-1):
+        for i in range(len(points) - 1):
             start = points[i]
-            end   = points[i + 1]
-            name      = self.name + "_segmented_" + str(start) + "-" + str(end-1)
+            end = points[i + 1]
+            name = self.name + "_segmented_" + str(start) + "-" + str(end - 1)
             file_name = name + ".mot"
             d = {}
             for col in self.data.columns.to_list():
@@ -287,8 +289,14 @@ class MOT:
         Raises:
             OSError: if a file could not be written.
         """
+        os.makedirs(directory_path, exist_ok=True)
         for mot in mots:
-            mot.save(directory_path)
+            try:
+                mot.save(directory_path)
+            except OSError:
+                raise OSError(f"Object {mot.name} couldn't be saved.")
+
+
 
 class MOTCleanup:
     @staticmethod
@@ -302,8 +310,8 @@ class MOTCleanup:
             OSError: if a file could not be deleted.
         """
         if not os.path.basename(path_to_mot).endswith('.mot'):
-            raise OSError(f"Could not delete { path_to_mot }: invalid path.")
-        print(f"Confirm deletion of file { path_to_mot } (y/N):\n")
+            raise OSError(f"Could not delete {path_to_mot}: invalid path.")
+        print(f"Confirm deletion of file {path_to_mot} (y/[n]):\n")
         confirmation = input().lower().strip()
         if confirmation == 'y' or confirmation == 'yes':
             try:
@@ -322,11 +330,11 @@ class MOTCleanup:
             path_to_directory (string): path to the directory where all MOT files are to be deleted.
         """
         if not os.path.isdir(path_to_directory):
-            raise OSError(f"Could not delete files from { path_to_directory }: path is not a directory.")
+            raise OSError(f"Could not delete files from {path_to_directory}: path is not a directory.")
 
         file_list = sorted(f for f in os.listdir(path_to_directory) if f.endswith('.mot'))
         print(f"This directory contains: " + str(file_list))
-        print(f"Confirm deletion of all MOT files from { path_to_directory } (y/N):")
+        print(f"Confirm deletion of all MOT files from {path_to_directory} (y/[n]):")
         confirmation = input().lower().strip()
 
         if confirmation == 'y' or confirmation == 'yes':
@@ -334,16 +342,18 @@ class MOTCleanup:
                 try:
                     os.remove(os.path.join(path_to_directory, file))
                 except OSError:
-                    raise OSError(f"Could not delete { file }")
-                print(f"File { file } has been deleted.")
+                    raise OSError(f"Could not delete {file}")
+                print(f"File {file} has been deleted.")
         else:
-            print(f"Files in { path_to_directory } have not been deleted.")
+            print(f"Files in {path_to_directory} have not been deleted.")
+
 
 class Test:
     """Regression tests for the MOT class methods.
 
     Those tests are used to ensure working methods are not compromised by new code.
     """
+
     @staticmethod
     def main():
         Test._test_load()
@@ -398,16 +408,16 @@ class Test:
 
     @staticmethod
     def _test_sample():
-        mot           = MOT.load(os.path.join(path, filename_standard))
-        length        = mot.data.shape[0]
+        mot = MOT.load(os.path.join(path, filename_standard))
+        length = mot.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
         rand1, rand2 = rands[0], rands[1]
-        error_message = f"Sampling method is not working with values { rand1, rand2 }: "
-        sample        = mot.sample(rand1, rand2)
+        error_message = f"Sampling method is not working with values {rand1, rand2}: "
+        sample = mot.sample(rand1, rand2)
         assert sample.data.shape[1] == mot.data.shape[1], \
             error_message + "wrong number of columns."
         assert sample.data.shape[0] == rand2 - rand1 \
-                and mot.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), \
+               and mot.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), \
             error_message + "sampling at wrong frames."
         assert mot != sample, \
             error_message + "original MOT object should not equal sampled objects."
@@ -421,17 +431,17 @@ class Test:
         length = mot.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
         rand1, rand2 = rands[0], rands[1]
-        error_message = f"Segmentation method is not working with values { rand1, rand2 }: "
+        error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         mots = mot.segment(rands)
         assert len(mots) == 3, \
             error_message + "wrong number of segments."
-        assert mots[0].data.shape[1]     == mot.data.shape[1] \
+        assert mots[0].data.shape[1] == mot.data.shape[1] \
                and mots[1].data.shape[1] == mot.data.shape[1] \
                and mots[2].data.shape[1] == mot.data.shape[1], \
             error_message + "wrong number of columns."
         assert mots[0].data.shape[0] + mots[1].data.shape[0] + mots[2].data.shape[0] == mot.data.shape[0], \
             error_message + "data lost in segmentation."
-        assert mots[0].data.shape[0]     == mots[0].header_lines['nRows'] == rand1  \
+        assert mots[0].data.shape[0] == mots[0].header_lines['nRows'] == rand1 \
                and mots[1].data.shape[0] == mots[1].header_lines['nRows'] == rand2 - rand1 \
                and mots[2].data.shape[0] == mots[2].header_lines['nRows'] == length - rand2, \
             error_message + "segmentation at wrong frames."
@@ -456,8 +466,7 @@ class Test:
         assert mot1 == mot2, \
             "Write method is not working."
 
+
 if __name__ == "__main__":
     Test.main()
     print("All done.")
-
-# todo: further testing with nested load/write & segmentation
