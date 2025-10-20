@@ -141,7 +141,7 @@ class TRC:
                 data = pd.read_csv(file, sep=r'\s', names=sub_headers, engine='python')
                 first_frame = data[headers[0]][0]
 
-                #close the file:
+                # close the file:
                 file.close()
 
                 # marker management:
@@ -155,27 +155,31 @@ class TRC:
 
                 return cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data, first_frame,
                            file_header if header else None)
-        except OSError as e:
-            raise OSError(error_message + str(e))
+        except Exception as e:
+            raise OSError(error_message + getattr(e, 'message', repr(e)))
 
-    def save(self, filepath):
+
+    def save(self, filepath, filename = None):
         """Saves data into a TRC file.
 
         Args:
             filepath (string): path to the directory in which to save the TRC file.
+            filename (string): name of the save file. Optional. If not filled, attribute filename will be used.
 
         Raises:
-            OSError: if the path is not a directory or if the file cannot be saved.
+            OSError: if the file cannot be saved.
         """
 
-        error_message = f"File {filepath} couldn't be saved: "
+        error_message = f"File {self.filename} couldn't be saved in {filepath}: "
 
         # check if valid path:
-        if not os.path.isdir(filepath):
-            if os.path.basename(filepath) != self.filename:
-                raise OSError(error_message + f"given path {filepath} is not a directory .")
-        else:
-            filepath = os.path.join(filepath, self.filename)
+        try:
+            os.makedirs(filepath, exist_ok=True)
+        except Exception as e:
+            raise OSError(error_message + getattr(e, 'message', repr(e)))
+
+        if filename is None:
+            filename = self.filename
 
         content = []
 
@@ -212,9 +216,10 @@ class TRC:
             c0 += '\n'
             content.append(c0)
 
-        with open(filepath, 'w') as writer:
+        with open(os.path.join(filepath, filename), 'w') as writer:
             writer.writelines(content)
-        print(f"File {self.filename} written in directory {path}.")
+        print(f"File {filename} written in directory {path}.")
+
 
     def copy(self):
         """ Returns a copy of the object.
@@ -225,6 +230,7 @@ class TRC:
         copy = deepcopy(self)
         copy.filename = copy.filename.replace(".trc", "_copy.trc")
         return copy
+
 
     def sample(self, first_frame, last_frame):
         """Samples the current TRC file between the given points.
@@ -262,6 +268,7 @@ class TRC:
                    first_frame=first_frame,
                    file_header=deepcopy(self.file_header))
 
+
     def segment(self, points):
         """ Segments the data frame according to the given frames points.
         Returns:
@@ -296,6 +303,7 @@ class TRC:
                                       file_header=deepcopy(self.file_header)))
         return resulting_trcs
 
+
     def segment_bis(self, points):
         points = sorted(points)
         if (points[0] < 0) or (points[-1] > self.data.shape[0]):
@@ -306,6 +314,7 @@ class TRC:
         for i in range(len(points) - 1):
             resulting_trcs.append(self.sample(points[i], points[i + 1]))
         return resulting_trcs
+
 
     @classmethod
     def load_all(cls, dir_path):
@@ -328,9 +337,10 @@ class TRC:
             try:
                 resulting_trcs.append(TRC.load(os.path.join(dir_path, file)))
             except Exception as e:
-                print(f"Could not load file: {file} because of {str(e)}. Skipping.")
+                print(f"Could not load file: {file} because of {getattr(e, 'message', repr(e))}. Skipping.")
                 pass
         return resulting_trcs
+
 
     @classmethod
     def save_multiple(cls, trcs, dir_path):
@@ -374,6 +384,7 @@ class TRCCleanup:
             print(f"File {path_to_trc} has been deleted.")
         else:
             print(f"File {path_to_trc} has not been deleted.")
+
 
     @staticmethod
     def delete_all_files(path_to_directory):
@@ -420,6 +431,7 @@ class Test:
         print("All tests passed. Deleting testing files...")
         TRCCleanup.delete_all_files(output)
 
+
     @staticmethod
     def _test_load():
         try:
@@ -428,13 +440,14 @@ class Test:
             TRC.load(os.path.join(path, filename_standard))
             TRC.load(os.path.join(path, filename_nan))
             assert True
-        except Exception:
+        except OSError:
             assert False, "File couldn't be loaded."
         try:
             TRC.load(os.path.join(path, filename_missing_z7))
             assert False, f"File {filename_missing_z7} should raise an exception upon loading."
-        except Exception:
+        except OSError:
             assert True
+
 
     @staticmethod
     def _test_equality():
@@ -446,11 +459,13 @@ class Test:
         assert trc == TRC.load(path, filename_standard), \
             "Objects loaded from same file should be equal."
 
+
     @staticmethod
     def _test_copy():
         trc = TRC.load(path, filename_standard)
         assert trc.copy() == trc, \
             "Objects should be equal to copy."
+
 
     @staticmethod
     def _test_sample():
@@ -463,13 +478,14 @@ class Test:
         assert sample.data.shape[1] == trc.data.shape[1], \
             error_message + "wrong number of columns."
         assert sample.data.shape[0] == rand2 - rand1 \
-               and trc.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), \
-            error_message + "sampling at wrong frames."
+               and trc.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), (
+                error_message + "sampling at wrong frames.")
         assert trc != sample, \
             error_message + "original TRC object should not equal sampled objects."
         sample2 = trc.sample(rand1, rand2)
         assert sample == sample2, \
             error_message + "calls on object with same parameters should be equal."
+
 
     @staticmethod
     def _test_segmentation():
@@ -483,18 +499,18 @@ class Test:
             error_message + "wrong number of segments."
         assert trcs[0].data.shape[1] == trc.data.shape[1] \
                and trcs[1].data.shape[1] == trc.data.shape[1] \
-               and trcs[2].data.shape[1] == trc.data.shape[1], \
-            error_message + "wrong number of columns."
+               and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
         assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 \
                and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == length - rand2, \
-            error_message + "segmentation at wrong frames."
+               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == length - rand2, (
+                error_message + "segmentation at wrong frames.")
         assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
             error_message + "original TRC object should not equal to segmented objects."
         assert trcs == trc.segment([rand1, rand2]), \
             error_message + "calls on object with same parameters should be equal."
+
 
     @staticmethod
     def _test_segmentation_bis():
@@ -508,18 +524,18 @@ class Test:
             error_message + "wrong number of segments."
         assert trcs[0].data.shape[1] == trc.data.shape[1] \
                and trcs[1].data.shape[1] == trc.data.shape[1] \
-               and trcs[2].data.shape[1] == trc.data.shape[1], \
-            error_message + "wrong number of columns."
+               and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
         assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 \
                and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == length - rand2, \
-            error_message + "segmentation at wrong frames."
+               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == length - rand2, (
+                error_message + "segmentation at wrong frames.")
         assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
             error_message + "original TRC object should not equal to segmented objects."
         assert trcs == trc.segment_bis([rand1, rand2]), \
             error_message + "calls on object with same parameters should be equal."
+
 
     @staticmethod
     def _test_load_all():
@@ -528,31 +544,35 @@ class Test:
             assert f == TRC.load(
                 os.path.join(path, f.filename)), "Mass loaded objects should match object loaded from the same file."
 
+
     @staticmethod
     def _test_save():
         trc1 = TRC.load(os.path.join(path, filename_standard))
         try:
             trc1.save(output)
             assert True
-        except Exception:
+        except OSError:
             assert False, "File not written."
         try:
             trc2 = TRC.load(os.path.join(output, filename_standard))
             assert True
-        except Exception:
+        except OSError:
             assert False, "Written file could not be read."
         assert trc1 == trc2, \
             "Write method is not working."
+
 
     @staticmethod
     def comparison_segmentation(file):
         """This method is used to compare use of the two coded segmentation methods.
 
         This method does 100 tests with each segmenting method on the same file, \
-            using a randomly generated number (1-10) of randomly generated values (in range of the object's data's length) \
+            using a randomly generated number (1-10) of randomly generated values
+            (in range of the object's data's length)
             to segment the file.
 
-        At the moment, the segment_bis method seems to be faster, but further testing is required to observe impact of file size, number of segments, size of segments.
+        At the moment, the segment_bis method seems to be faster, but further testing is required
+            to observe impact of file size, number of segments, size of segments.
 
         Args:
             file (string): file to test, located in the testing folder.

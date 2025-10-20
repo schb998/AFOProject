@@ -14,6 +14,7 @@ output = os.path.join(path, "test_output")
 filename_standard = "MOT_standard.mot"
 filename_nan = "MOT_nan.mot"  # missing data should be handled
 
+
 class MOT:
     """MOT object.
 
@@ -113,7 +114,7 @@ class MOT:
                 file.close()
                 return cls(name, filename, header_lines, data)
         except Exception as e:
-            raise OSError(error_message + str(e))
+            raise OSError(error_message + getattr(e, 'message', repr(e)))
 
     def rename(self, name=None, filename=None):
         """This method updates the MOT object's name and/or file_name.
@@ -178,7 +179,7 @@ class MOT:
                 writer.writelines(content)
                 print(f"File {file_name} written in directory {file_path}.")
         except Exception as e:
-            raise OSError(f"Unable to write file {file_name}: {e}")
+            raise OSError(f"Unable to write file {file_name}: {getattr(e, 'message', repr(e))}")
 
     def copy(self):
         """Copies and returns a new MOT object.
@@ -297,7 +298,6 @@ class MOT:
                 raise OSError(f"Object {mot.name} couldn't be saved.")
 
 
-
 class MOTCleanup:
     @staticmethod
     def delete_mot_file(path_to_mot):
@@ -371,7 +371,7 @@ class Test:
             MOT.load(os.path.join(path, filename_standard))
             MOT.load(path, filename_nan)
             assert True
-        except Exception:
+        except OSError:
             assert False, \
                 "File not read."
         assert MOT.load(os.path.join(path, filename_standard)) == MOT.load(os.path.join(path, filename_standard)), \
@@ -388,7 +388,7 @@ class Test:
             mot_first_save.save(output, "second_save.mot")
             mot_second_save = MOT.load(os.path.join(output, "second_save.mot"))
             assert True
-        except Exception:
+        except OSError:
             assert False, "Couldn't load and save files in a loop."
         assert mot == mot_first_save == mot_second_save, "Nestled loaded files should be equal."
 
@@ -417,8 +417,8 @@ class Test:
         assert sample.data.shape[1] == mot.data.shape[1], \
             error_message + "wrong number of columns."
         assert sample.data.shape[0] == rand2 - rand1 \
-               and mot.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), \
-            error_message + "sampling at wrong frames."
+               and mot.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), (
+                error_message + "sampling at wrong frames.")
         assert mot != sample, \
             error_message + "original MOT object should not equal sampled objects."
         sample2 = mot.sample(rand1, rand2)
@@ -437,14 +437,13 @@ class Test:
             error_message + "wrong number of segments."
         assert mots[0].data.shape[1] == mot.data.shape[1] \
                and mots[1].data.shape[1] == mot.data.shape[1] \
-               and mots[2].data.shape[1] == mot.data.shape[1], \
-            error_message + "wrong number of columns."
+               and mots[2].data.shape[1] == mot.data.shape[1], error_message + "wrong number of columns."
         assert mots[0].data.shape[0] + mots[1].data.shape[0] + mots[2].data.shape[0] == mot.data.shape[0], \
             error_message + "data lost in segmentation."
         assert mots[0].data.shape[0] == mots[0].header_lines['nRows'] == rand1 \
                and mots[1].data.shape[0] == mots[1].header_lines['nRows'] == rand2 - rand1 \
-               and mots[2].data.shape[0] == mots[2].header_lines['nRows'] == length - rand2, \
-            error_message + "segmentation at wrong frames."
+               and mots[2].data.shape[0] == mots[2].header_lines['nRows'] == length - rand2, (
+                error_message + "segmentation at wrong frames.")
         assert mot != mots[0] and mot != mots[1] and mot != mots[2], \
             error_message + "original MOT object should not equal to segmented objects."
         assert mots == mot.segment([rand1, rand2]), \
@@ -456,12 +455,12 @@ class Test:
         try:
             mot1.save(output)
             assert True
-        except Exception:
+        except OSError:
             assert False, "File not written."
         try:
             mot2 = MOT.load(os.path.join(output, filename_standard))
             assert True
-        except Exception:
+        except OSError:
             assert False, "Written file could not be read."
         assert mot1 == mot2, \
             "Write method is not working."
