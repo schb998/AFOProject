@@ -6,8 +6,6 @@ from scipy.signal import butter, filtfilt, find_peaks
 import matplotlib.pyplot as plt
 import numpy as np
 
-# todo: join heelstrike + toeoff function for faster results
-
 
 def filter_grf(mot, fs):
     """Filters data of a MOT object with a Butterworth filter.
@@ -16,7 +14,7 @@ def filter_grf(mot, fs):
         mot  (MOT): MOT object whose data is to be filtered.
         fs (float): sampling frequency.
     """
-    b, a = butter(6, 12 / (fs / 2), btype='low')
+    b, a = butter(6, (12 / (fs / 2)), btype='low', output='ba')
     filtered_df = deepcopy(mot.data)
     for col in mot.data.columns.tolist():
         filtered_df[col] = filtfilt(b, a, mot.data[col])
@@ -24,32 +22,30 @@ def filter_grf(mot, fs):
     return None
 
 
-def baseline_correct_debug(mot, fz_col, related_cols, output_path, show=False):
+def baseline_correct_debug(mot_object, fz_col, related_cols, output_path, show=False):
     """Corrects the baseline of one of the columns of the mot data.
 
     Saves plot of the baseline correction.
 
     Args:
-        mot                     (MOT): data to process.
+        mot_object              (MOT): data to process.
         fz_col               (string): name of the column to correct.
         related_cols (list of string): other columns to consider.
         output_path          (string): output path for plot save.
         show                   (bool): whether to show the figure when method is called.
     """
-    fy = mot.data[fz_col]
-    corrected_df = deepcopy(mot.data)
+    fy = mot_object.data[fz_col]
+    corrected_df = deepcopy(mot_object.data)
     valley_indices, _ = find_peaks(-fy)
     swing_valleys = valley_indices[fy[valley_indices] < 0]
 
     print(f"\nCorrecting {fz_col}")
     print(f"Number of swing valleys below 0N: {len(swing_valleys)}")
 
-    time_scale = mot.data['time'] if 'time' in mot.data.columns.tolist() else np.arange(len(fy))
-    """ # commented for debug  # 
+    time_scale = mot_object.data['time'] if 'time' in mot_object.data.columns.tolist() else np.arange(len(fy))
     plt.figure(figsize=(12, 4))
     plt.plot(time_scale, fy, label='Original', alpha=0.7)
     plt.scatter(time_scale[swing_valleys], fy[swing_valleys], color='red', label='Swing Valleys')
-    """  #
 
     if len(swing_valleys) == 0:
         print("No valleys found below zero. Skipping correction.")
@@ -60,13 +56,12 @@ def baseline_correct_debug(mot, fz_col, related_cols, output_path, show=False):
     corrected_df[fz_col] = fy + baseline
 
     for col in related_cols:
-        related = mot.data[col]
+        related = mot_object.data[col]
         offset = np.median(related[swing_valleys])
         corrected_df[col] = related - offset if offset > 0 else related + abs(offset)
         print(f"Offset for {col}: {offset:.2f}")
 
-    mot.data = corrected_df
-    """ # commented for debug #   
+    mot_object.data = corrected_df
     plt.plot(time_scale, corrected_df[fz_col], label='Corrected', alpha=0.8)
     plt.title(f"{fz_col} Baseline Correction")
     plt.xlabel("Time [s]")
@@ -74,12 +69,11 @@ def baseline_correct_debug(mot, fz_col, related_cols, output_path, show=False):
     plt.legend()
     plt.grid(True)
     os.makedirs(output_path, exist_ok=True)
-    plt.savefig(os.path.join(output_path, f"{ mot.filename.replace('.mot', '') }_baseline_correction_{fz_col}.png"), 
-                            bbox_inches='tight')
+    file_name = f"{mot_object.filename.replace('.mot', '')}_baseline_correction_{fz_col}.png"
+    plt.savefig(os.path.join(output_path, file_name), bbox_inches='tight')
     
     if show:
         plt.show()
-    """#
     return None
 
 
@@ -96,12 +90,15 @@ def detect_toe_offs(zeroed_mot, fs, threshold=20):
 
     """
     toe_offs = {'R': [], 'L': []}
+    prominence = 15
+    distance = int(fs / 10)
+    height = 200
 
     if 'ground_force2_vy' in zeroed_mot.data.columns.tolist():
         rzf = zeroed_mot.data['ground_force2_vy']
-        r_indexes, _ = find_peaks(rzf, prominence=15, distance=int(fs / 10), height=200)
+        r_indexes, _ = find_peaks(rzf, prominence=prominence, distance=distance, height=height)
         peak = 0
-        while peak < len(r_indexes):
+        while peak < np.shape(r_indexes)[0]:
             idx_start = r_indexes[peak]
             below_thresh = np.where(rzf[idx_start:] < threshold)[0]
             if len(below_thresh) == 0:
@@ -114,9 +111,9 @@ def detect_toe_offs(zeroed_mot, fs, threshold=20):
 
     if 'ground_force1_vy' in zeroed_mot.data.columns.tolist():
         lzf = zeroed_mot.data['ground_force1_vy']
-        l_indexes, _ = find_peaks(lzf, prominence=15, distance=int(fs / 10), height=200)
+        l_indexes, _ = find_peaks(lzf, prominence=prominence, distance=distance, height=height)
         peak = 0
-        while peak < len(l_indexes):
+        while peak < np.shape(l_indexes)[0]:
             idx_start = l_indexes[peak]
             below_thresh = np.where(lzf[idx_start:] < threshold)[0]
             if len(below_thresh) == 0:
@@ -143,13 +140,15 @@ def detect_heel_strikes(zeroed_mot, fs, threshold=20):
     """
     heel_contacts = {'R': [], 'L': []}
     distance = int(fs / 2)
+    prominence = 14
+    height = -100
 
     if 'ground_force2_vy' in zeroed_mot.data.columns.tolist():
         rzf = zeroed_mot.data['ground_force2_vy']
-        r_indexes, _ = find_peaks(-rzf, prominence=14, distance=distance, height=-100)
+        r_indexes, _ = find_peaks(-rzf, prominence=prominence, distance=distance, height=height)
         rest = len(rzf)
         peak = 0
-        while peak < len(r_indexes) and rest > 1000:
+        while peak < np.shape(r_indexes)[0] and rest > distance:
             idx_start = r_indexes[peak]
             above_thresh = np.where(rzf[idx_start:] > threshold)[0]
             if len(above_thresh) == 0:
@@ -164,10 +163,10 @@ def detect_heel_strikes(zeroed_mot, fs, threshold=20):
 
     if 'ground_force1_vy' in zeroed_mot.data.columns.tolist():
         lzf = zeroed_mot.data['ground_force1_vy']
-        l_indexes, _ = find_peaks(-lzf, prominence=14, distance=distance, height=-100)
+        l_indexes, _ = find_peaks(-lzf, prominence=prominence, distance=distance, height=height)
         rest = len(lzf)
         peak = 0
-        while peak < len(l_indexes) and rest > int(fs / 2):
+        while peak < np.shape(l_indexes)[0] and rest > distance:
             idx_start = l_indexes[peak]
             above_thresh = np.where(lzf[idx_start:] > threshold)[0]
             if len(above_thresh) == 0:

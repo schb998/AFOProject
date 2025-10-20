@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     # loads mot files:
     mot_file_list = sorted(f for f in os.listdir(mot_raw_data_path) if f.endswith('.mot'))
-    mot_file_list = [file for file in mot_file_list if not "static" in file.lower()]
+    mot_file_list = [file for file in mot_file_list if "static" not in file.lower()]
     results = {}
     for file in mot_file_list:
         try:
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         m.rename(name=m.filename.replace('.mot', '') + "_corrected",
                  filename=m.filename.replace('.mot', '_corrected.mot'), )
 
-        # pp.plot_grf_details(m, heel_strike_moments, toe_off_moments, save_corrected_path)  commented for debug
+        pp.plot_grf_details(m, heel_strike_moments, toe_off_moments, save_corrected_path)
         m.save(save_corrected_path)
 
         # segment according to heel strikes:
