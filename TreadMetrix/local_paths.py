@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-with open(".local.json") as json_loc:
+with open(os.path.join(os.path.dirname(__file__), ".local.json")) as json_loc:
     LOCAL = json.load(json_loc)
 
 opensim_path = LOCAL['opensim_path']
