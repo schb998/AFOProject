@@ -218,7 +218,7 @@ class TRC:
 
         with open(os.path.join(filepath, filename), 'w') as writer:
             writer.writelines(content)
-        print(f"File {filename} written in directory {path}.")
+        print(f"File {filename} written in directory {filepath}.")
 
 
     def copy(self):
