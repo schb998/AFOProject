@@ -6,7 +6,6 @@ import ast
 import random
 import time
 
-# todo: further testing with nested load/write & segmentation
 # todo: further testing for segmentation methods comparison
 # todo : update save method to make directory when needed
 
@@ -34,14 +33,14 @@ class TRC:
         file_header: List of string, content of the TRC file's header line. Optional.
     """
 
-    def __init__(self, filename, meta_data, marker_set, col_names, marker_dict, data, first_frame=0, file_header=None):
+    def __init__(self, filename, meta_data, marker_set, col_names, marker_dict, data, file_header=None):
         self.filename = filename
         self.metadata = meta_data
         self.marker_set = marker_set
         self.col_names = col_names
         self.marker_dict = marker_dict
         self.data = data
-        self.first_frame = first_frame
+        self.first_frame = data.index[0]
         if file_header is not None:
             self.file_header = file_header
         else:
@@ -138,8 +137,7 @@ class TRC:
                 sub_headers.insert(1, headers[1])
 
                 # data:
-                data = pd.read_csv(file, sep=r'\s', names=sub_headers, engine='python')
-                first_frame = data[headers[0]][0]
+                data = pd.read_csv(file, sep=r'\s', names=sub_headers, engine='python', index_col=headers[0])
 
                 # close the file:
                 file.close()
@@ -148,18 +146,18 @@ class TRC:
                 marker_set = headers[2:]
                 sub_headers = data.columns.tolist()
                 marker_dictionary = {}
-                i = 2
+                i = 1
                 for m in range(len(marker_set)):
                     marker_dictionary[marker_set[m]] = sub_headers[i:i + 3]
                     i += 3
 
-                return cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data, first_frame,
+                return cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data,
                            file_header if header else None)
         except Exception as e:
             raise OSError(error_message + getattr(e, 'message', repr(e)))
 
 
-    def save(self, filepath, filename = None):
+    def save(self, filepath, filename=None):
         """Saves data into a TRC file.
 
         Args:
@@ -207,10 +205,12 @@ class TRC:
         content.append(c0.strip() + "\t\t\n")
         content.append("\t\t" + c1.strip() + "\n")
 
+        frames = self.data.index
+
         for line in range(self.data.shape[0]):
-            c0 = ""
+            c0 = str(frames[line]) + "\t"
             for col in self.data.columns.tolist():
-                d = self.data[col][line]
+                d = self.data[col][line + self.first_frame]
                 d0 = str(d) if not np.isnan(d) else ""
                 c0 += f"{d0}\t"
             c0 += '\n'
@@ -248,8 +248,9 @@ class TRC:
         frames = sorted((first_frame, last_frame))
         first_frame = frames[0]
         last_frame = frames[1]
+        ff = self.first_frame
 
-        if (first_frame < 0) or (last_frame > self.data.shape[0]):
+        if (first_frame < self.first_frame) or (last_frame > self.first_frame + self.data.shape[0]):
             raise IndexError("Cannot cut at given frames: out of bound index.")
 
         file_name = self.filename.replace('.trc', "_segmented_" + str(first_frame) + "-" + str(last_frame - 1) + '.trc')
@@ -258,61 +259,57 @@ class TRC:
 
         d = {}
         for col in self.data.columns.to_list():
-            d[col] = self.data[col][first_frame:last_frame]
-        return TRC(file_name,
-                   metadata,
-                   deepcopy(self.marker_set),
-                   deepcopy(self.col_names),
-                   deepcopy(self.marker_dict),
-                   pd.DataFrame(data=d),
-                   first_frame=first_frame,
-                   file_header=deepcopy(self.file_header))
+            d[col] = self.data[col][first_frame - ff:last_frame - ff]
+        return TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names), deepcopy(self.marker_dict),
+                   pd.DataFrame(data=d), file_header=deepcopy(self.file_header))
 
 
     def segment(self, points):
-        """ Segments the data frame according to the given frames points.
+        """ Segments the data frame according to the given frames point.
+         Each fragment will be in the form of [points[i-1]; points[i][ with added segment first segment \
+         [first_frame_of_data; points[0][ and last segment [points[-1]; last_frame_of_data]
+
         Returns:
-            List: List of the segmented TRC objects.
+            List of the segmented TRC objects.
         """
         # sort the frames at which to segment the object:
         points = sorted(points)
-        if (points[0] < 0) or (points[-1] > self.data.shape[0]):
+        ff = self.first_frame
+        lf = self.first_frame + self.data.shape[0]
+        if (points[0] < ff) or (points[-1] > lf):
             raise IndexError("Cannot cut at given frames: out of bound index.")
-        points.append(self.data.shape[0])
-        points.insert(0, 0)
+        points.append(lf)
+        points.insert(0, ff)
 
         resulting_trcs = []
 
         # segment the file:
         for i in range(len(points) - 1):
             start = points[i]
-            end = points[i + 1]
+            end = points[i + 1] if i+1 != len(points) else points[i + 1] + 1
             metadata = deepcopy(self.metadata)
             metadata['NumFrames'] = end - start
             file_name = self.filename.replace(".trc", "_segmented_" + str(start) + "-" + str(end - 1) + ".trc")
             d = {}
             for col in self.data.columns.to_list():
-                d[col] = self.data[col][start:end]
-            resulting_trcs.append(TRC(file_name,
-                                      metadata,
-                                      deepcopy(self.marker_set),
-                                      deepcopy(self.col_names),
-                                      deepcopy(self.marker_dict),
-                                      pd.DataFrame(data=d),
-                                      first_frame=start,
+                d[col] = self.data[col][start - ff:end - ff]
+            resulting_trcs.append(TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names),
+                                      deepcopy(self.marker_dict), pd.DataFrame(data=d),
                                       file_header=deepcopy(self.file_header)))
+
         return resulting_trcs
 
 
     def segment_bis(self, points):
         points = sorted(points)
-        if (points[0] < 0) or (points[-1] > self.data.shape[0]):
+        if (points[0] < self.first_frame) or (points[-1] > self.data.shape[0] + self.first_frame):
             raise IndexError("Cannot cut at given frames: out of bound index.")
-        points.append(self.data.shape[0])
-        points.insert(0, 0)
+        points.append(self.data.shape[0] + self.first_frame)
+        points.insert(0, self.first_frame)
         resulting_trcs = []
         for i in range(len(points) - 1):
-            resulting_trcs.append(self.sample(points[i], points[i + 1]))
+            resulting_trcs.append(self.sample(points[i], points[i + 1])) if i != len(points) - 1 else \
+                resulting_trcs.append(self.sample(points[i], points[i + 1] + 1))
         return resulting_trcs
 
 
@@ -428,6 +425,7 @@ class Test:
         Test._test_segmentation_bis()
         Test._test_save()
         Test._test_load_all()
+        Test._test_save_all()
         print("All tests passed. Deleting testing files...")
         TRCCleanup.delete_all_files(output)
 
@@ -490,8 +488,9 @@ class Test:
     @staticmethod
     def _test_segmentation():
         trc = TRC.load(os.path.join(path, filename_standard))
+        ff = trc.first_frame
         length = trc.data.shape[0]
-        rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
+        rands = sorted((random.randint(ff, length+ff), random.randint(ff, length+ff)))
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment(rands)
@@ -502,9 +501,9 @@ class Test:
                and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
-        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 \
+        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 - ff \
                and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == length - rand2, (
+               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == (length + ff) - rand2, (
                 error_message + "segmentation at wrong frames.")
         assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
             error_message + "original TRC object should not equal to segmented objects."
@@ -515,8 +514,9 @@ class Test:
     @staticmethod
     def _test_segmentation_bis():
         trc = TRC.load(os.path.join(path, filename_standard))
+        ff = trc.first_frame
         length = trc.data.shape[0]
-        rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
+        rands = sorted((random.randint(ff, length+ff), random.randint(ff, length+ff)))
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment_bis(rands)
@@ -527,13 +527,13 @@ class Test:
                and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
-        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 \
+        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 - ff \
                and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == length - rand2, (
+               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == (length + ff) - rand2, (
                 error_message + "segmentation at wrong frames.")
         assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
             error_message + "original TRC object should not equal to segmented objects."
-        assert trcs == trc.segment_bis([rand1, rand2]), \
+        assert trcs == trc.segment([rand1, rand2]), \
             error_message + "calls on object with same parameters should be equal."
 
 
@@ -560,6 +560,29 @@ class Test:
             assert False, "Written file could not be read."
         assert trc1 == trc2, \
             "Write method is not working."
+
+    @staticmethod
+    def _test_save_all():
+        TRCCleanup.delete_all_files(output)
+        trc = TRC.load(os.path.join(path, filename_standard))
+        ff = trc.first_frame
+        length = trc.data.shape[0]
+        rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
+        rand1, rand2 = rands[0], rands[1]
+        error_message = f"Segmentation + save all method is not working with values {rand1, rand2}: "
+        trcs = trc.segment(rands)
+        try:
+            TRC.save_multiple(trcs, output)
+        except Exception as e:
+            assert False, error_message + f"Segmented files couldn't be saved: {getattr(e, 'message', repr(e))}"
+        try:
+            trcs_copied = TRC.load_all(output)
+        except Exception as e:
+            assert False, error_message + f"Segmented files couldn't be reloaded: {getattr(e, 'message', repr(e))}"
+        assert len(trcs) == len(trcs_copied), error_message + "Some file have not been saved"
+        for i in range(len(trcs)):
+            assert trcs[i] == trcs_copied[i], (error_message + f"File {trcs[i].filename} should be equal to its saved "
+                                                               f"and loaded version.")
 
 
     @staticmethod
@@ -613,5 +636,6 @@ class Test:
 
 
 if __name__ == "__main__":
+    # trc = TRC.load("C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\static_01.trc")
     Test.main()
     print('All done.')
