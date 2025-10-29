@@ -5,9 +5,11 @@ import numpy as np
 import ast
 import random
 import time
+from typing import Self
+import logging
 
 # todo: further testing for segmentation methods comparison
-# todo : update save method to make directory when needed
+# todo: make get_first_frame method instead of first_frame attribute ?
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
@@ -19,7 +21,7 @@ filename_nan = "TRC_nan.trc"  # missing values should be handled
 filename_missing_z7 = "TRC_missing_z7.trc"  # error : missing marker coordinate z7
 
 
-class TRC:
+class TRC(object):
     """TRC object.
 
     Attributes:
@@ -33,7 +35,7 @@ class TRC:
         file_header: List of string, content of the TRC file's header line. Optional.
     """
 
-    def __init__(self, filename, meta_data, marker_set, col_names, marker_dict, data, file_header=None):
+    def __init__(self, filename, meta_data, marker_set, col_names, marker_dict, data, file_header=None) -> None:
         self.filename = filename
         self.metadata = meta_data
         self.marker_set = marker_set
@@ -46,7 +48,7 @@ class TRC:
         else:
             self.file_header = []
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
 
         TRC objects are compared on data content. Filename and file_header attributes are not considered.
@@ -68,7 +70,7 @@ class TRC:
             return False
         return True
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
         """Overrides the default implementation of inequality operation.
 
         TRC objects are compared on data content. Filename and file_header attributes are not considered.
@@ -81,16 +83,68 @@ class TRC:
         """
         return not self.__eq__(other)
 
+    def __gt__(self, other: Self) -> bool:
+        """Overrides the default implementation of "strictly greater than" operation.
+
+        TRC objects are compared on the lexical order of their filenames.
+
+        Args:
+            other: TRC object to compare
+
+        Returns:
+            bool
+        """
+        return self.filename > other.filename
+
+    def __lt__(self, other: Self) -> bool:
+        """Overrides the default implementation of "strictly lower than" operation.
+
+        TRC objects are compared on the lexical order of their filenames.
+
+        Args:
+            other: TRC object to compare
+
+        Returns:
+            bool
+        """
+        return self.filename < other.filename
+
+    def __le__(self, other: Self) -> bool:
+        """Overrides the default implementation of "equal or lower than" operation.
+
+        TRC objects are compared on the lexical order of their filenames.
+
+        Args:
+            other: TRC object to compare
+
+        Returns:
+            bool
+        """
+        return self.filename <= other.filename
+
+    def __ge__(self, other: Self) -> bool:
+        """Overrides the default implementation of "equal or greater than" operation.
+
+        TRC objects are compared on the lexical order of their filenames.
+
+        Args:
+            other: TRC object to compare
+
+        Returns:
+            bool
+        """
+        return self.filename >= other.filename
+
     @classmethod
-    def load(cls, filepath, filename=None, header=True, delimiter="\t"):
+    def load(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> Self:
         """Reads data from a TRC file.
 
         Args:
-            filepath  (string): path to the TRC file.
-            filename  (string): name of the TRC file. \
+            filepath: path to the TRC file.
+            filename:  name of the TRC file. \
                 Should be filled if path does not include filename, optional otherwise.
-            header   (boolean): whether the TRC file includes a header. Default value is True.
-            delimiter (string): delimiter of the TRC file. Default value is "\t".
+            header: whether the TRC file includes a header. Default value is True.
+            delimiter: delimiter of the TRC file. Default value is "\t".
 
         Returns:
             TRC object
@@ -105,11 +159,13 @@ class TRC:
             if os.path.basename(filepath) != filename:
                 filepath = os.path.join(filepath, filename)
 
-        error_message = f"File {filename} at {filepath} couldn't be read: "
+        error_message = f"TRC object could not be loaded from file {filepath}: "
 
         # test that given path is valid :
         if (not os.path.isfile(filepath)) or (not filepath.endswith(".trc")):
-            raise OSError(error_message + " given path does not lead to a TRC file.")
+            error_message = error_message + " given path does not lead to a TRC file."
+            logging.warning(error_message)
+            raise OSError(error_message)
 
         # read the file:
         try:
@@ -151,13 +207,16 @@ class TRC:
                     marker_dictionary[marker_set[m]] = sub_headers[i:i + 3]
                     i += 3
 
-                return cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data,
-                           file_header if header else None)
+                res = cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data,
+                          file_header if header else None)
+                logging.info(f'TRC object successfully loaded from file {filepath}.')
+                return res
         except Exception as e:
-            raise OSError(error_message + getattr(e, 'message', repr(e)))
+            error_message = error_message + getattr(e, 'message', repr(e))
+            logging.warning(error_message)
+            raise OSError(error_message)
 
-
-    def save(self, filepath, filename=None):
+    def save(self, filepath, filename=None) -> None:
         """Saves data into a TRC file.
 
         Args:
@@ -167,17 +226,20 @@ class TRC:
         Raises:
             OSError: if the file cannot be saved.
         """
+        if filename is None:
+            filename = self.filename
 
-        error_message = f"File {self.filename} couldn't be saved in {filepath}: "
+        error_message = f"TRC object {filename} couldn't be saved in {filepath}: "
 
         # check if valid path:
         try:
             os.makedirs(filepath, exist_ok=True)
         except Exception as e:
-            raise OSError(error_message + getattr(e, 'message', repr(e)))
+            error_message = error_message + getattr(e, 'message', repr(e))
+            logging.warning(error_message)
+            raise OSError(error_message)
 
-        if filename is None:
-            filename = self.filename
+
 
         content = []
 
@@ -218,10 +280,9 @@ class TRC:
 
         with open(os.path.join(filepath, filename), 'w') as writer:
             writer.writelines(content)
-        print(f"File {filename} written in directory {filepath}.")
+        logging.info(f"File {filename} saved in directory {filepath}.")
 
-
-    def copy(self):
+    def copy(self) -> Self:
         """ Returns a copy of the object.
 
         Returns:
@@ -231,13 +292,12 @@ class TRC:
         copy.filename = copy.filename.replace(".trc", "_copy.trc")
         return copy
 
-
-    def sample(self, first_frame, last_frame):
+    def sample(self, first_frame, last_frame) -> Self:
         """Samples the current TRC file between the given points.
 
         Args:
-            first_frame (int): index of the first frame.
-            last_frame  (int): index of the last frame.
+            first_frame (int): index of the first frame, included.
+            last_frame  (int): index of the last frame, excluded.
 
         Returns:
             TRC: A new TRC object.
@@ -263,14 +323,18 @@ class TRC:
         return TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names), deepcopy(self.marker_dict),
                    pd.DataFrame(data=d), file_header=deepcopy(self.file_header))
 
-
-    def segment(self, points):
+    def segment(self, points) -> list[Self]:
         """ Segments the data frame according to the given frames point.
+
          Each fragment will be in the form of [points[i-1]; points[i][ with added segment first segment \
          [first_frame_of_data; points[0][ and last segment [points[-1]; last_frame_of_data]
 
         Returns:
             List of the segmented TRC objects.
+
+        Raises:
+            IndexError if given points out of index.
+
         """
         # sort the frames at which to segment the object:
         points = sorted(points)
@@ -286,7 +350,7 @@ class TRC:
         # segment the file:
         for i in range(len(points) - 1):
             start = points[i]
-            end = points[i + 1] if i+1 != len(points) else points[i + 1] + 1
+            end = points[i + 1] if i + 1 != len(points) else points[i + 1] + 1
             metadata = deepcopy(self.metadata)
             metadata['NumFrames'] = end - start
             file_name = self.filename.replace(".trc", "_segmented_" + str(start) + "-" + str(end - 1) + ".trc")
@@ -299,8 +363,7 @@ class TRC:
 
         return resulting_trcs
 
-
-    def segment_bis(self, points):
+    def segment_bis(self, points) -> list[Self]:
         points = sorted(points)
         if (points[0] < self.first_frame) or (points[-1] > self.data.shape[0] + self.first_frame):
             raise IndexError("Cannot cut at given frames: out of bound index.")
@@ -312,9 +375,8 @@ class TRC:
                 resulting_trcs.append(self.sample(points[i], points[i + 1] + 1))
         return resulting_trcs
 
-
     @classmethod
-    def load_all(cls, dir_path):
+    def load_all(cls, dir_path) -> list[Self]:
         """Loads TRC objects from TRC files.
 
         Args:
@@ -333,14 +395,12 @@ class TRC:
         for file in file_list:
             try:
                 resulting_trcs.append(TRC.load(os.path.join(dir_path, file)))
-            except Exception as e:
-                print(f"Could not load file: {file} because of {getattr(e, 'message', repr(e))}. Skipping.")
+            except OSError:
                 pass
         return resulting_trcs
 
-
     @classmethod
-    def save_multiple(cls, trcs, dir_path):
+    def save_multiple(cls, trcs, dir_path) -> None:
         """Recursively writes TRC object into files.
 
         Args:
@@ -355,7 +415,7 @@ class TRC:
             try:
                 trc.save(dir_path)
             except OSError:
-                raise OSError(f"Object {trc.filename} couldn't be saved.")
+                pass
 
 
 class TRCCleanup:
@@ -381,7 +441,6 @@ class TRCCleanup:
             print(f"File {path_to_trc} has been deleted.")
         else:
             print(f"File {path_to_trc} has not been deleted.")
-
 
     @staticmethod
     def delete_all_files(path_to_directory):
@@ -429,7 +488,6 @@ class Test:
         print("All tests passed. Deleting testing files...")
         TRCCleanup.delete_all_files(output)
 
-
     @staticmethod
     def _test_load():
         try:
@@ -446,7 +504,6 @@ class Test:
         except OSError:
             assert True
 
-
     @staticmethod
     def _test_equality():
         trc = TRC.load(path, filename_standard)
@@ -457,13 +514,11 @@ class Test:
         assert trc == TRC.load(path, filename_standard), \
             "Objects loaded from same file should be equal."
 
-
     @staticmethod
     def _test_copy():
         trc = TRC.load(path, filename_standard)
         assert trc.copy() == trc, \
             "Objects should be equal to copy."
-
 
     @staticmethod
     def _test_sample():
@@ -484,13 +539,12 @@ class Test:
         assert sample == sample2, \
             error_message + "calls on object with same parameters should be equal."
 
-
     @staticmethod
     def _test_segmentation():
         trc = TRC.load(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
-        rands = sorted((random.randint(ff, length+ff), random.randint(ff, length+ff)))
+        rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment(rands)
@@ -510,13 +564,12 @@ class Test:
         assert trcs == trc.segment([rand1, rand2]), \
             error_message + "calls on object with same parameters should be equal."
 
-
     @staticmethod
     def _test_segmentation_bis():
         trc = TRC.load(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
-        rands = sorted((random.randint(ff, length+ff), random.randint(ff, length+ff)))
+        rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment_bis(rands)
@@ -536,14 +589,12 @@ class Test:
         assert trcs == trc.segment([rand1, rand2]), \
             error_message + "calls on object with same parameters should be equal."
 
-
     @staticmethod
     def _test_load_all():
         trcs = TRC.load_all(path)
         for f in trcs:
             assert f == TRC.load(
                 os.path.join(path, f.filename)), "Mass loaded objects should match object loaded from the same file."
-
 
     @staticmethod
     def _test_save():
@@ -580,10 +631,11 @@ class Test:
         except Exception as e:
             assert False, error_message + f"Segmented files couldn't be reloaded: {getattr(e, 'message', repr(e))}"
         assert len(trcs) == len(trcs_copied), error_message + "Some file have not been saved"
+        trcs_copied.sort()
+        trcs.sort()
         for i in range(len(trcs)):
             assert trcs[i] == trcs_copied[i], (error_message + f"File {trcs[i].filename} should be equal to its saved "
-                                                               f"and loaded version.")
-
+                                                      f"and loaded version.")
 
     @staticmethod
     def comparison_segmentation(file):
@@ -636,6 +688,5 @@ class Test:
 
 
 if __name__ == "__main__":
-    # trc = TRC.load("C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\static_01.trc")
     Test.main()
     print('All done.')
