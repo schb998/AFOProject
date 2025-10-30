@@ -1,13 +1,17 @@
 import os
 import sys
 import json
+import tkinter as tk
+from tkinter import filedialog
+
+# todo: update this file with tkinter's gui for easier file & directory selections
 
 with open(os.path.join(os.path.dirname(__file__), ".local.json")) as json_loc:
     LOCAL = json.load(json_loc)
 
-opensim_path = LOCAL['opensim_path']
-model_file_name = LOCAL['osim_model_file_name']
-base_path = LOCAL['base_path']
+_opensim_path = LOCAL['opensim_path']
+_base_path = LOCAL['base_path']
+_model_file = LOCAL['osim_scaled_model']
 
 # FILL/REPLACE WHERE NEEDED:
 frame_rate_mot = 1000  # NUMBER OF FRAMES BY SECOND FOR MOT FILES
@@ -15,10 +19,10 @@ frame_rate_trc = 100  # NUMBER OF FRAMES BY SECOND FOR TRC FILES
 
 
 def configure_opensim():
-    os.environ['OPENSIM_HOME'] = opensim_path
-    os.add_dll_directory(opensim_path)
-    sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
-    os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
+    os.environ['OPENSIM_HOME'] = _opensim_path
+    os.add_dll_directory(_opensim_path)
+    sys.path.append(os.path.join(_opensim_path, 'Bindings', 'Python'))
+    os.environ['PATH'] += os.pathsep + os.path.join(_opensim_path, 'bin')
 
 
 def get_rates():
@@ -36,57 +40,56 @@ def get_rates():
 
 
 def get_base_path():
-    return base_path
+    return _base_path
 
 
 def get_model_file():
-    model_folder_path = LOCAL['model_folder_path'] if 'model_folder_path' in LOCAL else base_path
-    return os.path.join(model_folder_path, model_file_name)
+    return _model_file
 
 
 def get_raw_mot_path():
-    return LOCAL['raw_mot_path'] if 'raw_mot_path' in LOCAL else os.path.join(base_path, 'raw')
+    return LOCAL['raw_mot'] if 'raw_mot' in LOCAL else os.path.join(_base_path, 'raw')
 
 
 def get_corrected_mot_path():
-    return LOCAL['corrected_mot_path'] if 'corrected_mot_path' in LOCAL else os.path.join(base_path, 'corrected_mot')
+    return LOCAL['corrected_mot'] if 'corrected_mot' in LOCAL else os.path.join(_base_path, 'corrected_mot')
 
 
 def get_segmented_mot_path():
-    path = LOCAL['segmented_mot_path'] if 'segmented_mot_path' in LOCAL else os.path.join(base_path, 'segmented\\mot')
+    path = LOCAL['segmented_mot'] if 'segmented_mot' in LOCAL else os.path.join(_base_path, 'segmented')
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def get_raw_trc_path():
-    return LOCAL['raw_trc_path'] if 'raw_trc_path' in LOCAL else os.path.join(base_path, 'raw')
+    return LOCAL['raw_trc'] if 'raw_trc' in LOCAL else os.path.join(_base_path, 'raw')
 
 
 def get_segmented_trc_path():
-    path = LOCAL['segmented_trc_path'] if 'segmented_trc_path' in LOCAL else os.path.join(base_path, 'segmented\\trc')
+    path = LOCAL['segmented_trc'] if 'segmented_trc' in LOCAL else os.path.join(_base_path, 'segmented')
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def get_external_loads_path():
-    path = LOCAL['external_loads_path'] if 'external_loads_path' in LOCAL else os.path.join(base_path, 'external_loads')
+    path = LOCAL['external_loads'] if 'external_loads' in LOCAL else os.path.join(_base_path, 'external_loads')
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def get_ik_results_path():
-    path = LOCAL['ik_results_path'] if 'ik_results_path' in LOCAL else os.path.join(base_path, 'ik_results')
+    path = LOCAL['ik_results'] if 'ik_results' in LOCAL else os.path.join(_base_path, 'ik_results')
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def get_id_results_path():
-    path = LOCAL['id_results_path'] if 'id_results_path' in LOCAL else os.path.join(base_path, 'id_results')
+    path = LOCAL['id_results'] if 'id_results' in LOCAL else os.path.join(_base_path, 'id_results')
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def get_power_filtered_path():
-    path = LOCAL['power_filtered_path'] if 'power_filtered_path' in LOCAL else os.path.join(base_path, 'power_filtered')
+    path = LOCAL['power_filtered'] if 'power_filtered' in LOCAL else os.path.join(_base_path, 'power_filtered')
     os.makedirs(path, exist_ok=True)
     return path

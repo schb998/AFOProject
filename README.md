@@ -1,7 +1,9 @@
 # AFO Project
+
 This workflow filters and compute data from OSIM, MOT and TRC files to help the study of gait analysis.  
 
 ## Path management
+
 Have a look at the [`local_paths.py`](TreadMetrix/local_paths.py) file. This file is there to adapt to the computer and project specificities. 
 It uses a file called `.local.json` that is currently missing.  
 
@@ -11,25 +13,26 @@ and will not be pushed to the GitHub repository.
 
 ### Update paths
 
-Manually add the `.local.json` file into the [`TreadMetrix directory`](\TreadMetrix), then copy-paste and fill the following lines:  
+Manually add the `.local.json` file into the [`TreadMetrix directory`](\TreadMetrix).  
+
+Then copy-paste and fill the following lines into `.local.json`:  
 ```json
 {
-  "opensim_path":         "fill in with local path",
-  "base_path":            "fill in with local path",
-  "osim_model_file_name": "fill in with file name"
+  "opensim_path":      "fill in with absolute path to bin file",
+  "base_path":         "fill in with absolute path to directory",
+  "osim_scaled_model": "fill in with absolute path to file"
 }
 ```
-> **To be noted:** the last two paths need to be updated for each participant.
 
-Those three are the main paths and filename to fill, but additional paths such as `"model_folder_path"`, 
-`"raw_mot_path"`, `"corrected_mot_path"`, `"segmented_mot_path"`, `"raw_trc_path"`, `"segmented_trc_path"`, 
-`"external_loads_path"`, `"ik_results_path"`, `"id_results_path"` ou `"power_filtered_path"` can be added.  
+> **To be noted:** some of those paths will require to be updated for each participant.
 
-If those paths are not defined, the base_path directory will be assumed to be as follows:  
+Additional paths can be added: `"raw_mot"` & `"raw_trc"`, `"corrected_mot"`, `"segmented_mot"` & 
+`"segmented_trc"`, `"external_loads"`, `"ik_results"` & `"id_results"`, `"power_filtered"`.
+
+If those optional paths are not defined, the base_path directory will be assumed to be as follows:  
 
 ```
 └── base_path
-    ├── model_file.osim
     └── raw
         ├── raw_mot.mot
         └── raw_trc.trc
@@ -39,14 +42,14 @@ If those paths are not defined, the base_path directory will be assumed to be as
 > They will all be processed by the pipeline. 
 >> The WIP pipeline do not process files containing the term "static".
 
-And the directory will be as follows after going through the pipeline (some directory put aside, depending on file saving preferences):  
+And the directory will be as follows after going through the pipeline (some directories put aside, 
+depending on file saving preferences):  
 ```
 └── base_path
     ├── corrected_mot
     ├── external_loads
     ├── id_results
     ├── ik_results
-    ├── model_file.osim
     ├── power_filtered
     ├── raw
     └── segmented
@@ -55,6 +58,7 @@ And the directory will be as follows after going through the pipeline (some dire
 ```
 
 ## Current pipeline
+
 1. [`Treadmetrix.py`](TreadMetrix/TreadMetrix.py) filters a MOT file using the Butterworth filter.  
 2. [`mot.cut.steps.py`](TreadMetrix/mot.cut.steps.py) segments a filtered MOT file into multiple MOT files, 
 separated by gait cycle (heelstrike to following heelstrike) and leg side.  
@@ -68,6 +72,7 @@ Once [the local paths have been filled](#update-paths), run the files of the pip
 
 
 ## WIP pipeline
+
 The pipeline in progress is [`full_pipeline.py`](TreadMetrix/full_pipeline.py).  
 It uses custom MOT and TRC classes of the [`resources/filetypes_gestion`](resources/filetypes_gestion) directory, 
 and automatically follows the steps of the pipeline 
