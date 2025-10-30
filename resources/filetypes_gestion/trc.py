@@ -30,12 +30,20 @@ class TRC(object):
         marker_set:  List of the markers used.
         col_names:   List of the names of the data columns.
         marker_dict: Dictionary of the columns associated with each marker.
-        data:        Dataframe containing the data.
-        first_frame: Integer, first frame of the data. Default value = 0.
+        data:        Dataframe containing the data. The frames are used as index.
+        first_frame: Integer, first frame of the data.
         file_header: List of string, content of the TRC file's header line. Optional.
     """
 
-    def __init__(self, filename, meta_data, marker_set, col_names, marker_dict, data, file_header=None) -> None:
+    def __init__(self,
+                 filename: str,
+                 meta_data: dict[str, object],
+                 marker_set: list[str],
+                 col_names: list[str],
+                 marker_dict: dict[str, list[str]],
+                 data: pd.DataFrame,
+                 file_header: list[str] = None) \
+            -> None:
         self.filename = filename
         self.metadata = meta_data
         self.marker_set = marker_set
@@ -47,6 +55,7 @@ class TRC(object):
             self.file_header = file_header
         else:
             self.file_header = []
+
 
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
@@ -70,6 +79,7 @@ class TRC(object):
             return False
         return True
 
+
     def __ne__(self, other: object) -> bool:
         """Overrides the default implementation of inequality operation.
 
@@ -83,6 +93,7 @@ class TRC(object):
         """
         return not self.__eq__(other)
 
+
     def __gt__(self, other: Self) -> bool:
         """Overrides the default implementation of "strictly greater than" operation.
 
@@ -94,7 +105,9 @@ class TRC(object):
         Returns:
             bool
         """
-        return self.filename > other.filename
+        if isinstance(other, TRC):
+            return self.filename.lower() > other.filename.lower()
+
 
     def __lt__(self, other: Self) -> bool:
         """Overrides the default implementation of "strictly lower than" operation.
@@ -107,7 +120,8 @@ class TRC(object):
         Returns:
             bool
         """
-        return self.filename < other.filename
+        return self.filename.lower() < other.filename.lower()
+
 
     def __le__(self, other: Self) -> bool:
         """Overrides the default implementation of "equal or lower than" operation.
@@ -120,7 +134,8 @@ class TRC(object):
         Returns:
             bool
         """
-        return self.filename <= other.filename
+        return self.filename.lower() <= other.filename.lower()
+
 
     def __ge__(self, other: Self) -> bool:
         """Overrides the default implementation of "equal or greater than" operation.
@@ -133,7 +148,8 @@ class TRC(object):
         Returns:
             bool
         """
-        return self.filename >= other.filename
+        return self.filename.lower() >= other.filename.lower()
+
 
     @classmethod
     def load(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> Self:
@@ -216,7 +232,20 @@ class TRC(object):
             logging.warning(error_message)
             raise OSError(error_message)
 
-    def save(self, filepath, filename=None) -> None:
+
+    def rename(self, filename: str):
+        """This method updates the TRC object's name and/or file_name.
+
+        Args:
+            filename (str): The new filename of the TRC object.
+        """
+        if not filename.endswith(".trc"):
+            self.filename = filename + ".trc"
+        else:
+            self.filename = filename
+
+
+    def save(self, filepath: str, filename: str = None) -> None:
         """Saves data into a TRC file.
 
         Args:
@@ -282,6 +311,7 @@ class TRC(object):
             writer.writelines(content)
         logging.info(f"File {filename} saved in directory {filepath}.")
 
+
     def copy(self) -> Self:
         """ Returns a copy of the object.
 
@@ -292,7 +322,8 @@ class TRC(object):
         copy.filename = copy.filename.replace(".trc", "_copy.trc")
         return copy
 
-    def sample(self, first_frame, last_frame) -> Self:
+
+    def sample(self, first_frame: int, last_frame: int) -> Self:
         """Samples the current TRC file between the given points.
 
         Args:
@@ -323,11 +354,16 @@ class TRC(object):
         return TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names), deepcopy(self.marker_dict),
                    pd.DataFrame(data=d), file_header=deepcopy(self.file_header))
 
-    def segment(self, points) -> list[Self]:
+
+    def segment(self, points: list[int]) -> list[Self]:
         """ Segments the data frame according to the given frames point.
 
-         Each fragment will be in the form of [points[i-1]; points[i][ with added segment first segment \
-         [first_frame_of_data; points[0][ and last segment [points[-1]; last_frame_of_data]
+         Each fragment contains frames from points[i-1] (included) to points[i] (excluded),
+          with added segments: first segment from first_frame_of_data (included) to points[0] (excluded)
+          and last segment from points[-1] (included) to last_frame_of_data (included).
+
+        Parameters:
+            points: list of integer, frames to segment the object at.
 
         Returns:
             List of the segmented TRC objects.
@@ -363,7 +399,24 @@ class TRC(object):
 
         return resulting_trcs
 
-    def segment_bis(self, points) -> list[Self]:
+
+    def segment_bis(self, points: list[int]) -> list[Self]:
+        """ Segments the data frame according to the given frames point.
+
+         Each fragment contains frames from points[i-1] (included) to points[i] (excluded),
+          with added segments: first segment from first_frame_of_data (included) to points[0] (excluded)
+          and last segment from points[-1] (included) to last_frame_of_data (included).
+
+        Parameters:
+            points: list of integer, frames to segment the object at.
+
+        Returns:
+            List of the segmented TRC objects.
+
+        Raises:
+            IndexError if given points out of index.
+
+        """
         points = sorted(points)
         if (points[0] < self.first_frame) or (points[-1] > self.data.shape[0] + self.first_frame):
             raise IndexError("Cannot cut at given frames: out of bound index.")
@@ -375,8 +428,9 @@ class TRC(object):
                 resulting_trcs.append(self.sample(points[i], points[i + 1] + 1))
         return resulting_trcs
 
+
     @classmethod
-    def load_all(cls, dir_path) -> list[Self]:
+    def load_all(cls, dir_path: str) -> list[Self]:
         """Loads TRC objects from TRC files.
 
         Args:
@@ -399,12 +453,13 @@ class TRC(object):
                 pass
         return resulting_trcs
 
+
     @classmethod
-    def save_multiple(cls, trcs, dir_path) -> None:
+    def save_multiple(cls, trcs: list[Self], dir_path: str) -> None:
         """Recursively writes TRC object into files.
 
         Args:
-            trcs       (list): list of MOT objects.
+            trcs       (list): list of TRC objects.
             dir_path (string): output directory.
 
         Raises:
@@ -418,9 +473,9 @@ class TRC(object):
                 pass
 
 
-class TRCCleanup:
+class _TRCCleanup:
     @staticmethod
-    def delete_trc_file(path_to_trc):
+    def delete_trc_file(path_to_trc: str) -> None:
         """Deletes TRC file from given path.
 
         Args:
@@ -442,8 +497,9 @@ class TRCCleanup:
         else:
             print(f"File {path_to_trc} has not been deleted.")
 
+
     @staticmethod
-    def delete_all_files(path_to_directory):
+    def delete_all_files(path_to_directory: str) -> None:
         """Deletes all TRC files from given path.
 
         Args:
@@ -468,28 +524,30 @@ class TRCCleanup:
             print(f"Files in {path_to_directory} have not been deleted.")
 
 
-class Test:
-    """Regression tests for the MOT class methods.
+class _Test:
+    """Regression tests for the TRC class methods.
 
     Those tests are used to ensure working methods are not compromised by new code.
     """
 
     @staticmethod
-    def main():
-        Test._test_load()
-        Test._test_equality()
-        Test._test_copy()
-        Test._test_sample()
-        Test._test_segmentation()
-        Test._test_segmentation_bis()
-        Test._test_save()
-        Test._test_load_all()
-        Test._test_save_all()
+    def main() -> None:
+        _Test._test_load()
+        _Test._test_nestled_loads()
+        _Test._test_operations()
+        _Test._test_copy()
+        _Test._test_sample()
+        _Test._test_segmentation()
+        _Test._test_segmentation_bis()
+        _Test._test_save()
+        _Test._test_load_all()
+        _Test._test_save_all()
         print("All tests passed. Deleting testing files...")
-        TRCCleanup.delete_all_files(output)
+        _TRCCleanup.delete_all_files(output)
+        logging.info('All tests passed.')
 
     @staticmethod
-    def _test_load():
+    def _test_load() -> None:
         try:
             TRC.load(path, filename_standard)
             TRC.load(path, filename_nan)
@@ -505,23 +563,41 @@ class Test:
             assert True
 
     @staticmethod
-    def _test_equality():
-        trc = TRC.load(path, filename_standard)
-        assert trc == trc, \
-            "Equality operation is not working."
-        assert trc != TRC.load(path, filename_nan), \
-            "Inequality operation is not working."
-        assert trc == TRC.load(path, filename_standard), \
-            "Objects loaded from same file should be equal."
+    def _test_nestled_loads() -> None:
+        try:
+            trc = TRC.load(os.path.join(path, filename_nan))
+            trc.save(output, "first_save.trc")
+            trc_first_save = TRC.load(os.path.join(output, "first_save.trc"))
+            trc_first_save.save(output, "second_save.trc")
+            trc_second_save = TRC.load(os.path.join(output, "second_save.trc"))
+            assert True
+        except OSError:
+            assert False, "Couldn't load and save files in a loop."
+        assert trc == trc_first_save == trc_second_save, "Nestled loaded files should be equal."
+
 
     @staticmethod
-    def _test_copy():
+    def _test_operations() -> None:
+        trc1 = TRC.load(path, filename_standard)
+        trc2 = TRC.load(path, filename_nan)
+        assert trc1 == trc1 and trc2 == trc2, \
+            "Equality operation is not working."
+        assert trc1 != trc2 and trc2 != trc1, \
+            "Inequality operation is not working."
+        assert trc1 == TRC.load(path, filename_standard) and trc2 == TRC.load(path, filename_nan), \
+            "Objects loaded from same file should be equal."
+        trc3 = trc1.copy()
+        trc3.rename('foo')
+        assert trc1 > trc3 and trc1 >= trc3 and trc3 < trc1 and trc3 <= trc1, "Comparison operations are not working."
+
+    @staticmethod
+    def _test_copy() -> None:
         trc = TRC.load(path, filename_standard)
         assert trc.copy() == trc, \
             "Objects should be equal to copy."
 
     @staticmethod
-    def _test_sample():
+    def _test_sample() -> None:
         trc = TRC.load(os.path.join(path, filename_standard))
         length = trc.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
@@ -540,7 +616,7 @@ class Test:
             error_message + "calls on object with same parameters should be equal."
 
     @staticmethod
-    def _test_segmentation():
+    def _test_segmentation() -> None:
         trc = TRC.load(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
@@ -565,7 +641,7 @@ class Test:
             error_message + "calls on object with same parameters should be equal."
 
     @staticmethod
-    def _test_segmentation_bis():
+    def _test_segmentation_bis() -> None:
         trc = TRC.load(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
@@ -590,14 +666,14 @@ class Test:
             error_message + "calls on object with same parameters should be equal."
 
     @staticmethod
-    def _test_load_all():
+    def _test_load_all() -> None:
         trcs = TRC.load_all(path)
         for f in trcs:
             assert f == TRC.load(
                 os.path.join(path, f.filename)), "Mass loaded objects should match object loaded from the same file."
 
     @staticmethod
-    def _test_save():
+    def _test_save() -> None:
         trc1 = TRC.load(os.path.join(path, filename_standard))
         try:
             trc1.save(output)
@@ -613,8 +689,8 @@ class Test:
             "Write method is not working."
 
     @staticmethod
-    def _test_save_all():
-        TRCCleanup.delete_all_files(output)
+    def _test_save_all() -> None:
+        _TRCCleanup.delete_all_files(output)
         trc = TRC.load(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
@@ -635,10 +711,10 @@ class Test:
         trcs.sort()
         for i in range(len(trcs)):
             assert trcs[i] == trcs_copied[i], (error_message + f"File {trcs[i].filename} should be equal to its saved "
-                                                      f"and loaded version.")
+                                                               f"and loaded version.")
 
     @staticmethod
-    def comparison_segmentation(file):
+    def comparison_segmentation(path_to_file: str) -> (pd.DataFrame, float):
         """This method is used to compare use of the two coded segmentation methods.
 
         This method does 100 tests with each segmenting method on the same file, \
@@ -650,7 +726,7 @@ class Test:
             to observe impact of file size, number of segments, size of segments.
 
         Args:
-            file (string): file to test, located in the testing folder.
+            path_to_file (string): file to test, located in the testing folder.
 
         Returns:
             dataframe:  test results, with columns:
@@ -660,7 +736,7 @@ class Test:
                 - difference (duration segment - duration segment_bis)
             float:      mean value of the difference
         """
-        trc = TRC.load(path, file)
+        trc = TRC.load(path, path_to_file)
         length = trc.data.shape[0]
         data = []
         for i in range(100):
@@ -688,5 +764,6 @@ class Test:
 
 
 if __name__ == "__main__":
-    Test.main()
-    print('All done.')
+    logger = logging.getLogger("test")
+    logging.basicConfig(filename='.test.log', level=logging.INFO)
+    _Test.main()

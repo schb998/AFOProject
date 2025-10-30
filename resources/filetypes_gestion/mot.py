@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import ast
 import random
+from typing import Self
+import logging
 
 # todo: further testing with nested load/write & segmentation
 
@@ -27,7 +29,12 @@ class MOT:
         first_frame:  Integer corresponding to the first frame of the data set. Default value = 0.
     """
 
-    def __init__(self, name, filename, header_lines, data, first_frame=0):
+    def __init__(self, name: str,
+                 filename: str,
+                 header_lines: dict[str: object],
+                 data: pd.DataFrame,
+                 first_frame: int = 0)\
+            -> None:
         self.name = name
         self.filename = filename
         self.header_lines = header_lines
@@ -35,7 +42,7 @@ class MOT:
         self.col_names = data.columns.to_list()
         self.first_frame = first_frame
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
 
         MOT objects are compared on data content. Name and filename attributes are not considered.
@@ -55,7 +62,7 @@ class MOT:
             return False
         return True
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
         """Overrides the default implementation of inequality operation.
 
         MOT objects are compared on data content. Name and filename attributes are considered.
@@ -68,8 +75,81 @@ class MOT:
         """
         return not self.__eq__(other)
 
+    def __gt__(self, other: Self) -> bool:
+        """Overrides the default implementation of "strictly greater than" operation.
+
+        MOT objects are compared on the lexical order of their names amd filenames, in that order.
+
+        Args:
+            other: MOT object to compare
+
+        Returns:
+            bool
+        """
+        n = deepcopy(self.name).lower()
+        on = deepcopy(other.name).lower()
+        if n == on:
+            return self.filename.lower() > other.filename.lower()
+        else:
+            return n > on
+
+    def __lt__(self, other: Self) -> bool:
+        """Overrides the default implementation of "strictly lower than" operation.
+
+        MOT objects are compared on the lexical order of their filenames.
+
+        Args:
+            other: MOT object to compare
+
+        Returns:
+            bool
+        """
+        n = deepcopy(self.name).lower()
+        on = deepcopy(other.name).lower()
+        if n == on:
+            return self.filename.lower() < other.filename.lower()
+        else:
+            return n < on
+
+    def __le__(self, other: Self) -> bool:
+        """Overrides the default implementation of "equal or lower than" operation.
+
+        MOT objects are compared on the lexical order of their filenames.
+
+        Args:
+            other: MOT object to compare
+
+        Returns:
+            bool
+        """
+        n = deepcopy(self.name).lower()
+        on = deepcopy(other.name).lower()
+        if n == on:
+            return self.filename.lower() <= other.filename.lower()
+        else:
+            return n < on
+
+    def __ge__(self, other: Self) -> bool:
+        """Overrides the default implementation of "equal or greater than" operation.
+
+        MOT objects are compared on the lexical order of their filenames.
+
+        Args:
+            other: MOT object to compare
+
+        Returns:
+            bool
+        """
+        n = deepcopy(self.name).lower()
+        on = deepcopy(other.name).lower()
+        if n == on:
+            return self.filename.lower() >= other.filename.lower()
+        else:
+            return n > on
+
+
     @classmethod
-    def load(cls, filepath, filename=None):
+    def load(cls, filepath: str, filename: str = None) -> Self:
         """Reads data from a MOT file.
 
         Args:
@@ -94,7 +174,9 @@ class MOT:
 
         # check if path is valid :
         if (not os.path.isfile(filepath)) or (not filepath.endswith(".mot")):
-            raise OSError(error_message + " given path does not lead to a MOT file.")
+            error_message = error_message + " given path does not lead to a MOT file."
+            logging.warning(error_message)
+            raise OSError(error_message)
 
         # read the file:
         try:
@@ -114,9 +196,11 @@ class MOT:
                 file.close()
                 return cls(name, filename, header_lines, data)
         except Exception as e:
-            raise OSError(error_message + getattr(e, 'message', repr(e)))
+            error_message = error_message + getattr(e, 'message', repr(e))
+            logging.warning(error_message)
+            raise OSError(error_message)
 
-    def rename(self, name=None, filename=None):
+    def rename(self, name: str = None, filename: str = None):
         """This method updates the MOT object's name and/or file_name.
 
         Either arguments can be None. This method does nothing if both are None.
@@ -133,7 +217,7 @@ class MOT:
             else:
                 self.filename = filename
 
-    def save(self, file_path, file_name=None):
+    def save(self, file_path: str, file_name: str = None):
         """This method writes the MOT object into a MOT file.
 
         Does so at the given location, using the MOT object's filename parameter as the file's name.
@@ -181,7 +265,7 @@ class MOT:
         except Exception as e:
             raise OSError(f"Unable to write file {file_name}: {getattr(e, 'message', repr(e))}")
 
-    def copy(self):
+    def copy(self) -> Self:
         """Copies and returns a new MOT object.
 
         "_copy" has been added to the returned MOT object's filename and name.
@@ -194,7 +278,7 @@ class MOT:
         copy.name += '_copy'
         return copy
 
-    def sample(self, first_frame, last_frame):
+    def sample(self, first_frame: int, last_frame: int) -> Self:
         """Samples the current MOT file between the given points.
 
         Args:
@@ -212,7 +296,9 @@ class MOT:
         last_frame = frames[1]
 
         if (first_frame < 0) or (last_frame > self.data.shape[0]):
-            raise IndexError("Cannot cut at given frames: out of bound index.")
+            message = f"Cannot cut {self.name} at given frames: out of bound index."
+            logging.warning(message)
+            raise IndexError(message)
 
         headers = deepcopy(self.header_lines)
         headers['nRows'] = last_frame - first_frame
@@ -223,7 +309,7 @@ class MOT:
             d[col] = self.data[col][first_frame:last_frame]
         return MOT(name, file_name, headers, pd.DataFrame(data=d), first_frame)
 
-    def segment(self, points):
+    def segment(self, points: list[int]) -> list[Self]:
         """Segments the current MOT file.
 
         Does so at the given points, returning a list of segmented MOT objects.
@@ -240,7 +326,9 @@ class MOT:
         # sort the frames at which to segment the object:
         points = sorted(points)
         if (points[0] < 0) or (points[-1] > self.data.shape[0]):
-            raise IndexError("Cannot cut at given frames: out of bound index.")
+            message = f"Cannot cut {self.name} at given frames: out of bound index."
+            logging.warning(message)
+            raise IndexError(message)
         points.append(self.data.shape[0])
         points.insert(0, 0)
 
@@ -263,7 +351,7 @@ class MOT:
         return resulting_mots
 
     @classmethod
-    def load_multiple(cls, data_path_mot):
+    def load_multiple(cls, data_path_mot: str) -> list[Self]:
         """Recursively reads data from MOT files.
 
         Args:
@@ -280,7 +368,7 @@ class MOT:
         return motion_data_list
 
     @classmethod
-    def save_multiple(cls, mots, directory_path):
+    def save_multiple(cls, mots: list[Self], directory_path: str) -> None:
         """Recursively writes MOT object into files.
 
         Args:
@@ -295,12 +383,14 @@ class MOT:
             try:
                 mot.save(directory_path)
             except OSError:
-                raise OSError(f"Object {mot.name} couldn't be saved.")
+                message = f"Object {mot.name} couldn't be saved."
+                logging.warning(message)
+                raise OSError(message)
 
 
-class MOTCleanup:
+class _MOTCleanup:
     @staticmethod
-    def delete_mot_file(path_to_mot):
+    def delete_mot_file(path_to_mot: str) -> None:
         """Deletes MOT file from given path.
 
         Args:
@@ -323,14 +413,15 @@ class MOTCleanup:
             print(f"File {path_to_mot} has not been deleted.")
 
     @staticmethod
-    def delete_all_files(path_to_directory):
+    def delete_all_files(path_to_directory: str) -> None:
         """Deletes all MOT files from given path.
 
         Args:
             path_to_directory (string): path to the directory where all MOT files are to be deleted.
         """
         if not os.path.isdir(path_to_directory):
-            raise OSError(f"Could not delete files from {path_to_directory}: path is not a directory.")
+            message = f"Could not delete files from {path_to_directory}: path is not a directory."
+            raise OSError(message)
 
         file_list = sorted(f for f in os.listdir(path_to_directory) if f.endswith('.mot'))
         print(f"This directory contains: " + str(file_list))
@@ -348,25 +439,26 @@ class MOTCleanup:
             print(f"Files in {path_to_directory} have not been deleted.")
 
 
-class Test:
+class _Test:
     """Regression tests for the MOT class methods.
 
     Those tests are used to ensure working methods are not compromised by new code.
     """
 
     @staticmethod
-    def main():
-        Test._test_load()
-        Test._test_equality()
-        Test._test_copy()
-        Test._test_sample()
-        Test._test_segmentation()
-        Test._test_save()
+    def main() -> None:
+        _Test._test_load()
+        _Test._test_operations()
+        _Test._test_copy()
+        _Test._test_sample()
+        _Test._test_segmentation()
+        _Test._test_save()
         print("All tests passed, deleting testing files...")
-        MOTCleanup.delete_all_files(output)
+        _MOTCleanup.delete_all_files(output)
+        logging.info('All tests passed.')
 
     @staticmethod
-    def _test_load():
+    def _test_load() -> None:
         try:
             MOT.load(os.path.join(path, filename_standard))
             MOT.load(path, filename_nan)
@@ -380,7 +472,7 @@ class Test:
             "MOT Object from different files should be not equal."
 
     @staticmethod
-    def _test_nestled_loads():
+    def _test_nestled_loads() -> None:
         try:
             mot = MOT.load(os.path.join(path, filename_nan))
             mot.save(output, "first_save.mot")
@@ -393,21 +485,29 @@ class Test:
         assert mot == mot_first_save == mot_second_save, "Nestled loaded files should be equal."
 
     @staticmethod
-    def _test_equality():
-        mot = MOT.load(os.path.join(path, filename_standard))
-        assert mot == mot, \
+    def _test_operations() -> None:
+        mot1 = MOT.load(os.path.join(path, filename_standard))
+        mot2 = MOT.load(os.path.join(path, filename_nan))
+        assert mot1 == mot1 and mot2 == mot2, \
             "Equality operation is not working."
-        assert mot != MOT.load(os.path.join(path, filename_nan)), \
+        assert mot1 != mot2 and mot2 != mot1, \
             "Inequality operation is not working."
+        assert mot1 == MOT.load(path, filename_standard) and mot2 == MOT.load(path, filename_nan), \
+            "Objects loaded from same file should be equal."
+        mot3, mot4 = mot1.copy(), mot1.copy()
+        mot3.rename(name='foo', filename=mot1.filename)
+        mot4.rename(name=mot1.name, filename='foo')
+        assert mot1 > mot3 and mot1 >= mot3 and mot3 < mot1 and mot3 <= mot1 and\
+            mot1 > mot4 and mot1 >= mot4 and mot4 < mot1 and mot4 <= mot1, "Comparison operations are not working."
 
     @staticmethod
-    def _test_copy():
+    def _test_copy() -> None:
         mot = MOT.load(os.path.join(path, filename_standard))
         assert mot.copy() == mot, \
             "Copy method is not working."
 
     @staticmethod
-    def _test_sample():
+    def _test_sample() -> None:
         mot = MOT.load(os.path.join(path, filename_standard))
         length = mot.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
@@ -426,7 +526,7 @@ class Test:
             error_message + "calls on object with same parameters should be equal."
 
     @staticmethod
-    def _test_segmentation():
+    def _test_segmentation() -> None:
         mot = MOT.load(os.path.join(path, filename_standard))
         length = mot.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
@@ -450,7 +550,7 @@ class Test:
             error_message + "calls on object with same parameters should be equal."
 
     @staticmethod
-    def _test_save():
+    def _test_save() -> None:
         mot1 = MOT.load(os.path.join(path, filename_standard))
         try:
             mot1.save(output)
@@ -467,5 +567,10 @@ class Test:
 
 
 if __name__ == "__main__":
-    Test.main()
-    print("All done.")
+    logger = logging.getLogger("test")
+    logging.basicConfig(filename='.test.log', level=logging.INFO)
+    _Test.main()
+
+
+
+
