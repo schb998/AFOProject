@@ -37,7 +37,7 @@ class TRC(object):
 
     def __init__(self,
                  filename: str,
-                 meta_data: dict[str, object],
+                 meta_data: dict[str, str | int | float],
                  marker_set: list[str],
                  col_names: list[str],
                  marker_dict: dict[str, list[str]],
