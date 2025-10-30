@@ -1,38 +1,41 @@
 from resources.filetypes_gestion.mot import MOT
 from resources.filetypes_gestion.trc import TRC
+import local_paths as local
 import os
 from copy import deepcopy
 from scipy.signal import butter, filtfilt, find_peaks
 import matplotlib.pyplot as plt
 import numpy as np
 
+# todo: check segment_at_heel_strikes function when mot_frame_rate is None // trc_rate is not in trc.metadata
 
-def filter_grf(mot, fs):
+
+def filter_grf(mot: MOT, fs: float) -> None:
     """Filters data of a MOT object with a Butterworth filter.
 
     Args:
-        mot  (MOT): MOT object whose data is to be filtered.
-        fs (float): sampling frequency.
+        mot: MOT object whose data is to be filtered.
+        fs: sampling frequency.
     """
     b, a = butter(6, (12 / (fs / 2)), btype='low', output='ba')
     filtered_df = deepcopy(mot.data)
     for col in mot.data.columns.tolist():
         filtered_df[col] = filtfilt(b, a, mot.data[col])
     mot.data = filtered_df
-    return None
 
 
-def baseline_correct_debug(mot_object, fz_col, related_cols, output_path, show=False):
+def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str], output_path: str, show: bool = False)\
+        -> None:
     """Corrects the baseline of one of the columns of the mot data.
 
     Saves plot of the baseline correction.
 
     Args:
-        mot_object              (MOT): data to process.
-        fz_col               (string): name of the column to correct.
-        related_cols (list of string): other columns to consider.
-        output_path          (string): output path for plot save.
-        show                   (bool): whether to show the figure when method is called.
+        mot_object: data to process.
+        fz_col: name of the column to correct.
+        related_cols: other columns to consider.
+        output_path: output path for plot save.
+        show: whether to show the figure when method is called.
     """
     fy = mot_object.data[fz_col]
     corrected_df = deepcopy(mot_object.data)
@@ -42,14 +45,8 @@ def baseline_correct_debug(mot_object, fz_col, related_cols, output_path, show=F
     print(f"\nCorrecting {fz_col}")
     print(f"Number of swing valleys below 0N: {len(swing_valleys)}")
 
-    time_scale = mot_object.data['time'] if 'time' in mot_object.data.columns.tolist() else np.arange(len(fy))
-    plt.figure(figsize=(12, 4))
-    plt.plot(time_scale, fy, label='Original', alpha=0.7)
-    plt.scatter(time_scale[swing_valleys], fy[swing_valleys], color='red', label='Swing Valleys')
-
     if len(swing_valleys) == 0:
         print("No valleys found below zero. Skipping correction.")
-        return corrected_df
 
     baseline = abs(np.median(fy[swing_valleys]))
     print(f"Baseline offset to add: {baseline:.2f}")
@@ -62,6 +59,11 @@ def baseline_correct_debug(mot_object, fz_col, related_cols, output_path, show=F
         print(f"Offset for {col}: {offset:.2f}")
 
     mot_object.data = corrected_df
+
+    time_scale = mot_object.data['time'] if 'time' in mot_object.data.columns.tolist() else np.arange(len(fy))
+    plt.figure(figsize=(12, 4))
+    plt.plot(time_scale, fy, label='Original', alpha=0.7)
+    plt.scatter(time_scale[swing_valleys], fy[swing_valleys], color='red', label='Swing Valleys')
     plt.plot(time_scale, corrected_df[fz_col], label='Corrected', alpha=0.8)
     plt.title(f"{fz_col} Baseline Correction")
     plt.xlabel("Time [s]")
@@ -71,19 +73,18 @@ def baseline_correct_debug(mot_object, fz_col, related_cols, output_path, show=F
     os.makedirs(output_path, exist_ok=True)
     file_name = f"{mot_object.filename.replace('.mot', '')}_baseline_correction_{fz_col}.png"
     plt.savefig(os.path.join(output_path, file_name), bbox_inches='tight')
-    
+
     if show:
         plt.show()
-    return None
 
 
-def detect_toe_offs(zeroed_mot, fs, threshold=20):
+def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
     """Detects the gait cycles' "toe off" points.
 
     Args:
-        zeroed_mot (MOT): data to process.
-        fs       (float): sampling frequency.
-        threshold  (int): threshold to use for detection.
+        zeroed_mot: data to process.
+        fs: sampling frequency.
+        threshold: threshold to use for detection.
 
     Returns:
         Dictionary of the data's toe offs, listed by side.
@@ -127,12 +128,12 @@ def detect_toe_offs(zeroed_mot, fs, threshold=20):
     return toe_offs
 
 
-def detect_heel_strikes(zeroed_mot, fs, threshold=20):
+def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
     """Detects the gait cycles' "heel strikes" points.
     Args:
-        zeroed_mot (MOT): data to process.
-        fs       (float): sampling frequency.
-        threshold  (int): threshold to use for detection.
+        zeroed_mot: data to process.
+        fs: sampling frequency.
+        threshold: threshold to use for detection.
 
     Returns:
         Dictionary of the data's heel strikes, listed by side.
@@ -182,14 +183,15 @@ def detect_heel_strikes(zeroed_mot, fs, threshold=20):
     return heel_contacts
 
 
-def zero_swing_phase(mot_df, toe_offs, heel_strikes, side):
+def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: dict[str, list[int]], side: str)\
+        -> None:
     """Sets GRF and related columns to zero between toe-off and next heel strike.
 
     Args:
-        mot_df       (MOT): data to process.
-        toe_offs     (dict): toe off moments.
-        heel_strikes (dict): heel strikes moment.
-        side         (string): side to focus on. Method raises ValueError if invalid.
+        mot_df: data to process.
+        toe_offs: toe off moments, listed in directory by side.
+        heel_strikes: heel strikes moment, listed in directory by side.
+        side: side to focus on. Method raises ValueError if invalid.
 
     Raises:
         ValueError: if the 'side' argument is not either 'R'/'r'/'right' or 'L'/'l'/'left'.
@@ -222,18 +224,18 @@ def zero_swing_phase(mot_df, toe_offs, heel_strikes, side):
                     df_corrected.loc[toe_idx:heel_idx, col] = 0
 
     mot_df.data = df_corrected
-    return None
 
 
-def plot_grf_details(mot, heel_strikes, toe_offs, output, show=False):
+def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]],
+                     output: str, show: bool = False) -> None:
     """Saves plot of the vertical forces with toe offs and heel strikes.
 
     Args:
-        mot           (MOT): MOT object of the data.
-        heel_strikes (dict): heel strikes moment.
-        toe_offs     (dict): toe offs moment.
-        output        (str): output directory name.
-        show         (bool): whether to show the figure when method is called.
+        mot: MOT object of the data.
+        heel_strikes: heel strikes moment, listed in directory by side.
+        toe_offs: toe offs moment, listed in directory by side
+        output: output directory name.
+        show: whether to show the figure when method is called.
 
     """
     plt.figure(figsize=(14, 6))
@@ -268,32 +270,43 @@ def plot_grf_details(mot, heel_strikes, toe_offs, output, show=False):
                 bbox_inches='tight')
     if show:
         plt.show()
-    return None
 
 
-def segment_at_heel_strikes(mot, heel_strike_moments, mot_frame_rate=None, trc=None):
+def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]], mot_frame_rate: float = None,
+                            trc: TRC = None, save: bool = False) -> dict[str, dict[str, list[MOT | TRC]]]:
     """Segment MOT (and matching TRC) object(s) according to heel_strikes.
 
     Args:
-        mot                  (MOT): MOT object to process.
-        heel_strike_moments (dict): heel strikes, organized in lists by side ("R"/"L").
-        trc                  (TRC): TRC object matching the given MOT. Optional.
-        mot_frame_rate     (float): frame rate of mot_file. Optional.
+        mot: MOT object to process.
+        heel_strike_moments: dictionary of heel strikes, listed by side ("R"/"L").
+        trc: TRC object matching the given MOT. Optional.
+        mot_frame_rate: frame rate of mot_file. Optional.
             Used when trc is not None, for faster results.
+        save: whether the segmented files should be saved. Default is False.
 
     Returns:
         dict: dictionary of the segmented objects, organized in lists by type (trc/mot) and side.
 
     """
     # segment mot object:
-    res = {'mot': {"Right": mot.segment(heel_strike_moments['R'])[1:-1],
-                   "Left": mot.segment(heel_strike_moments['L'])[1:-1]}}
+    right_mots = mot.segment(heel_strike_moments['R'])[1:-1]
+    left_mots = mot.segment(heel_strike_moments['L'])[1:-1]
+    res = {'mot': {"Right": right_mots, "Left": left_mots}}
 
-    # process trc object
+    if save:
+        path = os.path.join(local.get_segmented_mot_path(), mot.filename.replace('.mot', ''))
+        MOT.save_multiple(right_mots, os.path.join(path, "Right"))
+        MOT.save_multiple(left_mots, os.path.join(path, "Left"))
+
+    # process trc object:
     if trc is not None:
-        trc_rate = trc.metadata['CameraRate']
+
+        # get the list of heel strikes:
+        trc_rate = int(trc.metadata['CameraRate']) if 'CameraRate' in trc.metadata.keys() else None
         if mot_frame_rate is None:
             mot_frame_rate = 1 / np.mean(np.diff(mot.data['time']))
+        if trc_rate is None:
+            trc_rate = 1 / np.mean(np.diff(trc.data['Time']))
         rate_conversion = trc_rate / mot_frame_rate
         trc_heel_strike_moments = {}
         for side in heel_strike_moments:
@@ -301,6 +314,14 @@ def segment_at_heel_strikes(mot, heel_strike_moments, mot_frame_rate=None, trc=N
             for i in range(len(heel_strike_moments[side])):
                 trc_heel_strike_moments[side].append(int(heel_strike_moments[side][i] * rate_conversion))
 
-        res['trc'] = {"Right": trc.segment(trc_heel_strike_moments['R'])[1:-1],
-                      "Left": trc.segment(trc_heel_strike_moments['L'])[1:-1]}
+        # segment trc:
+        right_trcs = trc.segment(trc_heel_strike_moments['R'])[1:-1]
+        left_trcs = trc.segment(trc_heel_strike_moments['L'])[1:-1]
+        res['trc'] = {"Right": right_trcs,  "Left": left_trcs}
+
+        if save:
+            path = os.path.join(local.get_segmented_trc_path(), mot.filename.replace('.mot', ''))
+            TRC.save_multiple(right_trcs, os.path.join(path, "Right"))
+            TRC.save_multiple(left_trcs, os.path.join(path, "Left"))
+
     return res

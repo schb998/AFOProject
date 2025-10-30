@@ -34,8 +34,10 @@ if __name__ == "__main__":
 
         # apply filters and baseline correction:
         pp.filter_grf(m, frame_rate)
-        pp.baseline_correct_debug(m, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'], save_corrected_path)
-        pp.baseline_correct_debug(m, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'], save_corrected_path)
+        pp.baseline_correct_debug(m, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'],
+                                  save_corrected_path)
+        pp.baseline_correct_debug(m, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'],
+                                  save_corrected_path)
         toe_off_moments = pp.detect_toe_offs(m, frame_rate)
         heel_strike_moments = pp.detect_heel_strikes(m, frame_rate)
         right_mot = m.copy()
@@ -44,7 +46,7 @@ if __name__ == "__main__":
         m.rename(name=m.filename.replace('.mot', '') + "_corrected",
                  filename=m.filename.replace('.mot', '_corrected.mot'), )
 
-        pp.plot_grf_details(m, heel_strike_moments, toe_off_moments, save_corrected_path)
+        pp.plot_grf_details(m, heel_strike_moments, toe_off_moments, str(save_corrected_path))
         m.save(save_corrected_path)
 
         # segment according to heel strikes:
@@ -55,8 +57,8 @@ if __name__ == "__main__":
             print(f"No TRC file in {trc_raw_data_path} matching MOT file {name}. Skipping.")
 
         if trc is None:
-            results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments)
+            results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments, save=False)
         else:
             results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments, mot_frame_rate=frame_rate,
-                                                                    trc=trc)
+                                                                    trc=trc, save=False)
     print("\nAll files were processed.")
