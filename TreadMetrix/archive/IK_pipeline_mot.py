@@ -1,13 +1,14 @@
 import os
 import sys
-
 import pandas as pd
+import local_paths as local
 
 # Setup OpenSim
-opensim_path = r"C:/OpenSim 4.4/bin"
-os.environ['OPENSIM_HOME'] = opensim_path
-sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
-os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
+local.configure_opensim()
+# opensim_path = r"C:/OpenSim 4.4/bin"
+# os.environ['OPENSIM_HOME'] = opensim_path
+# sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
+# os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
 
 import numpy as np
 from scipy.signal import butter, filtfilt
@@ -15,18 +16,23 @@ from ptb.util.io.mocap.file_formats import TRC
 from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels
 import opensim as osim
 
+"""
+This file is used to compute Inverse Kinematic data.
+    Inputs: segmented .trc file, corresponding .osim file, array of the markers used.
+    Output: segmented .mot files of the IK data.
+"""
+
 # Paths
-base_path = r"D:\MyData\Testingworkflow\Test"
-model_file = os.path.join(base_path, "scaled_model_Ella.osim")
-trc_path = os.path.join(base_path, "segmented_trc")
-ik_results_path = os.path.join(base_path, "IK_Results")
+model_file      = local.get_model_file()
+trc_path        = local.get_segmented_trc_path()
+ik_results_path = local.get_ik_results_path()
 
 # Ensure output folders exist
 for side in ["Right", "Left"]:
     os.makedirs(os.path.join(ik_results_path, side), exist_ok=True)
 
 # Marker setup
-marker_names = [
+marker_names   = [
     'Sternum', 'LShoulder', 'RShoulder', 'LASIS', 'RASIS', 'RPSIS', 'LPSIS',
     'RFibula', 'RShank', 'RAnkleLateral', 'RToe', 'LToe', 'RMT5', 'RMT2', 'RHeel',
     'LFibula', 'LShank', 'LAnkleLateral', 'LMT5', 'LMT2', 'LHeel', 'RKneeLateral',
@@ -35,13 +41,38 @@ marker_names = [
 do_not_include = ['RKneeMedial', 'RAnkleMedial', 'RToe', 'LKneeMedial', 'LAnkleMedial', 'LToe']
 
 # Butterworth filter
+# todo check args
 def filter_signals(data, fs=100, cutoff=6, order=2):
+    """
+    Filter the signal according to the Butterworth method.
+
+    Args:
+        data (array): signal to be filtered
+        fs (int): sampling frequency
+        cutoff (int): half cycles
+        order (int): order of the filter
+
+    Returns:
+        array: filtered signal
+
+    """
     nyq = 0.5 * fs
     b, a = butter(order, cutoff / nyq, btype='low', analog=False)
     return filtfilt(b, a, data, axis=0)
 
 # Read .mot using OpenSim Storage
 def read_mot_storage(filepath):
+    """
+    Read a .mot file from the storage path.
+
+    Args:
+        filepath (String):
+
+    Returns:
+        String array: labels of the .mot file
+        Array: data of the .mot file
+
+    """
     storage = osim.Storage(filepath)
     label_array = storage.getColumnLabels()
     labels = [label_array.get(i) for i in range(label_array.getSize())]
@@ -101,9 +132,9 @@ for side in ["Right", "Left"]:
 
         # Name format
         cycle_name = f"{side.lower()}_cycle_{i}"
-        mot_path_temp = os.path.join(base_path, f"{cycle_name}_temp.mot")
+        mot_path_temp = os.path.join(local.get_base_path(), f"{cycle_name}_temp.mot")
         mot_path_final = os.path.join(out_side_path, f"{cycle_name}.mot")
-        # mot_path_final = mot_path_temp+".mot"
+        # mot_path_final = mot_path_temp + ".mot"
         ik_tool.setOutputMotionFileName(mot_path_temp)
 
         # Add marker tasks

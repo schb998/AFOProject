@@ -1,2 +1,3 @@
 .idea/
-resources/wheels/ptb/latest.txt
+.local.json
+.test.log
