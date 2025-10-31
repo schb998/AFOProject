@@ -15,17 +15,17 @@ class Requirements:
 
         os.system('python -m pip install build toml')
         print("{0}\n\tInstalling PySide6 and vtk...\n{0}".format(Requirements.line))
-        os.system('conda install -y PySide6 vtk')
+        os.system('conda install -y numpy scipy pandas PySide6 vtk')
+        os.system('conda install -y conda-forge::pydicom==2.4.4')
 
-        print("{0}\n\tInstalling Mayavi...\n{0}".format(Requirements.line))
+        print("{0}\n\tInstalling Mayavi but gias visualiser will not work due incompatibility with qt6...\n{0}".format(Requirements.line))
         os.system('conda install -y mayavi')
         print("{0}\n\tInstalling Opensim ...\n{0}".format(Requirements.line))
         os.system('conda install -y -c opensim-org opensim')
-        os.system('conda install -y conda-forge::pyvista')
+        #os.system('conda install -y conda-forge::pyvista')
 
         print("{0}\n\tInstalling Gias3...\n{0}".format(Requirements.line))
         gias = {
-            "pydicom:": 'python -m pip install pydicom==2.4.4',
             "gias3": 'python -m pip install gias3',
             "gias3.musculoskeletal": 'python -m pip install gias3.musculoskeletal',
             "gias3.io": 'python -m pip install gias3.io',
