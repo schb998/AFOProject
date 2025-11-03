@@ -2,11 +2,13 @@ import os
 from copy import deepcopy
 import pandas as pd
 import numpy as np
+import numpy.typing
 import ast
 import random
 import time
 from typing import Self
 import logging
+import re
 
 # todo: further testing for segmentation methods comparison
 # todo: make get_first_frame method instead of first_frame attribute ?
@@ -233,6 +235,36 @@ class TRC(object):
             raise OSError(error_message)
 
 
+    @classmethod
+    def arrange(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> None:
+        """Overwrites a TRC file with a copy of data with added marker ZERO located at position (0,0,0) at all frames.
+
+        Used to arrange TRC files to use in OpenSim.
+
+        Args:
+            filepath: path to the TRC file.
+            filename:  name of the TRC file. \
+                Should be filled if path does not include filename, optional otherwise.
+            header: whether the TRC file includes a header. Default value is True.
+            delimiter: delimiter of the TRC file. Default value is "\t".
+
+        Returns:
+            None
+
+        Raises:
+            OSError: if the file cannot be read.
+
+        """
+        trc = cls.load(filepath, filename, header, delimiter)
+        old_name = deepcopy(trc.filename)
+        num_frames = trc.data.shape[0]
+        trc.add_marker('ZERO', {'X': np.zeros(num_frames),
+                                'Y': np.zeros(num_frames),
+                                'Z': np.zeros(num_frames)})
+        trc.rename(old_name)
+        trc.save(filepath)
+
+
     def rename(self, filename: str):
         """This method updates the TRC object's name and/or file_name.
 
@@ -243,6 +275,60 @@ class TRC(object):
             self.filename = filename + ".trc"
         else:
             self.filename = filename
+
+
+    def add_marker(self, marker_name: str, data: dict[str, numpy.typing.ArrayLike]) -> None:
+        """Add a marker to the data.
+
+        Args:
+            marker_name: name of the marker
+            data: dictionary of the marker's position data. Raises exception if size is not 3. Keys will be kept unless/
+             they do not match typical naming patterns: each coordinate starting/ending with X/Y/Z or x/y/z.
+
+        Returns:
+            None
+
+        Raises:
+            Exception if given data does not contain exactly 3 coordinates.
+        """
+        if len(data) != 3:
+            raise Exception("Markers require three coordinates in order to be added.")
+
+        # manage marker name
+        name = marker_name
+        i = 2
+        while name in self.marker_set:
+            logging.info(f"Marker {name} already exists, changing name to {marker_name + str(i)}")
+            name = marker_name + str(i)
+        marker_name = name
+        self.marker_set.append(marker_name)
+        self.metadata['NumMarkers'] = self.metadata['NumMarkers'] + 1
+
+        # manage marker coordinates:
+        content = deepcopy(data)
+        columns = list(content.keys())
+        try:
+            x_column = [x for x in columns if re.search("^([Xx])|([Xx])$", x) is not None][0]
+            y_column = [y for y in columns if re.search("^([Yy])|([Yy])$", y) is not None][0]
+            z_column = [z for z in columns if re.search("^([Zz])|([Zz])$", z) is not None][0]
+            result = {x_column.upper(): content[x_column],
+                      y_column.upper(): content[y_column],
+                      z_column.upper(): content[z_column]}
+        except KeyError:
+            num = str(len(self.marker_set) + 1)
+            x_column = 'X'+num
+            y_column = 'Y'+num
+            z_column = 'Z'+num
+            logging.info(f"Columns names do not match expected X/Y/Z formulation. Assigning them coordinates X, Y, Z "
+                         f"and names {x_column}, {y_column}, {z_column}.")
+            result = {x_column: content[columns[0]],
+                      y_column: content[columns[1]],
+                      z_column: content[columns[2]]}
+        self.marker_dict[marker_name] = [x_column, y_column, z_column]
+        self.col_names.extend([x_column, y_column, z_column])
+        for coo in list(result.keys()):
+            self.data[coo] = result[coo]
+        self.rename(self.filename.replace('.trc', f'added_{marker_name}'))
 
 
     def save(self, filepath: str, filename: str = None) -> None:
@@ -475,53 +561,74 @@ class TRC(object):
 
 class _TRCCleanup:
     @staticmethod
-    def delete_trc_file(path_to_trc: str) -> None:
+    def delete_trc_file(path_to_trc: str, force_delete: bool = False) -> None:
         """Deletes TRC file from given path.
 
         Args:
-            path_to_trc (string): path to the TR file to be deleted.
+            path_to_trc: path to the TR file to be deleted.
+            force_delete: whever to skip asking for confirmation before deletion.
 
         Raises:
             OSError: if a file could not be deleted.
         """
-        if not os.path.basename(path_to_trc).endswith('.trc'):
-            raise OSError(f"Could not delete {path_to_trc}: invalid path.")
-        print(f"Confirm deletion of file {path_to_trc} (y/N):\n")
-        confirmation = input().lower().strip()
-        if confirmation == 'y' or confirmation == 'yes':
+        def delete(file: str) -> None:
             try:
-                os.remove(path_to_trc)
+                os.remove(file)
+                logging.info(f"File {file} has been deleted.")
             except OSError:
-                raise OSError(f"Could not delete {path_to_trc}")
-            print(f"File {path_to_trc} has been deleted.")
+                logging.error(f"File {file} has been deleted.")
+
+        if not os.path.basename(path_to_trc).endswith('.trc'):
+            message = f"Could not delete {path_to_trc}: invalid path."
+            logging.warning(message)
+            raise OSError(message)
+
+        if force_delete:
+            delete(path_to_trc)
+
         else:
-            print(f"File {path_to_trc} has not been deleted.")
+            print(f"Confirm deletion of file {path_to_trc} (y/N):\n")
+            confirmation = input().lower().strip()
+            if confirmation == 'y' or confirmation == 'yes':
+                delete(path_to_trc)
+            else:
+                logging.info(f"File {path_to_trc} has not been deleted.")
 
 
     @staticmethod
-    def delete_all_files(path_to_directory: str) -> None:
+    def delete_all_files(path_to_directory: str, force_delete: bool = False) -> None:
         """Deletes all TRC files from given path.
 
         Args:
-            path_to_directory (string): path to the directory where all TRC files are to be deleted.
+            path_to_directory: path to the directory where all TRC files are to be deleted.
+            force_delete: whever to skip asking for confirmation before deletion.
         """
-        if not os.path.isdir(path_to_directory):
-            raise OSError(f"Could not delete files from {path_to_directory}: path is not a directory.")
-
-        file_list = sorted(f for f in os.listdir(path_to_directory) if f.endswith('.trc'))
-        print(f"This directory contains: " + str(file_list))
-        print(f"Confirm deletion of all TRC files from {path_to_directory} (y/N):")
-        confirmation = input().lower().strip()
-
-        if confirmation == 'y' or confirmation == 'yes':
-            for file in file_list:
+        def delete(files: list[str]) -> None:
+            for file in files:
                 try:
                     os.remove(os.path.join(path_to_directory, file))
+                    logging.info(f"File {file} has been deleted.")
                 except OSError:
-                    raise OSError(f"Could not delete {file}")
-                print(f"File {file} has been deleted.")
+                    logging.error(f"File {file} has been deleted.")
+
+        if not os.path.isdir(path_to_directory):
+            message = f"Could not delete {path_to_directory}: invalid path."
+            logging.warning(message)
+            raise OSError(message)
+
+        file_list = sorted(f for f in os.listdir(path_to_directory) if f.endswith('.trc'))
+
+        if force_delete:
+            delete(file_list)
+
         else:
-            print(f"Files in {path_to_directory} have not been deleted.")
+            print(f"This directory contains: " + str(file_list))
+            print(f"Confirm deletion of all TRC files from {path_to_directory} (y/N):")
+            confirmation = input().lower().strip()
+            if confirmation == 'y' or confirmation == 'yes':
+                delete(file_list)
+            else:
+                logging.info(f"Files in {path_to_directory} have not been deleted.")
 
 
 class _Test:
@@ -542,8 +649,10 @@ class _Test:
         _Test._test_save()
         _Test._test_load_all()
         _Test._test_save_all()
+        _Test._test_add_marker()
+        _Test._test_arrange()
         print("All tests passed. Deleting testing files...")
-        _TRCCleanup.delete_all_files(output)
+        _TRCCleanup.delete_all_files(output, True)
         logging.info('All tests passed.')
 
     @staticmethod
@@ -574,7 +683,6 @@ class _Test:
         except OSError:
             assert False, "Couldn't load and save files in a loop."
         assert trc == trc_first_save == trc_second_save, "Nestled loaded files should be equal."
-
 
     @staticmethod
     def _test_operations() -> None:
@@ -690,7 +798,7 @@ class _Test:
 
     @staticmethod
     def _test_save_all() -> None:
-        _TRCCleanup.delete_all_files(output)
+        _TRCCleanup.delete_all_files(output, True)
         trc = TRC.load(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
@@ -712,6 +820,33 @@ class _Test:
         for i in range(len(trcs)):
             assert trcs[i] == trcs_copied[i], (error_message + f"File {trcs[i].filename} should be equal to its saved "
                                                                f"and loaded version.")
+
+    @staticmethod
+    def _test_add_marker() -> None:
+        trc1 = TRC.load(path, filename_standard)
+        trc2 = trc1.copy()
+        num_frames = trc2.data.shape[0]
+        try:
+            trc2.add_marker('TEST', {'X': np.zeros(num_frames),
+                                     'Y': np.zeros(num_frames),
+                                     'Z': np.zeros(num_frames)})
+            assert True
+        except Exception:
+            assert False, "Adding marker method should work."
+        assert trc2.metadata['NumMarkers'] == trc1.metadata['NumMarkers'] + 1 == len(trc2.marker_set), \
+            "Wrong number of markers."
+        assert len(trc2.data.columns) == len(trc1.data.columns) + 3, "Wrong number of columns."
+
+    @staticmethod
+    def _test_arrange() -> None:
+        trc = TRC.load(path, filename_standard).copy()
+        trc.rename("test")
+        trc.save(output)
+        try:
+            TRC.arrange(output, "test.trc")
+            assert True
+        except Exception:
+            assert False, "Arrange method should work."
 
     @staticmethod
     def comparison_segmentation(path_to_file: str) -> (pd.DataFrame, float):

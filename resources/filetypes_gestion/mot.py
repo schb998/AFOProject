@@ -390,53 +390,74 @@ class MOT:
 
 class _MOTCleanup:
     @staticmethod
-    def delete_mot_file(path_to_mot: str) -> None:
+    def delete_mot_file(path_to_mot: str, force_delete: bool = False) -> None:
         """Deletes MOT file from given path.
 
         Args:
-            path_to_mot (string): path to the MOT file to be deleted.
+            path_to_mot: path to the MOT file to be deleted.
+            force_delete: whever to skip asking for confirmation before deletion.
 
         Raises:
             OSError: if a file could not be deleted.
         """
-        if not os.path.basename(path_to_mot).endswith('.mot'):
-            raise OSError(f"Could not delete {path_to_mot}: invalid path.")
-        print(f"Confirm deletion of file {path_to_mot} (y/[n]):\n")
-        confirmation = input().lower().strip()
-        if confirmation == 'y' or confirmation == 'yes':
+        def delete(file: str) -> None:
             try:
-                os.remove(path_to_mot)
+                os.remove(file)
+                logging.info(f"File {file} has been deleted.")
             except OSError:
-                raise OSError(f"Could not delete {path_to_mot}")
-            print(f"File {path_to_mot} has been deleted.")
+                logging.error(f"File {file} has been deleted.")
+
+        if not os.path.basename(path_to_mot).endswith('.mot'):
+            message = f"Could not delete {path_to_mot}: invalid path."
+            logging.warning(message)
+            raise OSError(message)
+
+        if force_delete:
+            delete(path_to_mot)
+
         else:
-            print(f"File {path_to_mot} has not been deleted.")
+            print(f"Confirm deletion of file {path_to_mot} (y/N):\n")
+            confirmation = input().lower().strip()
+            if confirmation == 'y' or confirmation == 'yes':
+                delete(path_to_mot)
+            else:
+                logging.info(f"File {path_to_mot} has not been deleted.")
+
 
     @staticmethod
-    def delete_all_files(path_to_directory: str) -> None:
+    def delete_all_files(path_to_directory: str, force_delete: bool = False) -> None:
         """Deletes all MOT files from given path.
 
         Args:
             path_to_directory (string): path to the directory where all MOT files are to be deleted.
+            force_delete: whever to skip asking for confirmation before deletion.
         """
+        def delete(files: list[str]) -> None:
+            for file in files:
+                try:
+                    os.remove(os.path.join(path_to_directory, file))
+                    logging.info(f"File {file} has been deleted.")
+                except OSError:
+                    logging.error(f"File {file} has been deleted.")
+
         if not os.path.isdir(path_to_directory):
             message = f"Could not delete files from {path_to_directory}: path is not a directory."
+            logging.warning(message)
             raise OSError(message)
 
         file_list = sorted(f for f in os.listdir(path_to_directory) if f.endswith('.mot'))
-        print(f"This directory contains: " + str(file_list))
-        print(f"Confirm deletion of all MOT files from {path_to_directory} (y/[n]):")
-        confirmation = input().lower().strip()
 
-        if confirmation == 'y' or confirmation == 'yes':
-            for file in file_list:
-                try:
-                    os.remove(os.path.join(path_to_directory, file))
-                except OSError:
-                    raise OSError(f"Could not delete {file}")
-                print(f"File {file} has been deleted.")
+        if force_delete:
+            delete(file_list)
+
         else:
-            print(f"Files in {path_to_directory} have not been deleted.")
+            print(f"This directory contains: " + str(file_list))
+            print(f"Confirm deletion of all MOT files from {path_to_directory} (y/[n]):")
+            confirmation = input().lower().strip()
+            if confirmation == 'y' or confirmation == 'yes':
+                delete(file_list)
+            else:
+                logging.info(f"Files in {path_to_directory} have not been deleted.")
 
 
 class _Test:
@@ -454,7 +475,7 @@ class _Test:
         _Test._test_segmentation()
         _Test._test_save()
         print("All tests passed, deleting testing files...")
-        _MOTCleanup.delete_all_files(output)
+        _MOTCleanup.delete_all_files(output, True)
         logging.info('All tests passed.')
 
     @staticmethod
