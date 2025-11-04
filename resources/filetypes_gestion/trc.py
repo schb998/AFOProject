@@ -346,13 +346,13 @@ class TRC(object):
             self.filename = filename
 
 
-    def add_marker(self, marker_name: str, data: dict[str, numpy.typing.ArrayLike]) -> None:
+    def add_marker(self, marker_name: str, data: np.typing.ArrayLike | dict[str, numpy.typing.ArrayLike]) -> None:
         """Add a marker to the data.
 
         Args:
             marker_name: name of the marker
-            data: dictionary of the marker's position data. Raises exception if size is not 3. Keys will be kept unless/
-             they do not match typical naming patterns of each coordinate starting/ending with X/Y/Z or x/y/z.
+            data: marker's trajectory. Can be either a numpy array or a directory.
+            Raises an exception if it does not contain data for exactly 3 coordinates.
 
         Returns:
             None
@@ -360,7 +360,8 @@ class TRC(object):
         Raises:
             Exception if given data does not contain exactly 3 coordinates.
         """
-        if len(data) != 3:
+        if ((isinstance(data, dict) and len(data) != 3)
+                or (isinstance(data, np.typing.ArrayLike)) and data.shape[1] != 3):
             raise Exception("Markers require three coordinates in order to be added.")
 
         # manage marker name
@@ -374,30 +375,34 @@ class TRC(object):
         self.marker_set.append(marker_name)
         self.metadata['NumMarkers'] = self.metadata['NumMarkers'] + 1
 
-        def default_names():
-            num = str(len(self.marker_set))
-            return 'X'+num, 'Y'+num, 'Z'+num
+        num = str(len(self.marker_set))
+        new_x_column_name, new_y_column_name, new_z_column_name = 'X'+num, 'Y'+num, 'Z'+num
 
-        # manage marker coordinates:
-        content = deepcopy(data)
-        columns = list(content.keys())
-        try:
-            x_column_name = [x for x in columns if re.search("^([Xx])|([Xx])$", x) is not None][0]
-            y_column_name = [y for y in columns if re.search("^([Yy])|([Yy])$", y) is not None][0]
-            z_column_name = [z for z in columns if re.search("^([Zz])|([Zz])$", z) is not None][0]
+        if isinstance(data, np.typing.ArrayLike):
+            result = {new_x_column_name: data[:, 0:1],
+                      new_y_column_name: data[:, 1:2],
+                      new_z_column_name: data[:, 2:3]}
 
-        except KeyError as e:
-            logging.info(f"Columns do not match expected X/Y/Z name formulation. "
-                         f"Assigning them coordinates X, Y, Z in order.")
-            x_column_name = columns[0]
-            y_column_name = columns[1]
-            z_column_name = columns[2]
+        else:
+            # manage marker coordinates:
+            content = deepcopy(data)
+            columns = list(content.keys())
+            try:
+                x_column_name = [x for x in columns if re.search("^([Xx])|([Xx])$", x) is not None][0]
+                y_column_name = [y for y in columns if re.search("^([Yy])|([Yy])$", y) is not None][0]
+                z_column_name = [z for z in columns if re.search("^([Zz])|([Zz])$", z) is not None][0]
 
-        new_x_column_name, new_y_column_name, new_z_column_name = default_names()
+            except KeyError as e:
+                logging.info(f"Given columns do not match expected X/Y/Z name formulation "
+                             f"of starting or ending by X/Y/Z. "
+                             f"Assigning them to coordinates X, Y, Z in this order.")
+                x_column_name = columns[0]
+                y_column_name = columns[1]
+                z_column_name = columns[2]
 
-        result = {new_x_column_name: content[x_column_name],
-                  new_y_column_name: content[y_column_name],
-                  new_z_column_name: content[z_column_name]}
+            result = {new_x_column_name: content[x_column_name],
+                      new_y_column_name: content[y_column_name],
+                      new_z_column_name: content[z_column_name]}
 
         new_cols = list(result.keys())
         self.marker_dict[marker_name] = new_cols
