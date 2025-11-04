@@ -1,19 +1,19 @@
 import os
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from resources.filetypes_gestion.trc import TRC
 from copy import deepcopy
 import logging
+import re
 
 
-def hjc_harrington(markers):
+def hjc_harrington(marker_data: dict[str, npt.ArrayLike]) -> (np.typing.ArrayLike, np.typing.ArrayLike):
     """
     Calculate Hip Joint Centers (HJC) using Harrington et al. (2006) method.
 
     Parameters:
-    markers: dict
-        Dictionary containing the trajectories of the required markers from a static trial.
-        Keys: 'LASIS', 'RASIS', 'LPSIS', 'RPSIS' (numpy arrays of shape [n_frames, 3]).
+        marker_data: dictionary of the pelvis markers' trajectories, by marker (marker_name = numpy arrays [n_frames, 3]).
 
     Returns:
     RHJC: numpy array
@@ -21,12 +21,13 @@ def hjc_harrington(markers):
     LHJC: numpy array
         Left hip joint center positions [n_frames, 3].
     """
-    lasis = np.array(markers['LASIS'])
-    rasis = np.array(markers['RASIS'])
-    lpsis = np.array(markers['LPSIS'])
-    rpsis = np.array(markers['RPSIS'])
+    marker_names = list(marker_data.keys())
+    lasis = np.array(marker_data[marker_names[0]])
+    lpsis = np.array(marker_data[marker_names[1]])
+    rasis = np.array(marker_data[marker_names[2]])
+    rpsis = np.array(marker_data[marker_names[3]])
 
-    n_frames = rasis.shape[0]
+    n_frames = lasis.shape[0]
 
     rhjc = np.zeros((n_frames, 3))
     lhjc = np.zeros((n_frames, 3))
@@ -86,8 +87,14 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     Returns:
         TRC: Updated TRC object with added RHJC and LHJC markers.
     """
-    pelvis_marker_names = ['RASIS', 'LASIS', 'RPSIS', 'LPSIS']
+    rasi = [m for m in trc.marker_set if re.search("^RASI", m) is not None][0]
+    lasi = [m for m in trc.marker_set if re.search("^LASI", m) is not None][0]
+    rpsi = [m for m in trc.marker_set if re.search("^RPSI", m) is not None][0]
+    lpsi = [m for m in trc.marker_set if re.search("^LPSI", m) is not None][0]
+    pelvis_marker_names = [lasi, lpsi, rasi, rpsi]
+
     markers = {}
+    pelvis_marker_names.sort()
     for m in pelvis_marker_names:
         coordinates = trc.marker_dict[m]
         x = trc.data[coordinates[0]]
@@ -95,7 +102,7 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
         z = trc.data[coordinates[2]]
         data = pd.DataFrame({'X': x, 'Y': y, 'Z': z})
         markers[m] = data
-    rhjc, lhjc = hjc_harrington(markers)
+    rhjc, lhjc = hjc_harrington(markers, )
 
     nb_markers = len(trc.marker_set)
     rhjc_coo = ['X' + str(nb_markers + 1), 'Y' + str(nb_markers + 1), 'Z' + str(nb_markers + 1)]
@@ -108,8 +115,7 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     # add markers to set:
     new.marker_set.append('RHJC')
     new.marker_set.append('LHJC')
-    new.metadata['origNumMarkers'] = og_markers_nb
-    new.metadata['NumMarkers'] = og_markers_nb + 2
+    new.metadata['NumMarkers'] = trc.metadata['NumMarkers'] + 2
     # add marker coordinates to set:
     new.col_names.extend(rhjc_coo)
     new.col_names.extend(lhjc_coo)
@@ -124,22 +130,24 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     return new
 
 
-def compute_hip_joints(input_path: str, output_path: str) -> TRC:
+def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
     """
     Full workflow to read, update, and save a TRC file with new virtual markers.
 
     Parameters:
         input_path (str): Path to the input TRC file.
-        output_path (str): Path to save the updated TRC file.
+        output_path (str): Path to save the updated TRC file. Optional. Object is not saved if not indicated.
 
     Returns:
+        TRC object with added hip joint markers.
 
     """
     try:
         trc = TRC.load(input_path)
         updated_trc = add_virtual_markers_to_trc(trc)
-        updated_trc.save(output_path)
-        logging.info(f"Updated TRC file saved to: {output_path}")
+        if output_path is not None:
+            updated_trc.save(output_path)
+            logging.info(f"Updated TRC file saved to: {output_path}")
         return updated_trc
     except Exception as e:
         message = f"Error while processing TRC file: {getattr(e, 'message', repr(e))}"
@@ -148,5 +156,5 @@ def compute_hip_joints(input_path: str, output_path: str) -> TRC:
 
 
 # Example usage
-compute_hip_joints(os.path.join("C:\\Users\\lgre690\\Documents\\MyData\\osim_tests", "static_01.trc"),
-                   "C:\\Users\\lgre690\\Documents\\MyData\\osim_tests")
+compute_hip_joints(os.path.join("C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas", "Static_0102.trc"),
+                   "C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas")

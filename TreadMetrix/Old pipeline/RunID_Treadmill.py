@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import opensim as osim
 from ptb.util.io.mocap.file_formats import TRC
-import local_paths as local
+import TreadMetrix.local_paths as local
 
 """
 This file is used to compute Inverse Dynamics data. 
@@ -13,12 +13,12 @@ This file is used to compute Inverse Dynamics data.
 
 # OpenSim
 local.configure_opensim()
-model_file              = local.get_model_file()
-trc_path                = local.get_segmented_trc_path()
-ik_path                 = local.get_segmented_mot_path()
-grf_path                = local.get_segmented_mot_path()
-external_loads_path     = local.get_external_loads_path()
-id_results_path         = local.get_id_results_path()
+model_file = local.get_model_file()
+trc_path = local.get_segmented_trc_path()
+ik_path = local.get_segmented_mot_path()
+grf_path = local.get_segmented_mot_path()
+external_loads_path = local.get_external_loads_path()
+id_results_path = local.get_id_results_path()
 
 for side in ["Right", "Left"]:
     os.makedirs(os.path.join(external_loads_path, side), exist_ok=True)
@@ -26,7 +26,7 @@ for side in ["Right", "Left"]:
 
 for side in ["Right", "Left"]:
     side_trc = os.path.join(trc_path, side)
-    side_ik  = os.path.join(ik_path, side)
+    side_ik = os.path.join(ik_path, side)
     side_grf = os.path.join(grf_path, side)
     side_xml = os.path.join(external_loads_path, side)
     side_out = os.path.join(id_results_path, side)
@@ -35,24 +35,24 @@ for side in ["Right", "Left"]:
         if not trc_file.endswith(".trc"):
             continue
 
-        name          = trc_file.replace(".trc", "")
+        name = trc_file.replace(".trc", "")
         trc_file_path = os.path.join(side_trc, trc_file)
-        ik_file_path  = os.path.join(side_ik, f"{name}.mot")
+        ik_file_path = os.path.join(side_ik, f"{name}.mot")
         grf_file_path = os.path.join(side_grf, f"{name}.mot")
         xml_file_path = os.path.join(side_xml, f"{name}.xml")
-        output_mot    = os.path.join(side_out, f"{name}.mot")
+        output_mot = os.path.join(side_out, f"{name}.mot")
 
         if not os.path.exists(ik_file_path) or not os.path.exists(grf_file_path):
             print(f"Skipping {name} (missing IK or GRF)")
             continue
 
         # Read start/end time from TRC
-        trc_data   = TRC.read(trc_file_path)
+        trc_data = TRC.read(trc_file_path)
         start_time = float(trc_data[0]['Data']['Time'][0])
-        end_time   = float(trc_data[0]['Data']['Time'][-1])
+        end_time = float(trc_data[0]['Data']['Time'][-1])
 
         # Generate ExternalLoads XML
-        df             = pd.read_csv(grf_file_path, sep=r'\s+', skiprows=6)
+        df = pd.read_csv(grf_file_path, sep=r'\s+', skiprows=6)
         external_loads = osim.ExternalLoads()
         external_loads.setDataFileName(grf_file_path)
 

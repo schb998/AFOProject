@@ -3,7 +3,7 @@ import os
 
 from resources.filetypes_gestion.mot import MOT
 from resources.filetypes_gestion.trc import TRC
-import local_paths as local
+import TreadMetrix.local_paths as local
 import data_postprocessing as pp
 
 if __name__ == "__main__":
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         m.rename(name=m.filename.replace('.mot', '') + "_corrected",
                  filename=m.filename.replace('.mot', '_corrected.mot'), )
 
-        pp.plot_grf_details(m, heel_strike_moments, toe_off_moments, str(save_corrected_path))
+        # pp.plot_grf_details(m, heel_strike_moments, toe_off_moments, str(save_corrected_path))
         m.save(save_corrected_path)
 
         # segment according to heel strikes:

@@ -2,13 +2,14 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import local_paths as local
+import TreadMetrix.local_paths as local
 
 """
 This file is used to segment pre-processed .mot files into smaller .mot files, each corresponding to a gait cycle.
     Input: processed .mot files.
     Output: segmented .mot files.
 """
+
 
 class CustomMOT:
     def __init__(self, data, column_labels, metadata):
@@ -20,9 +21,9 @@ class CustomMOT:
             column_labels (list): Column headers from the original MOT file.
             metadata (dict): Metadata extracted from the MOT file.
         """
-        self.data           = data
-        self.column_labels  = column_labels
-        self.metadata       = metadata
+        self.data = data
+        self.column_labels = column_labels
+        self.metadata = metadata
 
     def write(self, filename):
         """
@@ -43,6 +44,7 @@ class CustomMOT:
 
             # Write the data
             self.data.to_csv(file, sep='\t', index=False, header=False)
+
 
 def write_mot_files(samples, column_labels, metadata, output_dir):
     """
@@ -75,6 +77,7 @@ def write_mot_files(samples, column_labels, metadata, output_dir):
 
         print(f"Wrote MOT file: {filename}")
 
+
 def detect_heel_strikes(vertical_force, threshold=20):
     """
     Detect heel strikes from vertical ground reaction forces.
@@ -92,6 +95,7 @@ def detect_heel_strikes(vertical_force, threshold=20):
             heel_strikes.append(i)
     return heel_strikes
 
+
 def read_mot_files(corrected_mot_path, threshold=20):
     """
     Reads MOT files from a directory, extracts metadata and data, and detects heel strikes separately for left and right.
@@ -105,7 +109,7 @@ def read_mot_files(corrected_mot_path, threshold=20):
 
     """
     motion_data_list = []
-    file_list        = sorted(f for f in os.listdir(corrected_mot_path) if f.endswith('.mot'))
+    file_list = sorted(f for f in os.listdir(corrected_mot_path) if f.endswith('.mot'))
 
     for filename in file_list:
         file_path = os.path.join(corrected_mot_path, filename)
@@ -120,7 +124,7 @@ def read_mot_files(corrected_mot_path, threshold=20):
                 for _ in range(5):  # Skip the remaining metadata rows until 'endheader'
                     line = file.readline().strip()
                     if "=" in line:
-                        key, value            = line.split("=", 1)
+                        key, value = line.split("=", 1)
                         metadata[key.strip()] = value.strip()
 
                 # Skip the blank line after the header
@@ -132,15 +136,15 @@ def read_mot_files(corrected_mot_path, threshold=20):
 
                 # Detect heel strikes separately for left and right
                 if 'ground_force1_vy' in data.columns and 'ground_force2_vy' in data.columns:
-                    heel_strikes_left  = detect_heel_strikes(data['ground_force1_vy'], threshold)
+                    heel_strikes_left = detect_heel_strikes(data['ground_force1_vy'], threshold)
                     heel_strikes_right = detect_heel_strikes(data['ground_force2_vy'], threshold)
-                    metadata['heel_strikes_left']  = heel_strikes_left
+                    metadata['heel_strikes_left'] = heel_strikes_left
                     metadata['heel_strikes_right'] = heel_strikes_right
 
             # Append the parsed data to the list
             motion_data_list.append({
                 'fileName': filename,
-                'rawData':  data,
+                'rawData': data,
                 'colNames': data.columns.to_list(),
                 'metadata': metadata
             })
@@ -148,6 +152,7 @@ def read_mot_files(corrected_mot_path, threshold=20):
             print(f"Error reading {filename}: {e}")
 
     return motion_data_list
+
 
 def get_samples(mot_data, heel_strikes):
     """
@@ -162,10 +167,11 @@ def get_samples(mot_data, heel_strikes):
     """
     samples = {}
     for i in range(1, len(heel_strikes)):
-        start      = heel_strikes[i - 1]
-        end        = heel_strikes[i]
+        start = heel_strikes[i - 1]
+        end = heel_strikes[i]
         samples[i] = mot_data.iloc[start:end]
     return samples
+
 
 def visualize_heel_strikes(mot_data, heel_strikes_left, heel_strikes_right, threshold=20):
     """
@@ -177,7 +183,7 @@ def visualize_heel_strikes(mot_data, heel_strikes_left, heel_strikes_right, thre
         heel_strikes_right (list): Indices of detected right heel strikes.
         threshold (float): The threshold used for detection.
     """
-    time             = mot_data['time']
+    time = mot_data['time']
     ground_force1_vy = mot_data['ground_force1_vy']
     ground_force2_vy = mot_data['ground_force2_vy']
 
@@ -188,8 +194,10 @@ def visualize_heel_strikes(mot_data, heel_strikes_left, heel_strikes_right, thre
     plt.plot(time, ground_force2_vy, label="Right Vertical Force (ground_force2_vy)", alpha=0.8)
 
     # Mark left and right heel strikes
-    plt.scatter(time[heel_strikes_left], ground_force1_vy.iloc[heel_strikes_left], color='red', label="Left Heel Strikes", zorder=5)
-    plt.scatter(time[heel_strikes_right], ground_force2_vy.iloc[heel_strikes_right], color='blue', label="Right Heel Strikes", zorder=5)
+    plt.scatter(time[heel_strikes_left], ground_force1_vy.iloc[heel_strikes_left], color='red',
+                label="Left Heel Strikes", zorder=5)
+    plt.scatter(time[heel_strikes_right], ground_force2_vy.iloc[heel_strikes_right], color='blue',
+                label="Right Heel Strikes", zorder=5)
 
     # Add threshold line
     plt.axhline(y=threshold, color='gray', linestyle='--', label=f"Threshold ({threshold})")
@@ -202,11 +210,12 @@ def visualize_heel_strikes(mot_data, heel_strikes_left, heel_strikes_right, thre
     plt.savefig(local.get_segmented_mot_path(), "heelstrikes.png")
     plt.show()
 
+
 if __name__ == "__main__":
     corrected_mot_path = local.get_corrected_mot_path()
-    output_path        = local.get_segmented_mot_path()
-    output_dir_left    = os.path.join(output_path, 'Left')
-    output_dir_right   = os.path.join(output_path, 'Right')
+    output_path = local.get_segmented_mot_path()
+    output_dir_left = os.path.join(output_path, 'Left')
+    output_dir_right = os.path.join(output_path, 'Right')
     os.makedirs(output_dir_left, exist_ok=True)
     os.makedirs(output_dir_right, exist_ok=True)
     threshold = 20
@@ -217,15 +226,15 @@ if __name__ == "__main__":
     if motion_data:
         # Process each MOT file
         for file_data in motion_data:
-            mot_data      = file_data['rawData']
+            mot_data = file_data['rawData']
             column_labels = file_data['colNames']
-            metadata      = file_data['metadata']
+            metadata = file_data['metadata']
 
             # Get samples for left and right gait cycles
-            heel_strikes_left  = metadata.get('heel_strikes_left', [])
+            heel_strikes_left = metadata.get('heel_strikes_left', [])
             heel_strikes_right = metadata.get('heel_strikes_right', [])
-            left_samples       = get_samples(mot_data, heel_strikes_left)
-            right_samples      = get_samples(mot_data, heel_strikes_right)
+            left_samples = get_samples(mot_data, heel_strikes_left)
+            right_samples = get_samples(mot_data, heel_strikes_right)
 
             # Write MOT files for left gait cycles
             write_mot_files(left_samples, column_labels, metadata, output_dir_left)
@@ -234,4 +243,3 @@ if __name__ == "__main__":
             write_mot_files(right_samples, column_labels, metadata, output_dir_right)
     else:
         print("No MOT files found in the directory.")
-

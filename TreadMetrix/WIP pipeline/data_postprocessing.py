@@ -1,6 +1,6 @@
 from resources.filetypes_gestion.mot import MOT
 from resources.filetypes_gestion.trc import TRC
-import local_paths as local
+import TreadMetrix.local_paths as local
 import os
 from copy import deepcopy
 from scipy.signal import butter, filtfilt, find_peaks

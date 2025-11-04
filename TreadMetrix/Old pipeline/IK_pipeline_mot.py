@@ -1,7 +1,12 @@
 import os
 import sys
 import pandas as pd
-import local_paths as local
+import TreadMetrix.local_paths as local
+import numpy as np
+from scipy.signal import butter, filtfilt
+from ptb.util.io.mocap.file_formats import TRC
+from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels
+import opensim as osim
 
 # Setup OpenSim
 local.configure_opensim()
@@ -10,11 +15,6 @@ local.configure_opensim()
 # sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
 # os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
 
-import numpy as np
-from scipy.signal import butter, filtfilt
-from ptb.util.io.mocap.file_formats import TRC
-from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels
-import opensim as osim
 
 """
 This file is used to compute Inverse Kinematic data.
@@ -23,8 +23,8 @@ This file is used to compute Inverse Kinematic data.
 """
 
 # Paths
-model_file      = local.get_model_file()
-trc_path        = local.get_segmented_trc_path()
+model_file = local.get_model_file()
+trc_path = local.get_segmented_trc_path()
 ik_results_path = local.get_ik_results_path()
 
 # Ensure output folders exist
@@ -32,13 +32,14 @@ for side in ["Right", "Left"]:
     os.makedirs(os.path.join(ik_results_path, side), exist_ok=True)
 
 # Marker setup
-marker_names   = [
+marker_names = [
     'Sternum', 'LShoulder', 'RShoulder', 'LASIS', 'RASIS', 'RPSIS', 'LPSIS',
     'RFibula', 'RShank', 'RAnkleLateral', 'RToe', 'LToe', 'RMT5', 'RMT2', 'RHeel',
     'LFibula', 'LShank', 'LAnkleLateral', 'LMT5', 'LMT2', 'LHeel', 'RKneeLateral',
     'LAnkleMedial', 'LKneeLateral', 'RAnkleMedial', 'LKneeMedial', 'RKneeMedial'
 ]
 do_not_include = ['RKneeMedial', 'RAnkleMedial', 'RToe', 'LKneeMedial', 'LAnkleMedial', 'LToe']
+
 
 # Butterworth filter
 # todo check args
@@ -59,6 +60,7 @@ def filter_signals(data, fs=100, cutoff=6, order=2):
     nyq = 0.5 * fs
     b, a = butter(order, cutoff / nyq, btype='low', analog=False)
     return filtfilt(b, a, data, axis=0)
+
 
 # Read .mot using OpenSim Storage
 def read_mot_storage(filepath):
@@ -89,6 +91,7 @@ def read_mot_storage(filepath):
     data = np.array(data_vec)
     time_vec = np.array(time_vec).reshape(-1, 1)
     return labels, np.hstack((time_vec, data))
+
 
 # Write .mot file with OpenSim-compatible header
 # def write_filtered_mot(filename, data, headers):
