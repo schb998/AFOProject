@@ -102,30 +102,13 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
         z = trc.data[coordinates[2]]
         data = pd.DataFrame({'X': x, 'Y': y, 'Z': z})
         markers[m] = data
-    rhjc, lhjc = hjc_harrington(markers, )
-
-    nb_markers = len(trc.marker_set)
-    rhjc_coo = ['X' + str(nb_markers + 1), 'Y' + str(nb_markers + 1), 'Z' + str(nb_markers + 1)]
-    lhjc_coo = ['X' + str(nb_markers + 2), 'Y' + str(nb_markers + 2), 'Z' + str(nb_markers + 2)]
-
-    og_markers_nb = deepcopy(trc.metadata['NumMarkers'])
+    rhjc, lhjc = hjc_harrington(markers)
 
     new = trc.copy()
     new.filename = deepcopy(trc.filename).replace(".trc", "_addedHJ.trc")
-    # add markers to set:
-    new.marker_set.append('RHJC')
-    new.marker_set.append('LHJC')
-    new.metadata['NumMarkers'] = trc.metadata['NumMarkers'] + 2
-    # add marker coordinates to set:
-    new.col_names.extend(rhjc_coo)
-    new.col_names.extend(lhjc_coo)
-    new.marker_dict['RHJC'] = rhjc_coo
-    new.marker_dict['LHJC'] = lhjc_coo
-    # add data:
-    for i in range(3):
-        new.data[rhjc_coo[i]] = rhjc[:, i:i+1]
-    for i in range(3):
-        new.data[lhjc_coo[i]] = lhjc[:, i:i+1]
+
+    new.add_marker("RHJC", rhjc)
+    new.add_marker("LHJC", lhjc)
 
     return new
 
@@ -156,5 +139,6 @@ def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
 
 
 # Example usage
-compute_hip_joints(os.path.join("C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas", "Static_0102.trc"),
-                   "C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas")
+if __name__ == "__main__":
+    compute_hip_joints(os.path.join("C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas", "Static_0102.trc"),
+                       "C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas")
