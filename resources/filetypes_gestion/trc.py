@@ -235,102 +235,6 @@ class TRC(object):
             raise OSError(error_message)
 
 
-    @classmethod
-    def arrange(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> None:
-        """Overwrites a TRC file with a copy of data with added marker ZERO located at position (0,0,0) at all frames.
-
-        Used to arrange TRC files to use in OpenSim.
-
-        Args:
-            filepath: path to the TRC file.
-            filename:  name of the TRC file. \
-                Should be filled if path does not include filename, optional otherwise.
-            header: whether the TRC file includes a header. Default value is True.
-            delimiter: delimiter of the TRC file. Default value is "\t".
-
-        Returns:
-            None
-
-        Raises:
-            OSError: if the file cannot be read.
-
-        """
-        trc = cls.load(filepath, filename, header, delimiter)
-        old_name = deepcopy(trc.filename)
-        num_frames = trc.data.shape[0]
-        trc.add_marker('ZERO', {'X': np.zeros(num_frames),
-                                'Y': np.zeros(num_frames),
-                                'Z': np.zeros(num_frames)})
-        trc.rename(old_name)
-        trc.save(filepath)
-
-
-    def rename(self, filename: str):
-        """This method updates the TRC object's name and/or file_name.
-
-        Args:
-            filename (str): The new filename of the TRC object.
-        """
-        if not filename.endswith(".trc"):
-            self.filename = filename + ".trc"
-        else:
-            self.filename = filename
-
-
-    def add_marker(self, marker_name: str, data: dict[str, numpy.typing.ArrayLike]) -> None:
-        """Add a marker to the data.
-
-        Args:
-            marker_name: name of the marker
-            data: dictionary of the marker's position data. Raises exception if size is not 3. Keys will be kept unless/
-             they do not match typical naming patterns: each coordinate starting/ending with X/Y/Z or x/y/z.
-
-        Returns:
-            None
-
-        Raises:
-            Exception if given data does not contain exactly 3 coordinates.
-        """
-        if len(data) != 3:
-            raise Exception("Markers require three coordinates in order to be added.")
-
-        # manage marker name
-        name = marker_name
-        i = 2
-        while name in self.marker_set:
-            logging.info(f"Marker {name} already exists, changing name to {marker_name + str(i)}")
-            name = marker_name + str(i)
-        marker_name = name
-        self.marker_set.append(marker_name)
-        self.metadata['NumMarkers'] = self.metadata['NumMarkers'] + 1
-
-        # manage marker coordinates:
-        content = deepcopy(data)
-        columns = list(content.keys())
-        try:
-            x_column = [x for x in columns if re.search("^([Xx])|([Xx])$", x) is not None][0]
-            y_column = [y for y in columns if re.search("^([Yy])|([Yy])$", y) is not None][0]
-            z_column = [z for z in columns if re.search("^([Zz])|([Zz])$", z) is not None][0]
-            result = {x_column.upper(): content[x_column],
-                      y_column.upper(): content[y_column],
-                      z_column.upper(): content[z_column]}
-        except KeyError:
-            num = str(len(self.marker_set) + 1)
-            x_column = 'X'+num
-            y_column = 'Y'+num
-            z_column = 'Z'+num
-            logging.info(f"Columns names do not match expected X/Y/Z formulation. Assigning them coordinates X, Y, Z "
-                         f"and names {x_column}, {y_column}, {z_column}.")
-            result = {x_column: content[columns[0]],
-                      y_column: content[columns[1]],
-                      z_column: content[columns[2]]}
-        self.marker_dict[marker_name] = [x_column, y_column, z_column]
-        self.col_names.extend([x_column, y_column, z_column])
-        for coo in list(result.keys()):
-            self.data[coo] = result[coo]
-        self.rename(self.filename.replace('.trc', f'added_{marker_name}'))
-
-
     def save(self, filepath: str, filename: str = None) -> None:
         """Saves data into a TRC file.
 
@@ -354,15 +258,13 @@ class TRC(object):
             logging.warning(error_message)
             raise OSError(error_message)
 
-
-
         content = []
 
         if self.file_header is not None:
             line = ""
             for header in self.file_header:
                 line += f"{header}\t"
-            content.append(line + "\n")
+            content.append(line.strip() + "\n")
 
         c0 = ""
         c1 = ""
@@ -396,6 +298,113 @@ class TRC(object):
         with open(os.path.join(filepath, filename), 'w') as writer:
             writer.writelines(content)
         logging.info(f"File {filename} saved in directory {filepath}.")
+
+
+    @classmethod
+    def arrange(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> None:
+        """Overwrites a TRC file with a copy of data with added marker ZERO located at position (0,0,0) at all frames.
+
+        Used to arrange TRC files to use in OpenSim.
+
+        Args:
+            filepath: path to the TRC file.
+            filename:  name of the TRC file. \
+                Should be filled if path does not include filename, optional otherwise.
+            header: whether the TRC file includes a header. Default value is True.
+            delimiter: delimiter of the TRC file. Default value is "\t".
+
+        Returns:
+            None
+
+        Raises:
+            OSError: if the file cannot be read.
+
+        """
+        if filename is None:
+            temp = os.path.split(filepath)
+            filename = temp[1]
+            filepath = temp[0]
+        trc = cls.load(filepath, filename, header, delimiter)
+        old_name = deepcopy(trc.filename)
+        num_frames = trc.data.shape[0]
+        trc.add_marker('ZERO', {'X': np.zeros(num_frames),
+                                'Y': np.zeros(num_frames),
+                                'Z': np.zeros(num_frames)})
+        trc.rename(old_name)
+        trc.save(filepath)
+
+
+    def rename(self, filename: str):
+        """This method updates the TRC object's name and/or file_name.
+
+        Args:
+            filename (str): The new filename of the TRC object.
+        """
+        if not filename.endswith(".trc"):
+            self.filename = filename + ".trc"
+        else:
+            self.filename = filename
+
+
+    def add_marker(self, marker_name: str, data: dict[str, numpy.typing.ArrayLike]) -> None:
+        """Add a marker to the data.
+
+        Args:
+            marker_name: name of the marker
+            data: dictionary of the marker's position data. Raises exception if size is not 3. Keys will be kept unless/
+             they do not match typical naming patterns of each coordinate starting/ending with X/Y/Z or x/y/z.
+
+        Returns:
+            None
+
+        Raises:
+            Exception if given data does not contain exactly 3 coordinates.
+        """
+        if len(data) != 3:
+            raise Exception("Markers require three coordinates in order to be added.")
+
+        # manage marker name
+        name = marker_name
+        i = 2
+        while name in self.marker_set:
+            logging.info(f"Marker {name} already exists, changing name to {marker_name + str(i)}")
+            name = marker_name + str(i)
+            i = i+1
+        marker_name = name
+        self.marker_set.append(marker_name)
+        self.metadata['NumMarkers'] = self.metadata['NumMarkers'] + 1
+
+        def default_names():
+            num = str(len(self.marker_set))
+            return 'X'+num, 'Y'+num, 'Z'+num
+
+        # manage marker coordinates:
+        content = deepcopy(data)
+        columns = list(content.keys())
+        try:
+            x_column_name = [x for x in columns if re.search("^([Xx])|([Xx])$", x) is not None][0]
+            y_column_name = [y for y in columns if re.search("^([Yy])|([Yy])$", y) is not None][0]
+            z_column_name = [z for z in columns if re.search("^([Zz])|([Zz])$", z) is not None][0]
+
+        except KeyError as e:
+            logging.info(f"Columns do not match expected X/Y/Z name formulation. "
+                         f"Assigning them coordinates X, Y, Z in order.")
+            x_column_name = columns[0]
+            y_column_name = columns[1]
+            z_column_name = columns[2]
+
+        new_x_column_name, new_y_column_name, new_z_column_name = default_names()
+
+        result = {new_x_column_name: content[x_column_name],
+                  new_y_column_name: content[y_column_name],
+                  new_z_column_name: content[z_column_name]}
+
+        new_cols = list(result.keys())
+        self.marker_dict[marker_name] = new_cols
+        self.col_names.extend(new_cols)
+        for coo in new_cols:
+            self.data[coo] = result[coo]
+        self.rename(self.filename.replace('.trc', f'added_{marker_name}'))
 
 
     def copy(self) -> Self:
