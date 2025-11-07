@@ -1,20 +1,13 @@
 import os
 import sys
 import pandas as pd
-import TreadMetrix.local_paths as local
+import TreadMetrix.paths_access as local
 import numpy as np
 from scipy.signal import butter, filtfilt
 from ptb.util.io.mocap.file_formats import TRC
 from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels
 import opensim as osim
-
-# Setup OpenSim
-local.configure_opensim()
-# opensim_path = r"C:/OpenSim 4.4/bin"
-# os.environ['OPENSIM_HOME'] = opensim_path
-# sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
-# os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
-
+from TreadMetrix.wip_pipeline.osim_gestion import configure_opensim
 
 """
 This file is used to compute Inverse Kinematic data.
@@ -22,8 +15,9 @@ This file is used to compute Inverse Kinematic data.
     Output: segmented .mot files of the IK data.
 """
 
+configure_opensim()
 # Paths
-model_file = local.get_model_file()
+model_file = local.get_scaled_model_file()
 trc_path = local.get_segmented_trc_path()
 ik_results_path = local.get_ik_results_path()
 

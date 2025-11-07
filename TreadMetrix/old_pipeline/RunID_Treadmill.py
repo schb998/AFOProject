@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 import opensim as osim
 from ptb.util.io.mocap.file_formats import TRC
-import TreadMetrix.local_paths as local
+import TreadMetrix.paths_access as local
+from TreadMetrix.wip_pipeline.osim_gestion import configure_opensim
 
 """
 This file is used to compute Inverse Dynamics data. 
@@ -12,8 +13,8 @@ This file is used to compute Inverse Dynamics data.
 """
 
 # OpenSim
-local.configure_opensim()
-model_file = local.get_model_file()
+configure_opensim()
+model_file = local.get_scaled_model_file()
 trc_path = local.get_segmented_trc_path()
 ik_path = local.get_segmented_mot_path()
 grf_path = local.get_segmented_mot_path()

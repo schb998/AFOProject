@@ -1,31 +1,32 @@
 import numpy as np
 import os
-
+import re
 from resources.filetypes_gestion.mot import MOT
 from resources.filetypes_gestion.trc import TRC
-import TreadMetrix.local_paths as local
+import TreadMetrix.paths_access as new_local
+from TreadMetrix.paths_gui import main as gui_main
 import data_postprocessing as pp
 
 if __name__ == "__main__":
-    mot_raw_data_path = local.get_raw_mot_path()
-    trc_raw_data_path = local.get_raw_trc_path()
-    mot_corrected_output = local.get_corrected_mot_path()
+    gui_main()
 
-    # loads mot files:
-    mot_file_list = sorted(f for f in os.listdir(mot_raw_data_path) if f.endswith('.mot'))
-    mot_file_list = [file for file in mot_file_list if "static" not in file.lower()]
+    raw_mot_files = new_local.get_raw_mot_path()
+    raw_trc_files = new_local.get_raw_trc_path()
+    mot_corrected_output = new_local.get_corrected_mot_path()
+
+    # loads files:
     results = {}
-    for file in mot_file_list:
+    for file in raw_mot_files:
         try:
-            m = MOT.load(mot_raw_data_path, file)
+            m = MOT.load(file)
         except OSError:
             print(f"File {file} couldn't be loaded. Skipping.")
             break
         results[m.filename.replace('.mot', '')] = {'mot': m}
-    mot_file_list = results.keys()
+    raw_mot_files = results.keys()
 
     # process files:
-    for name in mot_file_list:
+    for name in raw_mot_files:
         m = results[name]['mot']
         time = m.data['time']
         frame_rate = 1 / np.mean(np.diff(time))
@@ -51,10 +52,13 @@ if __name__ == "__main__":
 
         # segment according to heel strikes:
         trc = None
+        trc_name = name + "\\.trc$"
+        matching_trc = [t for t in raw_trc_files if re.search(trc_name, t) is not None][0]
+
         try:
-            trc = TRC.load(trc_raw_data_path, m.filename.replace('_corrected.mot', '.trc'))
+            trc = TRC.load(matching_trc)
         except OSError:
-            print(f"No TRC file in {trc_raw_data_path} matching MOT file {name}. Skipping.")
+            print(f"No TRC file in matching MOT file {name}. Skipping.")
 
         if trc is None:
             results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments, save=False)

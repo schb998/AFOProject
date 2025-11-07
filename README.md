@@ -1,81 +1,58 @@
 # AFO Project
 
-This workflow filters and compute data from OSIM, MOT and TRC files to help the study of gait analysis.  
+This workflow filters and compute data from OSIM, MOT and TRC files to help the study of gait analysis.
 
-## Path management
+## WIP pipeline
 
-Have a look at the [`local_paths.py`](TreadMetrix/local_paths.py) file. This file is there to adapt to the computer and project specificities. 
-It uses a file called `.local.json` that is currently missing.  
+The pipeline in progress is located in [this](TreadMetrix/wip_pipeline) directory.
 
-`.local.json` needs to be created and added to the repository. 
-It will contain paths that are local to the computer and its directories
-and will not be pushed to the GitHub repository.  
+The pipeline in progress is [`full_pipeline.py`](TreadMetrix/wip_pipeline/full_pipeline.py).  
+It uses custom MOT and TRC classes of the [`resources/filetypes_gestion`](resources/filetypes_gestion) directory, 
+and automatically follows the steps of the pipeline 
+using functions located in [`data_postprocessing.py`](TreadMetrix/wip_pipeline/data_postprocessing.py).  
 
-### Update paths
+You just have to run [`full_pipeline.py`](TreadMetrix/wip_pipeline/full_pipeline.py).  
 
-Manually add the `.local.json` file into the [`TreadMetrix directory`](\TreadMetrix).  
 
-Then copy-paste and fill the following lines into `.local.json`:  
-```json
-{
-  "opensim_path":      "fill in with absolute path to bin file",
-  "base_path":         "fill in with absolute path to directory",
-  "osim_scaled_model": "fill in with absolute path to file"
-}
+## Old pipeline  
+
+The remaining files of the old pipeline are located in [this](TreadMetrix/old_pipeline) directory.
+They are programmed for deletion once adapted into the new pipeline and may not function as intended in the meantime.
+
+
+## Path management  
+
+If existing, have a look at the [`.local.json`](TreadMetrix/.local.json) file.
+
+> If it does not exist yet, don't worry: running the code will automatically create it.
+
+This file will be used to locally store the paths to the files used in the code, such as the directory where modified 
+files will be saved, or results of computations. It was prehemptily added to the [`.gitignore`](.gitignore) file, which 
+means it's not going to be pushed to the GitHub repository.
+
+When running the code, a window will appear and ask you to select paths and files that will be used during the pipeline. 
+This includes:  
+- `output path`, a directory to save the new files in, see details [below](#output-structure).
+- `raw MOTs`, the MOT files to process.  
+- `raw TRCs`, the TRC files to process.  
+- `scaled model`: if existing, you can select the scaled OSIM model of your participant.
+  If it does not exist, it will be generated as the code run using the following files:  
+  - `base model`: the OSIM model that will be scaled.  
+  - `scaling setup`: the XML file that will be used to scale the base model.  
+
+
+### Output structure  
+
+After running the code, the output directory will be as follows, some directories put aside 
+depending on file saving preferences:  
 ```
-
-> **To be noted:** some of those paths will require to be updated for each participant.
-
-Additional paths can be added: `"raw_mot"` & `"raw_trc"`, `"corrected_mot"`, `"segmented_mot"` & 
-`"segmented_trc"`, `"external_loads"`, `"ik_results"` & `"id_results"`, `"power_filtered"`.
-
-If those optional paths are not defined, the base_path directory will be assumed to be as follows:  
-
-```
-└── base_path
-    └── raw
-        ├── raw_mot.mot
-        └── raw_trc.trc
-```
-
-> **To be noted:** the `raw` directory illustrated can contain multiple MOT and TRC files. 
-> They will all be processed by the pipeline. 
->> The WIP pipeline do not process files containing the term "static".
-
-And the directory will be as follows after going through the pipeline (some directories put aside, 
-depending on file saving preferences):  
-```
-└── base_path
+└── output_path
     ├── corrected_mot
     ├── external_loads
     ├── id_results
     ├── ik_results
     ├── power_filtered
-    ├── raw
     └── segmented
         ├── mot
         └── trc
 ```
-
-## Current pipeline
-
-1. [`Treadmetrix.py`](TreadMetrix/TreadMetrix.py) filters a MOT file using the Butterworth filter.  
-2. [`mot.cut.steps.py`](TreadMetrix/mot.cut.steps.py) segments a filtered MOT file into multiple MOT files, 
-separated by gait cycle (heelstrike to following heelstrike) and leg side.  
-3. [`trc.cut.steps.py`](TreadMetrix/trc.cut.steps.py) segments a TRC file by side and gait cycle, 
-from the corresponding filtered MOT file.  
-4. [`IK_pipeline_mot`](TreadMetrix/IK_pipeline_mot.py) computes Inverse Kinematics from the data.  
-5. [`RunID_Treadmill`](TreadMetrix/RunID_Treadmill.py) computes Inverse Dynamics from the data.  
-6. [`Joint_power_mot_Treadmill`](TreadMetrix/Joint_power_mot_Treadmill.py) computes the joint power from the Ik and ID data.  
-
-Once [the local paths have been filled](#update-paths), run the files of the pipeline in the order above.  
-
-
-## WIP pipeline
-
-The pipeline in progress is [`full_pipeline.py`](TreadMetrix/full_pipeline.py).  
-It uses custom MOT and TRC classes of the [`resources/filetypes_gestion`](resources/filetypes_gestion) directory, 
-and automatically follows the steps of the pipeline 
-using functions located in [`data_postprocessing.py`](TreadMetrix/data_postprocessing.py).  
-
-Once [the local paths have been filled](#update-paths), run the pipeline file.

@@ -6,7 +6,7 @@ import math
 from scipy import interpolate
 from scipy.signal import butter, filtfilt
 import matplotlib.pyplot as plt
-import TreadMetrix.local_paths as local
+import TreadMetrix.paths_access as local
 
 """
 This file is used to compute joint power from processed .mot files of Inverse Kinematics & Dynamics.
@@ -71,7 +71,8 @@ def matches(method_name, column_names, gaitcycle):
         for name in column_names:
             if regex.search(name):
                 results.append(name)
-    return results
+        return results
+    return None
 
 
 def matches_angles(column_names, gaitcycle):
