@@ -1,10 +1,10 @@
 import os
-import sys
 import pandas as pd
-import TreadMetrix.paths_access as local
+import resources.paths.paths_access as local
+from TreadMetrix.wip_pipeline.osim_gestion import configure_opensim
 import numpy as np
 from scipy.signal import butter, filtfilt
-from resources.filetypes_gestion.trc import TRC
+from resources.file_types.trc import TRC
 from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels
 import opensim as osim
 
@@ -15,7 +15,6 @@ This file is used to compute Inverse Kinematic data.
 """
 
 
-# Butterworth filter
 def filter_signals(data, fs=100, cutoff=6, order=2):
     """
     Filter the signal according to the Butterworth method.
@@ -35,13 +34,12 @@ def filter_signals(data, fs=100, cutoff=6, order=2):
     return filtfilt(b, a, data, axis=0)
 
 
-# Read .mot using OpenSim Storage
-def read_mot_storage(filepath):
+def read_mot_storage(filepath: str) -> (tuple, str):
     """
     Read a .mot file from the storage path.
 
     Args:
-        filepath (String):
+        filepath: string, path to the mot file.
 
     Returns:
         String array: labels of the .mot file
@@ -50,12 +48,12 @@ def read_mot_storage(filepath):
     """
     storage = osim.Storage(filepath)
     label_array = storage.getColumnLabels()
-    labels = [label_array.get(i) for i in range(label_array.getSize())]
+    labels = [label_array.get(label) for label in range(label_array.getSize())]
 
     time_vec = []
     data_vec = []
-    for i in range(storage.getSize()):
-        row = storage.getStateVector(i)
+    for v in range(storage.getSize()):
+        row = storage.getStateVector(v)
         time_vec.append(row.getTime())
         data_array = row.getData()
         data_row = [data_array.get(j) for j in range(data_array.getSize())]
@@ -67,6 +65,18 @@ def read_mot_storage(filepath):
 
 
 def set_up_ik_tool(model_file, marker_data, start_time, end_time):
+    """
+    Set up OpenSim's Inverse Kinematics tool.
+
+    Args:
+        model_file:
+        marker_data:
+        start_time:
+        end_time:
+
+    Returns:
+
+    """
     tool = osim.InverseKinematicsTool()
     tool.set_model_file(model_file)
     tool.setMarkerDataFileName(marker_data)
@@ -76,20 +86,30 @@ def set_up_ik_tool(model_file, marker_data, start_time, end_time):
 
 
 def marker_tasks(tool, markers, do_not_include_list):
+    """
+    Setup OpenSim's taskset with gicen markers.
+
+    Args:
+        tool:
+        markers:
+        do_not_include_list:
+
+    Returns:
+
+    """
     taskset = tool.getIKTaskSet()
     for m in markers:
         task = osim.IKMarkerTask()
         task.setName(m)
         task.setApply(m not in do_not_include_list)
         task.setWeight(1)
-        taskset.cloneAndAppend(task)
+        taskset.append(task)
     return taskset
 
 
 if __name__ == "__main__":
-
     # Setup OpenSim
-    local.configure_opensim()
+    configure_opensim()
 
     # Paths
     model_file = local.get_scaled_model_file()

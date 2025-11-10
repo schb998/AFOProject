@@ -2,11 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import re
-import math
 from scipy import interpolate
 from scipy.signal import butter, filtfilt
-import matplotlib.pyplot as plt
-import TreadMetrix.paths_access as local
+import resources.paths.paths_access as local
 
 """
 This file is used to compute joint power from processed .mot files of Inverse Kinematics & Dynamics.

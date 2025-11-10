@@ -1,9 +1,8 @@
 import os
-import numpy as np
 import pandas as pd
 import opensim as osim
 from ptb.util.io.mocap.file_formats import TRC
-import TreadMetrix.paths_access as local
+import resources.paths.paths_access as local
 from TreadMetrix.wip_pipeline.osim_gestion import configure_opensim
 
 """

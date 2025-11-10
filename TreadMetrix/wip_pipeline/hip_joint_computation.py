@@ -1,8 +1,7 @@
-import os
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from resources.filetypes_gestion.trc import TRC
+from resources.file_types.trc import TRC
 from copy import deepcopy
 import logging
 import re
@@ -12,8 +11,8 @@ def hjc_harrington(marker_data: dict[str, npt.ArrayLike]) -> (np.typing.ArrayLik
     """
     Calculate Hip Joint Centers (HJC) using Harrington et al. (2006) method.
 
-    Parameters:
-        marker_data: dictionary of the pelvis markers' trajectories, by marker (marker_name = numpy arrays [n_frames, 3]).
+    Parameters: marker_data: dictionary of the pelvis markers' trajectories, by marker (marker_name = numpy arrays [
+    n_frames, 3]).
 
     Returns:
     RHJC: numpy array
@@ -136,9 +135,3 @@ def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
         message = f"Error while processing TRC file: {getattr(e, 'message', repr(e))}"
         logging.warning(message)
         raise Exception(message)
-
-
-# Example usage
-if __name__ == "__main__":
-    compute_hip_joints(os.path.join("C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas", "Static_0102.trc"),
-                       "C:\\Users\\lgre690\\Documents\\MyData\\osim_tests\\lilas")

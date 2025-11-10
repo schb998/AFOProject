@@ -1,10 +1,11 @@
 import opensim as osim
 from tkinter import *
 from tkinter.ttk import *
-from tkinter.filedialog import askopenfile, askopenfilenames, askdirectory
 import os
 import sys
-import TreadMetrix.wip_pipeline.tkinter_toolbox as tbox
+import resources.tkinter_toolbox as tbox
+from resources.custom_exceptions import *
+from resources.paths.paths_back import set_osim_path
 
 
 def configure_opensim() -> None:
@@ -13,9 +14,15 @@ def configure_opensim() -> None:
     Returns:
         None
     """
-    message = "Select OpenSim's source folder, \"bin\" directory"
-    tbox.infobox(message)
-    opensim_path = askdirectory(title=message)
+    def attempt() -> str:
+        try:
+            opensim_path = set_osim_path()
+            return opensim_path
+        except InvalidPathException as e:
+            tbox.infobox(e.message)
+            raise e
+
+    opensim_path = attempt()
     os.environ['OPENSIM_HOME'] = opensim_path
     os.add_dll_directory(opensim_path)
     sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
@@ -64,7 +71,7 @@ def scale_model() -> str:
     tbox.infobox(message)
     base_model_file = tbox.get_osim_file(instruction=message)
     if base_model_file is None:
-        raise Exception("No base model selected. Interrupting.")
+        raise MissingPathException("OpenSim base project file", "none", "interrupting")
     base_model_filename = base_model_file.name
     base_model = osim.Model(base_model_filename)
 
@@ -72,14 +79,14 @@ def scale_model() -> str:
     tbox.infobox(message)
     static = tbox.get_trc_file(instruction=message)
     if static is None:
-        raise Exception("No static file selected. Interrupting.")
+        raise MissingPathException("Static TRC file", "none", "interrupting")
     static_filename = static.name
 
     message = "Select the scaling setup file."
     tbox.infobox(message)
     scale_setup = tbox.get_xml_file(instruction=message)
     if scale_setup is None:
-        raise Exception("No static file selected. Interrupting.")
+        raise MissingPathException("Sacling tool setup XML file", "none", "interrupting")
     scale_setup_filename = scale_setup.name
 
     scale_tool = osim.ScaleTool(scale_setup_filename)

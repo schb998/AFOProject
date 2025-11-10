@@ -7,7 +7,7 @@ This workflow filters and compute data from OSIM, MOT and TRC files to help the 
 The pipeline in progress is located in [this](TreadMetrix/wip_pipeline) directory.
 
 The pipeline in progress is [`full_pipeline.py`](TreadMetrix/wip_pipeline/full_pipeline.py).  
-It uses custom MOT and TRC classes of the [`resources/filetypes_gestion`](resources/filetypes_gestion) directory, 
+It uses custom MOT and TRC classes of the [`resources/filetypes_gestion`](resources/file_types) directory, 
 and automatically follows the steps of the pipeline 
 using functions located in [`data_postprocessing.py`](TreadMetrix/wip_pipeline/data_postprocessing.py).  
 
@@ -22,7 +22,7 @@ They are programmed for deletion once adapted into the new pipeline and may not 
 
 ## Path management  
 
-If existing, have a look at the [`.local.json`](TreadMetrix/.local.json) file.
+If existing, have a look at the [`.local.json`](resources/paths/.local.json) file.
 
 > If it does not exist yet, don't worry: running the code will automatically create it.
 

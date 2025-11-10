@@ -1,7 +1,6 @@
 import os
-import sys
 import pandas as pd
-import TreadMetrix.paths_access as local
+import resources.paths.paths_access as local
 import numpy as np
 from scipy.signal import butter, filtfilt
 from ptb.util.io.mocap.file_formats import TRC

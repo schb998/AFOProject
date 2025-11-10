@@ -1,18 +1,18 @@
 import numpy as np
 import os
 import re
-from resources.filetypes_gestion.mot import MOT
-from resources.filetypes_gestion.trc import TRC
-import TreadMetrix.paths_access as new_local
-from TreadMetrix.paths_gui import main as gui_main
+from resources.file_types.mot import MOT
+from resources.file_types.trc import TRC
+import resources.paths.paths_access as local
+from resources.paths.paths_gui import main as gui_main
 import data_postprocessing as pp
 
 if __name__ == "__main__":
+    # update local paths and read them:
     gui_main()
-
-    raw_mot_files = new_local.get_raw_mot_path()
-    raw_trc_files = new_local.get_raw_trc_path()
-    mot_corrected_output = new_local.get_corrected_mot_path()
+    raw_mot_files = local.get_raw_mot_path()
+    raw_trc_files = local.get_raw_trc_path()
+    mot_corrected_output = local.get_corrected_mot_path()
 
     # loads files:
     results = {}
