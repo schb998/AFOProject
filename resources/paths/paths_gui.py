@@ -1,7 +1,6 @@
 from tkinter import *
 from tkinter.ttk import *
 import resources.tkinter_toolbox as tbox
-import TreadMetrix.wip_pipeline.osim_gestion as osim
 import resources.paths.paths_back as back
 
 LABELS: dict[Label, str] = {}
@@ -9,12 +8,8 @@ CURRENT_ROW = 0
 
 
 def _update_labels():
-    local = back.get_local()
     for lab in LABELS:
-        try:
-            lab.config(text=_reformat(local[LABELS[lab]]))
-        except KeyError:
-            lab.config(text=_reformat(None))
+        lab.config(text=_reformat(back.get_local(LABELS[lab])))
 
 
 def _update_row():
@@ -42,7 +37,7 @@ def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "output_path"})
 
-    select_button = Button(root, text="Select output directory",
+    select_button = Button(root, text="Select",
                            command=lambda: {back.set_output_directory(), _update_labels()})
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
@@ -62,7 +57,7 @@ def _setup_raw_mot(root: Tk) -> (Label, Label, Button, Button):
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_mot"})
 
-    select_button = Button(root, text="Select raw MOT files to process",
+    select_button = Button(root, text="Select",
                            command=lambda: {back.set_raw_mots(), _update_labels()})
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
@@ -82,7 +77,7 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_trc"})
 
-    select_button = Button(root, text="Select raw TRC files to process",
+    select_button = Button(root, text="Select",
                            command=lambda: {back.set_raw_trcs(), _update_labels()})
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
@@ -105,7 +100,7 @@ def _setup_row(root: Tk, label_name: str, name_in_json: str, button_txt: str, se
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: name_in_json})
 
-    select_button = Button(root, text=button_txt, command={select_action, _update_labels()})
+    select_button = Button(root, text="Select", command={select_action, _update_labels()})
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
     unselect_button = Button(root, text="Unselect",
@@ -116,29 +111,20 @@ def _setup_row(root: Tk, label_name: str, name_in_json: str, button_txt: str, se
     return label, selected, select_button, unselect_button
 
 
-def _osim_button(root: Tk) -> Button:
-    osim_button = Button(root, text="Manage local OpenSim paths", command=lambda: {osim.main()})
-    osim_button.grid(row=CURRENT_ROW, column=1, sticky=S)
-    _update_row()
-    return osim_button
-
-
 def _tk_window() -> Tk:
     root = Tk()
     root.title("Path management")
     tbox.set_up_window(root, window_width=800)
-    root.columnconfigure(3)
+    root.columnconfigure(4)
 
     _setup_output_directory(root)
     _setup_raw_mot(root)
     _setup_raw_trc(root)
 
-    _osim_button(root)
-
     _update_row()
-    save_button = Button(root, text="Save", default='active',
+    save_button = Button(root, text="Save/Proceed", default='active',
                          command=lambda: {back.save_to_json(), root.destroy()})
-    save_button.grid(row=CURRENT_ROW, column=3, sticky=S)
+    save_button.grid(row=CURRENT_ROW)
 
     return root
 

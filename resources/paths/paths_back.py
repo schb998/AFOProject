@@ -134,14 +134,16 @@ def delete_raw_trc() -> None:
     _remove_from_local("raw_trc")
 
 
-def set_osim_path() -> str:
+def set_osim_path() -> None:
     message = "Select OpenSim's source folder, \"bin\" directory"
     tbox.infobox(message)
     opensim_path = askdirectory(title=message,
                                 initialdir=os.path.expanduser("~/Documents"))
     if not os.path.isdir(opensim_path):
+        tbox.infobox("Selected path is not a directory.")
         raise WrongExtensionException("OpenSim's source folder", opensim_path)
     if os.path.basename(opensim_path) != "bin":
+        tbox.infobox("Selected directory is not \"bin\".")
         raise InvalidPathException("OpenSim's source folder", opensim_path, "given path is not \"bin\" directory.")
     _update_local("osim_path", opensim_path)
-    return opensim_path
+    save_to_json()

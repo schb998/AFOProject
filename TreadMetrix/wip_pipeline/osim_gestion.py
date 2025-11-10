@@ -5,7 +5,28 @@ import os
 import sys
 import resources.tkinter_toolbox as tbox
 from resources.custom_exceptions import *
-from resources.paths.paths_back import set_osim_path
+from resources.paths.paths_back import set_osim_path, get_local
+from resources.paths.paths_access import get_osim_path, get_base_model_file, get_scaled_model_file
+
+LABELS: dict[Label, str] = {}
+BUTTONS: dict[Button, str] = {}
+CURRENT_ROW = 0
+
+
+def _update_labels():
+    for lab in LABELS:
+        content = get_local(LABELS[lab])
+        txt = content if content is not None else "empty"
+        lab.config(text=txt)
+
+
+def _update_buttons():
+    for button in BUTTONS:
+        content = get_local(BUTTONS[button])
+        if content is None:
+            button.state(['disabled'])
+        else:
+            button.state(['!disabled'])
 
 
 def configure_opensim() -> None:
@@ -14,15 +35,42 @@ def configure_opensim() -> None:
     Returns:
         None
     """
-    def attempt() -> str:
-        try:
-            opensim_path = set_osim_path()
-            return opensim_path
-        except InvalidPathException as e:
-            tbox.infobox(e.message)
-            raise e
 
-    opensim_path = attempt()
+    root = Tk()
+    root.title("OpenSim's source folder")
+    tbox.set_up_window(root, window_width=800)
+    root.columnconfigure(2)
+
+    label = Label(root, text="Saved path:")
+    label.grid(row=0, column=0, sticky=NW, pady=10)
+
+
+    selected = Label(root, text=get_osim_path())
+    selected.grid(row=0, column=1, sticky=NW, pady=10)
+    LABELS.update({selected: "osim_path"})
+
+    def button_click():
+        set_osim_path()
+        _update_labels()
+        _update_buttons()
+
+    select_button = Button(root, text="Select new", command=button_click)
+    select_button.grid(row=1, column=0, sticky=NW, pady=10)
+
+    confirm_button = Button(root, text="Confirm", command=root.destroy)
+    confirm_button.grid(row=1, column=1, sticky=NW, pady=10)
+    BUTTONS.update({confirm_button: "osim_path"})
+    _update_buttons()
+
+    try:
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)
+    finally:
+        root.mainloop()
+
+    opensim_path = get_osim_path()
+
+
     os.environ['OPENSIM_HOME'] = opensim_path
     os.add_dll_directory(opensim_path)
     sys.path.append(os.path.join(opensim_path, 'Bindings', 'Python'))
@@ -86,7 +134,7 @@ def scale_model() -> str:
     tbox.infobox(message)
     scale_setup = tbox.get_xml_file(instruction=message)
     if scale_setup is None:
-        raise MissingPathException("Sacling tool setup XML file", "none", "interrupting")
+        raise MissingPathException("Scaling tool setup XML file", "none", "interrupting")
     scale_setup_filename = scale_setup.name
 
     scale_tool = osim.ScaleTool(scale_setup_filename)
@@ -104,8 +152,9 @@ def main() -> None:
     configure_opensim()
 
     root = Tk()
-    root.title("Model scaling and IK via Opensim")
+    root.title("Model scaling and IK via OpenSim")
     tbox.set_up_window(root)
+    root.columnconfigure(2)
 
     button1 = Button(root, text="Select scaled model", command=open_scaled_model)
     button2 = Button(root, text="Scale a model", command=scale_model)

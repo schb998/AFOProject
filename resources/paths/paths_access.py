@@ -1,6 +1,6 @@
 import os
-
-from resources.paths.paths_back import get_local, MissingLoadbearingPathException
+from resources.custom_exceptions import *
+from resources.paths.paths_back import get_local
 from resources.paths.paths_gui import missing_loadbearing_path
 
 
@@ -8,7 +8,7 @@ def _call_to_gui(reason: str) -> None:
     missing_loadbearing_path(reason)
 
 
-def get_base_path() -> str:
+def get_output_path() -> str:
     content = get_local("output_path")
     if content is not None:
         return content
@@ -17,6 +17,10 @@ def get_base_path() -> str:
     if content is not None:
         return content
     raise MissingLoadbearingPathException("Output directory")
+
+
+def get_osim_path() -> str | None:
+    return get_local("osim_path")
 
 
 def get_scaled_model_file() -> str:
@@ -35,6 +39,8 @@ def get_base_model_file() -> str:
     if content is not None:
         return content
     raise OSError("No scaled model in .local.json.")
+
+
 
 
 def get_raw_mot_path() -> str | list[str]:

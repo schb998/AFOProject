@@ -128,7 +128,7 @@ for side in ["Right", "Left"]:
 
         # Name format
         cycle_name = f"{side.lower()}_cycle_{i}"
-        mot_path_temp = os.path.join(local.get_base_path(), f"{cycle_name}_temp.mot")
+        mot_path_temp = os.path.join(local.get_output_path(), f"{cycle_name}_temp.mot")
         mot_path_final = os.path.join(out_side_path, f"{cycle_name}.mot")
         # mot_path_final = mot_path_temp + ".mot"
         ik_tool.setOutputMotionFileName(mot_path_temp)
