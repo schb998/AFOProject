@@ -16,7 +16,7 @@ def get_output_path() -> str:
     content = get_local("output_path")
     if content is not None:
         return content
-    raise MissingLoadbearingPathException("Output directory")
+    raise MissingPathException("Output directory")
 
 
 def get_osim_path() -> str | None:
@@ -31,7 +31,7 @@ def get_scaled_model_file() -> str:
     content = get_local('osim_scaled_model')
     if content is not None:
         return content
-    raise MissingLoadbearingPathException("Scaled OpenSim model")
+    raise MissingPathException("Scaled OpenSim model")
 
 
 def get_base_model_file() -> str:

@@ -135,7 +135,7 @@ def scale_model() -> str:
     tbox.infobox(message)
     base_model_file = tbox.get_osim_file(instruction=message)
     if base_model_file is None:
-        raise MissingPathException("OpenSim base project file", "none", "interrupting")
+        raise MissingPathException("OpenSim base project file", "interrupting")
     base_model_filename = base_model_file.name
     base_model = osim.Model(base_model_filename)
 
@@ -143,14 +143,14 @@ def scale_model() -> str:
     tbox.infobox(message)
     static = tbox.get_trc_file(instruction=message)
     if static is None:
-        raise MissingPathException("Static TRC file", "none", "interrupting")
+        raise MissingPathException("Static TRC file", "interrupting")
     static_filename = static.name
 
     message = "Select the scaling setup file."
     tbox.infobox(message)
     scale_setup = tbox.get_xml_file(instruction=message)
     if scale_setup is None:
-        raise MissingPathException("Scaling tool setup XML file", "none", "interrupting")
+        raise MissingPathException("Scaling tool setup XML file", "interrupting")
     scale_setup_filename = scale_setup.name
 
     scale_tool = osim.ScaleTool(scale_setup_filename)
