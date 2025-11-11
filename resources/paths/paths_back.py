@@ -1,13 +1,10 @@
-from tkinter.filedialog import askopenfilenames, askdirectory
 import os
-import resources.tkinter_toolbox as tbox
 import json
 import json.decoder
 from copy import deepcopy
 from resources.custom_exceptions import *
 import logging
 
-# todo: clean up the gui/back interractions by sending all tkinter usages to gui
 # todo: find a way to match selected trcs with the mots?
 
 """
@@ -155,7 +152,7 @@ def get_local(key: str = None) -> str | list[str] | dict[str, str | list[str]]:
     return deepcopy(_LOCAL)
 
 
-def _get_default_searching_path() -> str:
+def get_default_searching_path() -> str:
     """Return the directory to use as initial directory when selecting paths.
 
     Returns:
@@ -165,44 +162,39 @@ def _get_default_searching_path() -> str:
     return loc if loc is not None else os.path.expanduser("~/Documents")
 
 
-# setup paths for the virtual save, may require a save in local file.
+# setup paths for the virtual save (may require a save in local file).
 
 
-def set_output_directory() -> None:
-    """Set up the output path from user input.
+def set_output_directory(selection: str | None) -> bool:
+    """Set up the output path into the virtual save if valid.
 
-    Returns:
-        None
-    """
-    message = "Select the directory in which to save the pipeline's files."
-    tbox.infobox(message)
-    answer = askdirectory(title=message, initialdir=_get_default_searching_path())
-    if (not answer) or (not os.path.exists(answer)):
-        tbox.infobox("No directory selected.")
-        return
-    if not os.access(answer, os.W_OK):
-        tbox.infobox("Selected directory is not writeable.")
-        return
-    _update_local("output_path", answer)
-
-
-def set_raw_mots() -> None:
-    """Select the raw MOT files to process and save them in virtaul save.
+    Args:
+        selection: path to save as output directory if valid
 
     Returns:
-        None
+        bool, whether the given path is a valid output directory
     """
-    message = "Select the raw MOT files to process."
-    tbox.infobox(message)
-    selection = askopenfilenames(title=message,
-                                 initialdir=_get_default_searching_path(),
-                                 filetypes=[("OpenSim Motion files", "*.mot")])
+    if ((selection is None)
+            or (not selection)
+            or (not os.path.exists(selection))
+            or not os.access(selection, os.W_OK)):
+        return False
+    _update_local("output_path", selection)
+    return True
+
+
+def set_raw_mots(selection: list[str] | None) -> (bool, str | None):
+    """Set up the given MOT files into the virtual save if valid.
+
+    Args:
+        selection: filepaths to save if valid
+
+    Returns:
+        bool, whether there are valid files to process in the given list
+        str | None, details such as invalid files or error message
+    """
     if len(selection) == 0:
-        tbox.infobox("No files selected.")
-        return
-    selection = list(selection)
-    selection.sort()
-    tbox.infobox(f"Selected files: {selection}.")
+        return False, "No file selected."
 
     faulty = []
     for file in selection:
@@ -210,28 +202,30 @@ def set_raw_mots() -> None:
             faulty.append(file)
             selection.remove(file)
 
+    if len(selection) == 0:
+        return False, "None of the selected files were valid."
+
     if len(faulty) > 0:
-        tbox.infobox(f"Selected files {faulty} are not valid and will not be processed.")
+        message = f"Selected files {faulty} are not valid and will not be processed."
+    else:
+        message = None
+
     _update_local("raw_mot", selection)
+    return True, message
 
 
-def set_raw_trcs() -> None:
-    """Select the raw TRC files to process and save them in virtaul save.
+def set_raw_trcs(selection: list[str] | None) -> (bool, str | None):
+    """Set up the given TRC files into the virtual save if valid.
+
+    Args:
+        selection: filepaths to save if valid
 
     Returns:
-        None
+        bool, whether there are valid files to process in the given list
+        str | None, details such as invalid files or error message
     """
-    message = "Select the raw TRC files to process."
-    tbox.infobox(message)
-    selection = askopenfilenames(title=message,
-                                 initialdir=_get_default_searching_path(),
-                                 filetypes=[("OpenSim Marker files", "*.trc")])
     if len(selection) == 0:
-        tbox.infobox("No files selected.")
-        return
-    selection = list(selection)
-    selection.sort()
-    tbox.infobox(f"Selected files: {selection}.")
+        return False, "No file selected."
 
     faulty = []
     for file in selection:
@@ -239,34 +233,32 @@ def set_raw_trcs() -> None:
             faulty.append(file)
             selection.remove(file)
 
+    if len(selection) == 0:
+        return False, "None of the selected files were valid."
+
     if len(faulty) > 0:
-        tbox.infobox(f"Selected files {faulty} are not valid and will not be processed.")
+        message = f"Selected files {faulty} are not valid and will not be processed."
+    else:
+        message = None
+
     _update_local("raw_trc", selection)
+    return True, message
 
 
-
-def set_osim_path() -> None:
-    """Save selected OpenSim source folder in both local and file save.
+def set_osim_path(selection: str | None) -> (bool, str | None):
+    """If valid, save selected OpenSim source folder in both local and file save.
 
     Returns:
-        None
-
-    Raises:
-        WrongExtensionException: if selected path does not exist or is not a directory.
-        InvalidPathException: if the selected directory is not the "bin" directory.
+        bool, whether the selection was valid.
+        str, if selection invalid, description fo the issue.
     """
-    message = "Select OpenSim's source folder, \"bin\" directory"
-    tbox.infobox(message)
-    opensim_path = askdirectory(title=message,
-                                initialdir=os.path.expanduser("~/Documents"))
-    if not os.path.isdir(opensim_path):
-        tbox.infobox("Selected path is not a directory.")
-        raise WrongExtensionException("OpenSim's source folder", opensim_path)
-    if os.path.basename(opensim_path) != "bin":
-        tbox.infobox("Selected directory is not \"bin\".")
-        raise InvalidPathException("OpenSim's source folder", opensim_path, "given path is not \"bin\" directory.")
-    _update_local("osim_path", opensim_path)
+    if not os.path.isdir(selection):
+        return False, "Selected path is not a directory."
+    if os.path.basename(selection) != "bin":
+        return False, "Selected directory is not \"bin\"."
+    _update_local("osim_path", selection)
     save_to_json()
+    return True, None
 
 
 def delete_output_directory() -> None:
@@ -294,4 +286,3 @@ def delete_raw_trc() -> None:
         None
     """
     _remove_from_local("raw_trc")
-

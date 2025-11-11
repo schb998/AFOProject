@@ -1,5 +1,6 @@
 from tkinter import *
 from tkinter import messagebox
+from tkinter.filedialog import askdirectory, askopenfilenames
 from tkinter.ttk import *
 import resources.tkinter_toolbox as tbox
 import resources.paths.paths_back as back
@@ -84,7 +85,12 @@ def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     LABELS.update({selected: "output_path"})
 
     def select_button_click():
-        back.set_output_directory()
+        message = "Select the directory in which to save the pipeline's files."
+        tbox.infobox(message)
+        value = askdirectory(title=message, initialdir=back.get_default_searching_path())
+        valid = back.set_output_directory(value)
+        if not valid:
+            tbox.infobox("Selection does not match requirement. Issue could be existence or writeability.")
         _update_labels()
         _update_button()
 
@@ -125,7 +131,21 @@ def _setup_raw_mot(root: Tk) -> (Label, Label, Button, Button):
     LABELS.update({selected: "raw_mot"})
 
     def select_button_click():
-        back.set_raw_mots()
+        message = "Select the raw MOT files to process."
+        tbox.infobox(message)
+        selection = list(askopenfilenames(title=message,
+                                          initialdir=back.get_default_searching_path(),
+                                          filetypes=[("OpenSim Motion files", "*.mot")]))
+        selection.sort()
+        valid, detail = back.set_raw_mots(selection)
+        if not valid:
+            message = f"Selection does not match requirement."
+            if detail is not None:
+                message = message + " " + detail
+            tbox.infobox(message)
+            return
+        if detail is not None:
+            tbox.infobox(detail)
         _update_labels()
         _update_button()
 
@@ -166,7 +186,21 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     LABELS.update({selected: "raw_trc"})
 
     def select_button_click():
-        back.set_raw_trcs()
+        message = "Select the raw TRC files to process."
+        tbox.infobox(message)
+        selection = list(askopenfilenames(title=message,
+                                          initialdir=back.get_default_searching_path(),
+                                          filetypes=[("OpenSim Marker files", "*.trc")]))
+        selection.sort()
+        valid, detail = back.set_raw_trcs(selection)
+        if not valid:
+            message = f"Selection does not match requirement."
+            if detail is not None:
+                message = message + " " + detail
+            tbox.infobox(message)
+            return
+        if detail is not None:
+            tbox.infobox(detail)
         _update_labels()
         _update_button()
 
@@ -187,7 +221,7 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     return label, selected, select_button, unselect_button
 
 
-def _setup_row(root: Tk, label_name: str, name_in_json: str, select_action, unselect_action):
+def _setup_new_row(root: Tk, label_name: str, name_in_json: str, select_action, unselect_action):
     """Set up a line on given window to manage a specific path. Has issues, not to use at the moment.
 
     Args:
@@ -233,7 +267,12 @@ def _setup_row(root: Tk, label_name: str, name_in_json: str, select_action, unse
     return label, selected, select_button, unselect_button
 
 
-def _tk_window() -> Tk:
+def missing_loadbearing_path(reason: str) -> None:
+    tbox.infobox(reason)
+    main()
+
+
+def main() -> None:
     root = Tk()
     root.title("Path management")
     tbox.set_up_window(root, window_width=800)
@@ -256,16 +295,6 @@ def _tk_window() -> Tk:
     BUTTON = proceed_button
     _update_button()
 
-    return root
-
-
-def missing_loadbearing_path(reason: str) -> None:
-    tbox.infobox(reason)
-    main()
-
-
-def main() -> None:
-    root = _tk_window()
     root.protocol("WM_DELETE_WINDOW", lambda: tbox.on_closing(root, "Unsaved change will be lost."))
     try:
         from ctypes import windll

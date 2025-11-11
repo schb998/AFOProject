@@ -1,5 +1,6 @@
 import opensim as osim
 from tkinter import *
+from tkinter.filedialog import askdirectory
 from tkinter.ttk import *
 import os
 import sys
@@ -55,17 +56,23 @@ def configure_opensim() -> None:
 
     root.protocol("WM_DELETE_WINDOW", lambda: custom_on_closing(root))
 
-    selected = Label(root, text=get_osim_path())
+    selected = Label(root, text=get_osim_path(), background="darkgrey")
     selected.grid(row=0, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "osim_path"})
 
     def button_click():
-        set_osim_path()
+        message = "Select OpenSim's source folder, \"bin\" directory"
+        tbox.infobox(message)
+        selection = askdirectory(title=message,
+                                 initialdir=os.path.expanduser("~/Documents"))
+        valid, reason = set_osim_path(selection)
+        if not valid:
+            tbox.infobox(reason)
         _update_labels()
         _update_buttons()
 
     select_button = Button(root, text="Select new", command=button_click)
-    select_button.grid(row=1, column=0, sticky=NW, pady=10)
+    select_button.grid(row=0, column=2, sticky=NW, pady=10)
 
     confirm_button = Button(root, text="Confirm", command=root.destroy)
     confirm_button.grid(row=1, column=1, sticky=NW, pady=10)
