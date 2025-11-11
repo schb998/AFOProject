@@ -1,3 +1,4 @@
 .idea/
-.local.json
-.test.log
+local.json
+test.log
+path_navigation.log

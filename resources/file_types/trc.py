@@ -939,5 +939,5 @@ class _Test:
 
 if __name__ == "__main__":
     logger = logging.getLogger("test")
-    logging.basicConfig(filename='.test.log', level=logging.INFO)
+    logging.basicConfig(filename='test.log', level=logging.INFO)
     _Test.main()

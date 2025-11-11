@@ -2,6 +2,7 @@
 
 This workflow filters and compute data from OSIM, MOT and TRC files to help the study of gait analysis.
 
+
 ## WIP pipeline
 
 The pipeline in progress is located in [this](TreadMetrix/wip_pipeline) directory.
@@ -22,7 +23,7 @@ They are programmed for deletion once adapted into the new pipeline and may not 
 
 ## Path management  
 
-If existing, have a look at the [`.local.json`](resources/paths/.local.json) file.
+If existing, have a look at the [`local.json`](resources/paths/local.json) file.
 
 > If it does not exist yet, don't worry: running the code will automatically create it.
 

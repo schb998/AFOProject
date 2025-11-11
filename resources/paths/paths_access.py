@@ -38,7 +38,7 @@ def get_base_model_file() -> str:
     content = get_local('osim_base_model')
     if content is not None:
         return content
-    raise OSError("No scaled model in .local.json.")
+    raise OSError("No scaled model in local.json.")
 
 
 
