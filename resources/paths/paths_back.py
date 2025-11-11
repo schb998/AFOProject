@@ -18,8 +18,7 @@ instead.
 """
 
 # logs for debug
-logger = logging.getLogger("test")
-logging.basicConfig(filename='path_navigation.log', level=logging.INFO)
+logging.basicConfig(filename=os.path.join(os.path.dirname(__file__), "path_navigation.log"), level=logging.INFO)
 
 
 # manipulate save file local.json:
@@ -178,6 +177,7 @@ def set_output_directory(selection: str | None) -> bool:
             or (not selection)
             or (not os.path.exists(selection))
             or not os.access(selection, os.W_OK)):
+        logging.warning(f"Attempt at updating output directory to {selection} failed.")
         return False
     _update_local("output_path", selection)
     return True
@@ -194,7 +194,9 @@ def set_raw_mots(selection: list[str] | None) -> (bool, str | None):
         str | None, details such as invalid files or error message
     """
     if len(selection) == 0:
-        return False, "No file selected."
+        message = "No file selected."
+        logging.warning(f"Attempt at updating output directory to {selection} failed: {message}.")
+        return False, message
 
     faulty = []
     for file in selection:
@@ -203,10 +205,13 @@ def set_raw_mots(selection: list[str] | None) -> (bool, str | None):
             selection.remove(file)
 
     if len(selection) == 0:
-        return False, "None of the selected files were valid."
+        message = "None of the selected files were valid."
+        logging.warning(f"Attempt at updating selection of raw MOT files to process to {faulty} failed: {message}.")
+        return False, message
 
     if len(faulty) > 0:
         message = f"Selected files {faulty} are not valid and will not be processed."
+        logging.info(f"Files {faulty} are invalid MOT files to process and will not be processed.")
     else:
         message = None
 
@@ -225,7 +230,9 @@ def set_raw_trcs(selection: list[str] | None) -> (bool, str | None):
         str | None, details such as invalid files or error message
     """
     if len(selection) == 0:
-        return False, "No file selected."
+        message = "No file selected."
+        logging.warning(f"Attempt at updating output directory to {selection} failed: {message}.")
+        return False, message
 
     faulty = []
     for file in selection:
@@ -234,10 +241,13 @@ def set_raw_trcs(selection: list[str] | None) -> (bool, str | None):
             selection.remove(file)
 
     if len(selection) == 0:
-        return False, "None of the selected files were valid."
+        message = "None of the selected files were valid."
+        logging.warning(f"Attempt at updating selection of raw TRC files to process to {faulty} failed: {message}.")
+        return False, message
 
     if len(faulty) > 0:
         message = f"Selected files {faulty} are not valid and will not be processed."
+        logging.info(f"Files {faulty} are invalid TRC files to process and will not be processed.")
     else:
         message = None
 
@@ -253,9 +263,13 @@ def set_osim_path(selection: str | None) -> (bool, str | None):
         str, if selection invalid, description fo the issue.
     """
     if not os.path.isdir(selection):
-        return False, "Selected path is not a directory."
+        message = "Selected path is not a directory."
+        logging.warning("Osim source folder could not be updated: " + message)
+        return False, message
     if os.path.basename(selection) != "bin":
-        return False, "Selected directory is not \"bin\"."
+        message = "Selected directory is not \"bin\"."
+        logging.warning("Osim source folder could not be updated: " + message)
+        return False, message
     _update_local("osim_path", selection)
     save_to_json()
     return True, None
