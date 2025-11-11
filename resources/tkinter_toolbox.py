@@ -1,4 +1,5 @@
 from tkinter import *
+from tkinter import messagebox
 from tkinter.ttk import *
 from tkinter.filedialog import askopenfile, askopenfilenames, askdirectory
 from tkinter.messagebox import showinfo
@@ -19,7 +20,7 @@ def set_up_window(window: Tk, window_width: int = 500, window_height: int = 300)
 
 
 def infobox(message: str) -> None:
-    """Displays a tkinter information window with gicen message
+    """Displays a tkinter information window with given message.
 
     Args:
         message: message to display
@@ -28,6 +29,24 @@ def infobox(message: str) -> None:
         None
     """
     showinfo(title='Information', message=message)
+
+
+def on_closing(window: Tk, custom: str = None) -> bool:
+    """Handle user closing given window.
+
+    Args:
+        window: window the user wants to close
+        custom: custom message to display. Optional.
+
+    Returns:
+        bool, whether the user confirmed closing.
+    """
+    if custom is None:
+        custom = "Do you want to quit?"
+    if messagebox.askokcancel("Quit", custom):
+        window.destroy()
+        return True
+    return False
 
 
 def get_osim_file(instruction: str = None, mode: str = 'r') -> io.TextIOWrapper | None:

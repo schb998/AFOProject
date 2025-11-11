@@ -1,9 +1,11 @@
 from tkinter import *
+from tkinter import messagebox
 from tkinter.ttk import *
 import resources.tkinter_toolbox as tbox
 import resources.paths.paths_back as back
 
 LABELS: dict[Label, str] = {}
+BUTTON: Button
 CURRENT_ROW = 0
 
 
@@ -15,6 +17,16 @@ def _update_labels():
 def _update_row():
     global CURRENT_ROW
     CURRENT_ROW = CURRENT_ROW + 1
+
+
+def _update_button():
+    global BUTTON
+    if BUTTON is not None:
+        result, _ = back.arevalid_loadbearing_paths(True)
+        if result is True:
+            BUTTON.state(['!disabled'])
+        else:
+            BUTTON.state(['disabled'])
 
 
 def _reformat(string_list: list[str] | tuple[str] | str | None) -> str:
@@ -37,12 +49,22 @@ def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "output_path"})
 
+    def select_button_click():
+        back.set_output_directory()
+        _update_labels()
+        _update_button()
+
     select_button = Button(root, text="Select",
-                           command=lambda: {back.set_output_directory(), _update_labels()})
+                           command=lambda: {select_button_click()})
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
+    def unselect_button_click():
+        back.delete_output_directory()
+        _update_labels()
+        _update_button()
+
     unselect_button = Button(root, text="Unselect",
-                             command=lambda: {back.delete_output_directory(), _update_labels()})
+                             command=lambda: {unselect_button_click()})
     unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
 
     _update_row()
@@ -57,12 +79,22 @@ def _setup_raw_mot(root: Tk) -> (Label, Label, Button, Button):
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_mot"})
 
+    def select_button_click():
+        back.set_raw_mots()
+        _update_labels()
+        _update_button()
+
     select_button = Button(root, text="Select",
-                           command=lambda: {back.set_raw_mots(), _update_labels()})
+                           command=lambda: {select_button_click()})
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
+    def unselect_button_click():
+        back.delete_raw_mot()
+        _update_labels()
+        _update_button()
+
     unselect_button = Button(root, text="Unselect",
-                             command=lambda: {back.delete_raw_mot(), _update_labels()})
+                             command=lambda: {unselect_button_click()})
     unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
 
     _update_row()
@@ -77,12 +109,22 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_trc"})
 
+    def select_button_click():
+        back.set_raw_trcs()
+        _update_labels()
+        _update_button()
+
     select_button = Button(root, text="Select",
-                           command=lambda: {back.set_raw_trcs(), _update_labels()})
+                           command=lambda: {select_button_click()})
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
+    def unselect_button_click():
+        back.delete_raw_trc()
+        _update_labels()
+        _update_button()
+
     unselect_button = Button(root, text="Unselect",
-                             command=lambda: {back.delete_raw_trc(), _update_labels()})
+                             command=lambda: {unselect_button_click()})
     unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
 
     _update_row()
@@ -122,9 +164,17 @@ def _tk_window() -> Tk:
     _setup_raw_trc(root)
 
     _update_row()
-    save_button = Button(root, text="Save/Proceed", default='active',
-                         command=lambda: {back.save_to_json(), root.destroy()})
-    save_button.grid(row=CURRENT_ROW)
+    save_button = Button(root, text="Save to file", default='active',
+                         command=lambda: {back.save_to_json(), _update_button()})
+    save_button.grid(row=CURRENT_ROW, column=0)
+
+    proceed_button = Button(root, text="Proceed", default='active',
+                            command=lambda: {root.destroy()})
+    proceed_button.grid(row=CURRENT_ROW, column=1)
+
+    global BUTTON
+    BUTTON = proceed_button
+    _update_button()
 
     return root
 
@@ -136,6 +186,7 @@ def missing_loadbearing_path(reason: str) -> None:
 
 def main() -> None:
     root = _tk_window()
+    root.protocol("WM_DELETE_WINDOW", lambda: tbox.on_closing(root, "Unsaved change will be lost."))
     try:
         from ctypes import windll
         windll.shcore.SetProcessDpiAwareness(1)

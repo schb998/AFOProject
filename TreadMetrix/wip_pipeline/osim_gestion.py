@@ -29,6 +29,15 @@ def _update_buttons():
             button.state(['!disabled'])
 
 
+def custom_on_closing(window: Tk):
+    if get_osim_path() is None:
+        closed = tbox.on_closing(window, "No path was given. Closing this window will interrupt processing.")
+        if closed:
+            raise KeyboardInterrupt
+    else:
+        tbox.on_closing(window, "Proceed with given path?")
+
+
 def configure_opensim() -> None:
     """Locally configures Opensim.
 
@@ -44,6 +53,7 @@ def configure_opensim() -> None:
     label = Label(root, text="Saved path:")
     label.grid(row=0, column=0, sticky=NW, pady=10)
 
+    root.protocol("WM_DELETE_WINDOW", lambda: custom_on_closing(root))
 
     selected = Label(root, text=get_osim_path())
     selected.grid(row=0, column=1, sticky=NW, pady=10)
@@ -111,7 +121,6 @@ def get_base_model_filename() -> str | None:
     if file is not None:
         return file.name
     return None
-
 
 
 def scale_model() -> str:
