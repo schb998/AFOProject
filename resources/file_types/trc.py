@@ -46,6 +46,17 @@ class TRC(object):
                  data: pd.DataFrame,
                  file_header: list[str] = None) \
             -> None:
+        """Creates a TRC object.
+
+        Args:
+            filename: name of the TRC file associated with the object
+            meta_data: metadata of teh dataset
+            marker_set: markers of the data
+            col_names: (ordered) list of the markers' data coordinates from the file
+            marker_dict: build in the form of {marker: list of associated coordinate columns}
+            data: data
+            file_header: header line of the file
+        """
         self.filename = filename
         self.metadata = meta_data
         self.marker_set = marker_set
@@ -303,7 +314,7 @@ class TRC(object):
 
 
     @classmethod
-    def adapt(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> None:
+    def adapt_to_opensim_use(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> None:
         """Overwrites a TRC file with a copy of data with added marker ZERO located at position (0,0,0) at all
         frames, as last marker column.
 
@@ -352,7 +363,7 @@ class TRC(object):
 
 
     def add_marker(self, marker_name: str, data: np.ndarray | dict[str, np.ndarray]) -> None:
-        """Add a marker to the data.
+        """Adds a marker to the data.
 
         Args:
             marker_name: name of the marker
@@ -418,7 +429,7 @@ class TRC(object):
 
 
     def copy(self) -> Self:
-        """ Returns a copy of the object.
+        """Returns a copy of the object.
 
         Returns:
             TRC object
@@ -461,7 +472,7 @@ class TRC(object):
 
 
     def segment(self, points: list[int]) -> list[Self]:
-        """ Segments the data frame according to the given frames point.
+        """Segments the data frame according to the given frames point.
 
          Each fragment contains frames from points[i-1] (included) to points[i] (excluded),
           with added segments: first segment from first_frame_of_data (included) to points[0] (excluded)
@@ -506,7 +517,7 @@ class TRC(object):
 
 
     def segment_bis(self, points: list[int]) -> list[Self]:
-        """ Segments the data frame according to the given frames point.
+        """Segments the data frame according to the given frames point.
 
          Each fragment contains frames from points[i-1] (included) to points[i] (excluded),
           with added segments: first segment from first_frame_of_data (included) to points[0] (excluded)
@@ -577,22 +588,32 @@ class TRC(object):
             except OSError:
                 pass
 
+
     @classmethod
-    def adapt_all(cls, dir_path: str) -> None:
+    def adapt_all_to_opensim_use(cls, dir_path: str) -> None:
+        """Adapts all TRC file of given folder to be used with OpenSim. Sees method "adapt_to_opensim_use" for details.
+
+        Args:
+            dir_path: path to dircetory in which to process the TRc files.
+
+        Returns:
+            None
+        """
         if not os.path.isdir(dir_path):
             raise OSError("Given path is not a directory.")
         file_list = [f for f in os.listdir(dir_path) if f.endswith('.trc')]
         for file in file_list:
-            TRC.adapt(file)
+            TRC.adapt_to_opensim_use(file)
 
 
 class _TRCCleanup:
+    """Static class to clean up test files."""
     @staticmethod
     def delete_trc_file(path_to_trc: str, force_delete: bool = False) -> None:
         """Deletes TRC file from given path.
 
         Args:
-            path_to_trc: path to the TR file to be deleted.
+            path_to_trc: path to the TRC file to be deleted.
             force_delete: whever to skip asking for confirmation before deletion.
 
         Raises:
@@ -871,7 +892,7 @@ class _Test:
         trc.save(output)
 
         try:
-            TRC.adapt(output, "test.trc")
+            TRC.adapt_to_opensim_use(output, "test.trc")
             assert True
         except Exception as e:
             assert False, "Arrange method should not raise error: " + getattr(e, 'message', repr(e))
@@ -879,13 +900,12 @@ class _Test:
         assert trc != trc_arranged1, "Raw file and arrange file should be different."
 
         try:
-            TRC.adapt(output, "test.trc")
+            TRC.adapt_to_opensim_use(output, "test.trc")
             assert True
         except Exception as e:
             assert False, "Arrange method should not raise error: " + getattr(e, 'message', repr(e))
         trc_arranged2 = TRC.load(output, "test.trc")
         assert trc_arranged1 == trc_arranged2, "Using arrange on already arranged TRC file should not have effect."
-
 
     @staticmethod
     def comparison_segmentation(path_to_file: str) -> (pd.DataFrame, float):

@@ -35,6 +35,15 @@ class MOT:
                  data: pd.DataFrame,
                  first_frame: int = 0)\
             -> None:
+        """Creates a MOT object.
+
+        Args:
+            name: name given to the data set
+            filename: name of the MOT file associated with the object
+            header_lines: header lines of the MOT file
+            data: data
+            first_frame: identifier of the first frame of the data
+        """
         self.name = name
         self.filename = filename
         self.header_lines = header_lines
@@ -150,7 +159,7 @@ class MOT:
 
     @classmethod
     def load(cls, filepath: str, filename: str = None) -> Self:
-        """Reads data from a MOT file.
+        """Reads data from a MOT file into a MOT object.
 
         Args:
             filepath (string): path to the MOT file.
@@ -201,7 +210,7 @@ class MOT:
             raise OSError(error_message)
 
     def rename(self, name: str = None, filename: str = None):
-        """This method updates the MOT object's name and/or file_name.
+        """Updates the MOT object's name and/or file_name.
 
         Either arguments can be None. This method does nothing if both are None.
 
@@ -218,7 +227,7 @@ class MOT:
                 self.filename = filename
 
     def save(self, file_path: str, file_name: str = None):
-        """This method writes the MOT object into a MOT file.
+        """Writes the MOT object into a MOT file.
 
         Does so at the given location, using the MOT object's filename parameter as the file's name.
 
@@ -268,7 +277,7 @@ class MOT:
     def copy(self) -> Self:
         """Copies and returns a new MOT object.
 
-        "_copy" has been added to the returned MOT object's filename and name.
+        "_copy" differentiator added to the returned MOT object's filename and name.
 
         Returns:
             MOT: Copied MOT object.
@@ -389,9 +398,10 @@ class MOT:
 
 
 class _MOTCleanup:
+    """Static class to clean up test files."""
     @staticmethod
     def delete_mot_file(path_to_mot: str, force_delete: bool = False) -> None:
-        """Deletes MOT file from given path.
+        """Deletes MOT file located at given filepath.
 
         Args:
             path_to_mot: path to the MOT file to be deleted.
@@ -426,10 +436,10 @@ class _MOTCleanup:
 
     @staticmethod
     def delete_all_files(path_to_directory: str, force_delete: bool = False) -> None:
-        """Deletes all MOT files from given path.
+        """Deletes all MOT files from given directory.
 
         Args:
-            path_to_directory (string): path to the directory where all MOT files are to be deleted.
+            path_to_directory: path to the directory where all MOT files are to be deleted.
             force_delete: whever to skip asking for confirmation before deletion.
         """
         def delete(files: list[str]) -> None:
