@@ -96,7 +96,46 @@ def _remove_from_local(key: str) -> None:
 _load_bearing_paths: list[str] = ["output_path", "raw_mot", "raw_trc"]
 
 
-def arevalid_loadbearing_paths(detail: bool = False) -> bool | tuple[bool, list[str]]:
+def _delete_invalid_paths():
+    """Delete the invalid paths in the local save file.
+
+    Returns:
+        None
+    """
+    global _LOCAL
+
+    faulty = []
+    for key in list(_LOCAL.keys()):
+        content = _LOCAL[key]
+
+        # if we're checking a list, test each element of the list:
+        if isinstance(content, list):
+            # remove each inexisting elelment from the list:
+            for element in content:
+                if not os.path.exists(element):
+                    content.remove(element)
+                    faulty.append(element)
+            # remove the list if empty:
+            if len(content) == 0:
+                _remove_from_local(key)
+
+        # check singular element:
+        elif not os.path.exists(content):
+            _remove_from_local(key)
+            faulty.append(content)
+
+    if len(faulty) > 0:
+        logging.warning(f"Some of the previous paths do not exist anymore and have been removed from local save: "
+                        f"{faulty}.")
+        save_to_json()
+    else:
+        logging.info(f"All previous paths still exists.")
+
+
+_delete_invalid_paths()
+
+
+def are_loadbearing_paths_filled(detail: bool = False) -> bool | tuple[bool, list[str]]:
     """Check if all required paths had been filled.
 
     Args:
@@ -119,23 +158,23 @@ def arevalid_loadbearing_paths(detail: bool = False) -> bool | tuple[bool, list[
 
     else:
         res = True
-        problems = []
+        faulty = []
         for name in _load_bearing_paths:
             local_content = get_local(name)
             if local_content is None:
                 res = False
-                problems.append(name)
+                faulty.append(name)
         if res:
             logging.info(f"All load bearing paths of the save file are filled.")
         else:
-            logging.warning(f"Missing load bearing paths: {problems}")
-        return res, problems
+            logging.warning(f"Missing load bearing paths: {faulty}")
+        return res, faulty
 
 
 # access path in local virtual save:
 
 
-def get_local(key: str = None) -> str | list[str] | dict[str, str | list[str]]:
+def get_local(key: str = None) -> str | list[str] | dict[str, str | list[str]] | None:
     """Returns data from virtual save. If no key is given, return a copy of the virtual save.
 
     Args:
@@ -144,7 +183,6 @@ def get_local(key: str = None) -> str | list[str] | dict[str, str | list[str]]:
     Returns:
         Local paths. Can be a string (lone path), a list of string (multiple paths)
         or a dictionary (full copy of local paths).
-
     """
     if key is not None:
         return deepcopy(_LOCAL[key]) if key in _LOCAL else None
@@ -173,12 +211,26 @@ def set_output_directory(selection: str | None) -> bool:
     Returns:
         bool, whether the given path is a valid output directory
     """
-    if ((selection is None)
-            or (not selection)
-            or (not os.path.exists(selection))
-            or not os.access(selection, os.W_OK)):
-        logging.warning(f"Attempt at updating output directory to {selection} failed.")
+    error_message = f"Attempt at updating output directory failed: "
+
+    # case : no selection
+    if (selection is None) or (not selection):
+        error_message = error_message + f"no path selected."
+        logging.warning(error_message)
         return False
+
+    # case : not existing (I'm not even sure this is a possible case with current calls)
+    if not os.path.exists(selection):
+        error_message = error_message + f" selected path {selection} does not exist."
+        logging.warning(error_message)
+        return False
+
+    # case: not writeable
+    if not os.access(selection, os.W_OK):
+        error_message = error_message + f"selected path {selection} is not writeable."
+        logging.warning(error_message)
+        return False
+
     _update_local("output_path", selection)
     return True
 
@@ -193,25 +245,31 @@ def set_raw_mots(selection: list[str] | None) -> (bool, str | None):
         bool, whether there are valid files to process in the given list
         str | None, details such as invalid files or error message
     """
-    if len(selection) == 0:
-        message = "No file selected."
-        logging.warning(f"Attempt at updating output directory to {selection} failed: {message}.")
-        return False, message
+    error_message = "Failed attempt at updating selection of raw MOT files to process: "
 
+    # case: no file selected
+    if len(selection) == 0:
+        error_message = error_message + f"no file selected."
+        logging.warning(error_message)
+        return False, error_message
+
+    # checking validity of selected files
     faulty = []
     for file in selection:
         if not os.path.isfile(file):
             faulty.append(file)
             selection.remove(file)
 
+    # case: no valid file left
     if len(selection) == 0:
-        message = "None of the selected files were valid."
-        logging.warning(f"Attempt at updating selection of raw MOT files to process to {faulty} failed: {message}.")
-        return False, message
+        error_message = error_message + f"none of the selected files {faulty} were valid."
+        logging.warning(error_message)
+        return False, error_message
 
+    # keeping trace of eventual invalid files
     if len(faulty) > 0:
-        message = f"Selected files {faulty} are not valid and will not be processed."
-        logging.info(f"Files {faulty} are invalid MOT files to process and will not be processed.")
+        message = f"Selected files {faulty} are invalid MOT files to process and will not be processed."
+        logging.info(message)
     else:
         message = None
 
@@ -229,25 +287,31 @@ def set_raw_trcs(selection: list[str] | None) -> (bool, str | None):
         bool, whether there are valid files to process in the given list
         str | None, details such as invalid files or error message
     """
-    if len(selection) == 0:
-        message = "No file selected."
-        logging.warning(f"Attempt at updating output directory to {selection} failed: {message}.")
-        return False, message
+    error_message = "Failed attempt at updating selection of raw TRC files to process: "
 
+    # case: no file selected
+    if len(selection) == 0:
+        error_message = error_message + f"no file selected."
+        logging.warning(error_message)
+        return False, error_message
+
+    # checking validity of selected files
     faulty = []
     for file in selection:
         if not os.path.isfile(file):
             faulty.append(file)
             selection.remove(file)
 
+    # case: no valid file left
     if len(selection) == 0:
-        message = "None of the selected files were valid."
-        logging.warning(f"Attempt at updating selection of raw TRC files to process to {faulty} failed: {message}.")
-        return False, message
+        error_message = error_message + f"none of the selected files {faulty} were valid."
+        logging.warning(error_message)
+        return False, error_message
 
+    # keeping trace of eventual invalid files
     if len(faulty) > 0:
-        message = f"Selected files {faulty} are not valid and will not be processed."
-        logging.info(f"Files {faulty} are invalid TRC files to process and will not be processed.")
+        message = f"Selected files {faulty} are invalid TRC files to process and will not be processed."
+        logging.info(message)
     else:
         message = None
 
@@ -262,18 +326,42 @@ def set_osim_path(selection: str | None) -> (bool, str | None):
         bool, whether the selection was valid.
         str, if selection invalid, description fo the issue.
     """
+    message = "Osim source folder could not be updated: "
     if not os.path.isdir(selection):
-        message = "Selected path is not a directory."
-        logging.warning("Osim source folder could not be updated: " + message)
+        message = message + "Selected path is not a directory."
+        logging.warning(message)
         return False, message
     if os.path.basename(selection) != "bin":
-        message = "Selected directory is not \"bin\"."
-        logging.warning("Osim source folder could not be updated: " + message)
+        message = message + "Selected directory is not \"bin\"."
+        logging.warning(message)
         return False, message
     _update_local("osim_path", selection)
     save_to_json()
     return True, None
 
+
+def set_scaled_model(selection: str | None) -> (bool, str | None):
+    """If valid, save selected OpenSim model in both local and file save.
+
+    Returns:
+        bool, whether the selection was valid.
+        str, if selection invalid, description fo the issue.
+    """
+    message = "Scaled Osim model could not be updated: "
+    if selection is None or not selection:
+        message = message + "No path selected."
+        logging.warning(message)
+        return False, message
+    if not os.path.isfile(selection):
+        message = message + "Selected path is not a file."
+        logging.warning(message)
+        return False, message
+    _update_local("osim_scaled_model", selection)
+    save_to_json()
+    return True, None
+
+
+# delete paths from the virtual save (require a save in local file).
 
 def delete_output_directory() -> None:
     """Delete the selected output path from the virtual save.

@@ -38,7 +38,7 @@ def _update_button():
     """
     global BUTTON
     if BUTTON is not None:
-        result = back.arevalid_loadbearing_paths()
+        result = back.are_loadbearing_paths_filled()
         if result is True:
             BUTTON.state(['!disabled'])
         else:

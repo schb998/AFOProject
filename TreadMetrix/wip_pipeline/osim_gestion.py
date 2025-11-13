@@ -6,37 +6,36 @@ import os
 import sys
 import resources.tkinter_toolbox as tbox
 from resources.custom_exceptions import *
-from resources.paths.paths_back import set_osim_path, get_local
-from resources.paths.paths_access import get_osim_path, get_base_model_file, get_scaled_model_file
+import resources.paths.paths_back as m
+import resources.paths.paths_access as c
 
-LABELS: dict[Label, str] = {}
-BUTTONS: dict[Button, str] = {}
+# todo: update configure_opensim so paths_back manage configuration instead
+# todo: continue separation osim_gestion // paths_back for model selection
+
+
+LABEL: Label = None
+BUTTON: Button = None
 CURRENT_ROW = 0
 
 
-def _update_labels():
-    for lab in LABELS:
-        content = get_local(LABELS[lab])
-        txt = content if content is not None else "empty"
-        lab.config(text=txt)
+def update_label():
+    global LABEL
+    if LABEL is not None:
+        try:
+            txt = c.get_osim_path()
+            LABEL.config(text=txt)
+        except MissingPathException:
+            LABEL.config(text="empty")
 
 
-def _update_buttons():
-    for button in BUTTONS:
-        content = get_local(BUTTONS[button])
-        if content is None:
-            button.state(['disabled'])
-        else:
-            button.state(['!disabled'])
-
-
-def custom_on_closing(window: Tk):
-    if get_osim_path() is None:
-        closed = tbox.on_closing(window, "No path was given. Closing this window will interrupt processing.")
-        if closed:
-            raise KeyboardInterrupt
-    else:
-        tbox.on_closing(window, "Proceed with given path?")
+def update_button():
+    global BUTTON
+    if BUTTON is not None:
+        try:
+            txt = c.get_osim_path()
+            BUTTON.state(['!disabled'])
+        except MissingPathException:
+            BUTTON.state(['disabled'])
 
 
 def configure_opensim() -> None:
@@ -45,6 +44,8 @@ def configure_opensim() -> None:
     Returns:
         None
     """
+    global LABEL
+    global BUTTON
 
     root = Tk()
     root.title("OpenSim's source folder")
@@ -54,30 +55,47 @@ def configure_opensim() -> None:
     label = Label(root, text="Saved path:")
     label.grid(row=0, column=0, sticky=NW, pady=10)
 
+    def custom_on_closing(window: Tk):
+        try:
+            content = c.get_osim_path()
+            tbox.on_closing(window, f"Proceed with path: \"{content}\"?")
+        except MissingPathException:
+            closed = tbox.on_closing(window, "No OpenSim path was given. Closing this window will interrupt processing.")
+            if closed:
+                raise KeyboardInterrupt
+
+
     root.protocol("WM_DELETE_WINDOW", lambda: custom_on_closing(root))
 
-    selected = Label(root, text=get_osim_path(), background="darkgrey")
+    try:
+        txt = c.get_osim_path()
+    except MissingPathException:
+        txt = "empty"
+
+    selected = Label(root, text=txt, background="darkgrey")
     selected.grid(row=0, column=1, sticky=NW, pady=10)
-    LABELS.update({selected: "osim_path"})
+    LABEL = selected
 
     def button_click():
         message = "Select OpenSim's source folder, \"bin\" directory"
         tbox.infobox(message)
         selection = askdirectory(title=message,
                                  initialdir=os.path.expanduser("~/Documents"))
-        valid, reason = set_osim_path(selection)
-        if not valid:
+        success, reason = m.set_osim_path(selection)
+        if not success:
             tbox.infobox(reason)
-        _update_labels()
-        _update_buttons()
+        update_label()
+        update_button()
 
     select_button = Button(root, text="Select new", command=button_click)
     select_button.grid(row=0, column=2, sticky=NW, pady=10)
 
     confirm_button = Button(root, text="Confirm", command=root.destroy)
     confirm_button.grid(row=1, column=1, sticky=NW, pady=10)
-    BUTTONS.update({confirm_button: "osim_path"})
-    _update_buttons()
+    confirm_button.state(['disabled'])
+    BUTTON = confirm_button
+
+    update_button()
 
     try:
         from ctypes import windll
@@ -85,8 +103,7 @@ def configure_opensim() -> None:
     finally:
         root.mainloop()
 
-    opensim_path = get_osim_path()
-
+    opensim_path = c.get_osim_path()
 
     os.environ['OPENSIM_HOME'] = opensim_path
     os.add_dll_directory(opensim_path)
@@ -94,13 +111,13 @@ def configure_opensim() -> None:
     os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
 
 
-def open_scaled_model() -> str | None:
+def select_scaled_model() -> None:
     message = "Please select scaled model file."
     tbox.infobox(message)
     file = tbox.get_osim_file(instruction=message)
-    if file is not None:
-        return file.read()
-    return None
+    success, detail = m.set_scaled_model(file.name if file is not None else None)
+    if not success:
+        tbox.infobox(detail)
 
 
 def get_scaled_model_filename() -> str | None:
@@ -172,7 +189,7 @@ def main() -> None:
     tbox.set_up_window(root)
     root.columnconfigure(2)
 
-    button1 = Button(root, text="Select scaled model", command=open_scaled_model)
+    button1 = Button(root, text="Select scaled model", command=select_scaled_model)
     button2 = Button(root, text="Scale a model", command=scale_model)
     button1.pack(ipadx=5, ipady=5, expand=True)
     button2.pack(ipadx=5, ipady=5, expand=True)
