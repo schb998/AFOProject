@@ -53,16 +53,27 @@ if __name__ == "__main__":
         # segment according to heel strikes:
         trc = None
         trc_name = name + "\\.trc$"
-        matching_trc = [t for t in raw_trc_files if re.search(trc_name, t) is not None][0]
+
+        trc_found = False
 
         try:
-            trc = TRC.load(matching_trc)
-        except OSError:
-            print(f"No TRC file in matching MOT file {name}. Skipping.")
+            matching_trc = [t for t in raw_trc_files if re.search(trc_name, t) is not None][0]
+            trc_found = True
+        except IndexError:
+            print(f"No selected TRC file matching MOT file {name}. Skipping.")
+            matching_trc = None
 
-        if trc is None:
+
+        if trc_found:
+            try:
+                trc = TRC.load(matching_trc)
+                results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments, mot_frame_rate=frame_rate,
+                                                                        trc=trc, save=False)
+            except OSError:
+                print("Could not TRC load")
+                trc_found = False
+
+        if not trc_found:
             results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments, save=False)
-        else:
-            results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments, mot_frame_rate=frame_rate,
-                                                                    trc=trc, save=False)
+
     print("\nAll files were processed.")
