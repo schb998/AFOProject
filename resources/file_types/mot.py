@@ -15,6 +15,7 @@ output = os.path.join(path, "test_output")
 # working files:
 filename_standard = "MOT_standard.mot"
 filename_nan = "MOT_nan.mot"  # missing data should be handled
+filename_osim_generated = "MOT_osim.mot"
 
 
 class MOT:
@@ -195,11 +196,14 @@ class MOT:
                 line = next(file).strip("\n")
                 while line != "endheader":
                     temp = line.split('=')
-                    md = temp[1].strip()
                     try:
-                        header_lines[temp[0].strip()] = ast.literal_eval(md)
-                    except ValueError:
-                        header_lines[temp[0].strip()] = md
+                        md = temp[1].strip()
+                        try:
+                            header_lines[temp[0].strip()] = ast.literal_eval(md)
+                        except ValueError:
+                            header_lines[temp[0].strip()] = md
+                    except IndexError:
+                        pass
                     line = next(file).strip("\n")
                 data = pd.read_csv(file, sep=r'\s', engine='python')
                 file.close()
@@ -493,6 +497,7 @@ class _Test:
         try:
             MOT.load(os.path.join(path, filename_standard))
             MOT.load(path, filename_nan)
+            MOT.load(path, filename_osim_generated)
             assert True
         except OSError:
             assert False, \

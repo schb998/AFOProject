@@ -1,9 +1,12 @@
 import os
+from copy import deepcopy
+
 import pandas as pd
 import resources.paths.paths_access as local
 from TreadMetrix.wip_pipeline.osim_gestion import configure_opensim
 import numpy as np
 from scipy.signal import butter, filtfilt
+from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels
 import opensim as osim
@@ -14,8 +17,11 @@ This file is used to compute Inverse Kinematic data.
     Output: segmented .mot files of the IK data.
 """
 
+# todo : save _ik_marker_errors.sto file elsewhere
 
-def filter_signals(data, fs=100, cutoff=6, order=2):
+
+
+def filter_signals(data: pd.DataFrame, fs: int = 100, cutoff: int = 6, order: int = 2):
     """
     Filter the signal according to the Butterworth method.
 
@@ -103,20 +109,15 @@ def marker_tasks(tool, markers, do_not_include_list):
         task.setName(m)
         task.setApply(m not in do_not_include_list)
         task.setWeight(1)
-        taskset.append(task)
+        taskset.cloneAndAppend(task)
     return taskset
 
 
-if __name__ == "__main__":
-    # Setup OpenSim
-    configure_opensim()
-
-    # Paths
+def process(segmented_trcs: dict[str, list[TRC]], filename: str):
     model_file = local.get_scaled_model_file()
-    trc_path = local.get_segmented_trc_path()
-    ik_results_path = local.get_ik_results_path()
+    ik_results_path = os.path.join(local.get_ik_results_path(), filename)
+    os.makedirs(ik_results_path, exist_ok=True)
 
-    # Marker setup
     marker_names = [
         'Sternum', 'LShoulder', 'RShoulder', 'LASIS', 'RASIS', 'RPSIS', 'LPSIS',
         'RFibula', 'RShank', 'RAnkleLateral', 'RToe', 'LToe', 'RMT5', 'RMT2', 'RHeel',
@@ -126,53 +127,44 @@ if __name__ == "__main__":
     do_not_include = ['RKneeMedial', 'RAnkleMedial', 'RToe', 'LKneeMedial', 'LAnkleMedial', 'LToe']
 
     for side in ["Right", "Left"]:
-        trc_side_path = os.path.join(trc_path, side)
-        out_side_path = os.path.join(ik_results_path, side)
-        trc_files = sorted([f for f in os.listdir(trc_side_path) if f.endswith(".trc")])
+        trcs = segmented_trcs[side]
+        ik_output_path = os.path.join(ik_results_path, side)
+        temp_trc_directory = os.path.join(ik_output_path, "temp")
+        os.makedirs(temp_trc_directory, exist_ok=True)
 
-        for i, trc_file in enumerate(trc_files, 1):
-            print(f"Processing {side}/{trc_file}...")
+        cycle_num = 1
+        for trc in trcs:
+            print(f"Processing {side}/{trc.filename}...")
 
-            trc_full_path = os.path.join(trc_side_path, trc_file)
-            trc = TRC.load(trc_full_path)
+            trc.save(temp_trc_directory)
+            trc_full_path = os.path.join(temp_trc_directory, trc.filename)
 
             # Setup IK Tool
             ik_tool = set_up_ik_tool(model_file, trc_full_path, float(trc.data['Time'].iloc[0]),
                                      float(trc.data['Time'].iloc[-1]))
 
             # Name format
-            cycle_name = f"{side.lower()}_cycle_{i}"
-            mot_path_temp = os.path.join(out_side_path, f"{cycle_name}_temp.mot")
-            mot_path_final = os.path.join(out_side_path, f"{cycle_name}.mot")
-            ik_tool.setOutputMotionFileName(mot_path_temp)
+            cycle_name = f"{side.lower()}_cycle_{cycle_num}"
+            mot_name = f"{cycle_name}.mot"
+            mot_path = os.path.join(ik_output_path, mot_name)
+            ik_tool.setOutputMotionFileName(mot_path)
 
             # Add marker tasks
             task_set = marker_tasks(ik_tool, marker_names, do_not_include)
 
             ik_tool.run()
 
-            if not os.path.exists(mot_path_temp):
-                print(f"IK failed for {trc_file}")
-                continue
+            # Read and filter:
+            if os.path.exists(mot_path):
+                mot = MOT.load(mot_path)
+                mot.data = pd.DataFrame(filter_signals(mot.data))
+                mot.save(ik_output_path)
 
-            # Read and filter
-            headers, raw_data = read_mot_storage(mot_path_temp)
-            time = raw_data[:, 0]
-            signals = raw_data[:, 1:]
-            filtered = filter_signals(signals)
-            filtered_data = np.column_stack((time, filtered))
-            h = OSIMStorage.simple_header_template()
-            filename = os.path.split(mot_path_temp)[1]
+            else:
+                print(f"IK failed for: {trc.filename}")
 
-            h[HeadersLabels.trial] = filename[:filename.rindex('.')]
-            h[HeadersLabels.version] = 1
-            h[HeadersLabels.nRows] = filtered_data.shape[0]
-            h[HeadersLabels.nColumns] = filtered_data.shape[1]
-            h[HeadersLabels.inDegrees] = True
-            mot = OSIMStorage.create(data=pd.DataFrame(data=filtered_data, columns=headers), header=h,
-                                     filename=filename)
-            mot.write(mot_path_final)
+            cycle_num = cycle_num + 1
 
-            os.remove(mot_path_temp)
+        os.remove(temp_trc_directory)
 
     print("\nAll IK trials processed and saved as filtered .mot files.")

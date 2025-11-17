@@ -9,7 +9,7 @@ import opensim as osim
 from TreadMetrix.wip_pipeline.osim_gestion import configure_opensim
 
 """
-This file is used to compute Inverse Kinematic data.
+This file is used to compute Inverse Kinematic data. Old Pipelline.
     Inputs: segmented .trc file, corresponding .osim file, array of the markers used.
     Output: segmented .mot files of the IK data.
 """
