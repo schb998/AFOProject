@@ -28,7 +28,7 @@ if __name__ == "__main__":
     results = {}
     for file in raw_mot_files:
         try:
-            m = MOT.load(file)
+            m = MOT.load_from_mot(file)
         except OSError:
             print(f"File {file} couldn't be loaded. Skipping.")
             break
