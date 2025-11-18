@@ -75,7 +75,7 @@ if __name__ == "__main__":
         if trc_found:
             try:
                 TRC.adapt_to_opensim_use(matching_trc)
-                trc = TRC.load(matching_trc)
+                trc = TRC.load_from_trc(matching_trc)
                 results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments, mot_frame_rate=frame_rate,
                                                                         trc=trc, save=save)
             except OSError:

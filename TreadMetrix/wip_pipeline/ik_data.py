@@ -134,7 +134,7 @@ if __name__ == "__main__":
             print(f"Processing {side}/{trc_file}...")
 
             trc_full_path = os.path.join(trc_side_path, trc_file)
-            trc = TRC.load(trc_full_path)
+            trc = TRC.load_from_trc(trc_full_path)
 
             # Setup IK Tool
             ik_tool = set_up_ik_tool(model_file, trc_full_path, float(trc.data['Time'].iloc[0]),
