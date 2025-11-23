@@ -33,7 +33,7 @@ class MOT:
                  filename: str,
                  header_lines: dict[str: object],
                  data: pd.DataFrame,
-                 first_frame: int = 0)\
+                 first_frame: int = 0) \
             -> None:
         """Creates a MOT object.
 
@@ -156,12 +156,13 @@ class MOT:
         else:
             return n > on
 
-
     @classmethod
-    def load_from_mot(cls, filepath: str, filename: str = None) -> Self:
+    def load_from_mot(cls, filepath: str, filename: str = None, separator=r'\s') -> Self:
         """Reads data from a MOT file into a MOT object.
 
         Args:
+            separator: character used to separate data in the mot file.
+                r'\s' by default. OpenSim generated files require r'\t'.
             filepath (string): path to the MOT file.
             filename (string): name of the MOT file. \
                 Should be filled if path does not include filename, optional otherwise.
@@ -194,14 +195,16 @@ class MOT:
                 header_lines = {}
                 line = next(file).strip("\n")
                 while line != "endheader":
-                    temp = line.split('=')
-                    md = temp[1].strip()
-                    try:
-                        header_lines[temp[0].strip()] = ast.literal_eval(md)
-                    except ValueError:
-                        header_lines[temp[0].strip()] = md
+                    if line:
+                        temp = line.split('=')
+                        if len(temp) > 1:
+                            md = temp[1].strip()
+                            try:
+                                header_lines[temp[0].strip()] = ast.literal_eval(md)
+                            except ValueError:
+                                header_lines[temp[0].strip()] = md
                     line = next(file).strip("\n")
-                data = pd.read_csv(file, sep=r'\s', engine='python')
+                data = pd.read_csv(file, sep=separator, engine='python')
                 file.close()
                 return cls(name, filename, header_lines, data)
         except Exception as e:
@@ -399,6 +402,7 @@ class MOT:
 
 class _MOTCleanup:
     """Static class to clean up test files."""
+
     @staticmethod
     def delete_mot_file(path_to_mot: str, force_delete: bool = False) -> None:
         """Deletes MOT file located at given filepath.
@@ -410,6 +414,7 @@ class _MOTCleanup:
         Raises:
             OSError: if a file could not be deleted.
         """
+
         def delete(file: str) -> None:
             try:
                 os.remove(file)
@@ -433,7 +438,6 @@ class _MOTCleanup:
             else:
                 logging.info(f"File {path_to_mot} has not been deleted.")
 
-
     @staticmethod
     def delete_all_files(path_to_directory: str, force_delete: bool = False) -> None:
         """Deletes all MOT files from given directory.
@@ -442,6 +446,7 @@ class _MOTCleanup:
             path_to_directory: path to the directory where all MOT files are to be deleted.
             force_delete: whever to skip asking for confirmation before deletion.
         """
+
         def delete(files: list[str]) -> None:
             for file in files:
                 try:
@@ -530,8 +535,8 @@ class _Test:
         mot3, mot4 = mot1.copy(), mot1.copy()
         mot3.rename(name='foo', filename=mot1.filename)
         mot4.rename(name=mot1.name, filename='foo')
-        assert mot1 > mot3 and mot1 >= mot3 and mot3 < mot1 and mot3 <= mot1 and\
-            mot1 > mot4 and mot1 >= mot4 and mot4 < mot1 and mot4 <= mot1, "Comparison operations are not working."
+        assert mot1 > mot3 and mot1 >= mot3 and mot3 < mot1 and mot3 <= mot1 and \
+               mot1 > mot4 and mot1 >= mot4 and mot4 < mot1 and mot4 <= mot1, "Comparison operations are not working."
 
     @staticmethod
     def _test_copy() -> None:
@@ -602,7 +607,3 @@ class _Test:
 if __name__ == "__main__":
     logging.basicConfig(filename='test.log', level=logging.INFO)
     _Test.main()
-
-
-
-

@@ -17,7 +17,7 @@ This file is used to compute Inverse Kinematic data.
 configure_opensim()
 # Paths
 model_file = local.get_scaled_model_file()
-trc_path = local.get_segmented_trc_path()
+trc_path = local.get_segmented_path()
 ik_results_path = local.get_ik_results_path()
 
 # Ensure output folders exist

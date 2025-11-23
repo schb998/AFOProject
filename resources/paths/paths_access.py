@@ -1,11 +1,15 @@
 import os
 from resources.custom_exceptions import *
 import resources.paths.paths_back as model
-from resources.paths.paths_gui import missing_loadbearing_path
+from resources.paths.paths_gui import main as main_gui, quick_setup
 
 
-def _call_to_gui(reason: str) -> None:
-    missing_loadbearing_path(reason)
+def call_to_gui() -> None:
+    main_gui()
+
+
+def call_quick_setup() -> bool:
+    return quick_setup()
 
 
 def get_output_path() -> str:
@@ -60,18 +64,6 @@ def get_raw_mot_path() -> list[str]:
     raise MissingPathException("list of raw mots to process")
 
 
-def get_corrected_mot_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'corrected_mot')
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
-def get_segmented_mot_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'segmented_mot')
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
 def get_raw_trc_path() -> list[str]:
     path = model.get_local("raw_trc")
     if path is not None:
@@ -79,8 +71,14 @@ def get_raw_trc_path() -> list[str]:
     raise MissingPathException("list of raw trcs to process")
 
 
-def get_segmented_trc_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'segmented_trc')
+def get_corrected_mot_path() -> str:
+    path = os.path.join(model.get_local("output_path"), 'corrected_mot')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def get_segmented_path() -> str:
+    path = os.path.join(model.get_local("output_path"), 'segmented')
     os.makedirs(path, exist_ok=True)
     return path
 

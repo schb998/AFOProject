@@ -13,12 +13,12 @@ import resources.paths.paths_access as c
 # todo: continue separation osim_gestion // paths_back for model selection
 
 
-LABEL: Label = None
-BUTTON: Button = None
+LABEL: Label
+BUTTON: Button
 CURRENT_ROW = 0
 
 
-def update_label():
+def _update_label():
     global LABEL
     if LABEL is not None:
         try:
@@ -28,7 +28,7 @@ def update_label():
             LABEL.config(text="empty")
 
 
-def update_button():
+def _update_button():
     global BUTTON
     if BUTTON is not None:
         try:
@@ -84,8 +84,8 @@ def configure_opensim() -> None:
         success, reason = m.set_osim_path(selection)
         if not success:
             tbox.infobox(reason)
-        update_label()
-        update_button()
+        _update_label()
+        _update_button()
 
     select_button = Button(root, text="Select new", command=button_click)
     select_button.grid(row=0, column=2, sticky=NW, pady=10)
@@ -95,7 +95,7 @@ def configure_opensim() -> None:
     confirm_button.state(['disabled'])
     BUTTON = confirm_button
 
-    update_button()
+    _update_button()
 
     try:
         from ctypes import windll

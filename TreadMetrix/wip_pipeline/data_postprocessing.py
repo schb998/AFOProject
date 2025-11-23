@@ -24,7 +24,8 @@ def filter_grf(mot: MOT, fs: float) -> None:
     mot.data = filtered_df
 
 
-def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str], output_path: str, show: bool = False)\
+def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str], output_path: str = None,
+                           show: bool = False) \
         -> None:
     """Corrects the baseline of one of the columns of the mot data.
 
@@ -34,7 +35,7 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
         mot_object: data to process.
         fz_col: name of the column to correct.
         related_cols: other columns to consider.
-        output_path: output path for plot save.
+        output_path: output path for plot save. Optional. If None, plot is not saved.
         show: whether to show the figure when method is called.
     """
     fy = mot_object.data[fz_col]
@@ -60,22 +61,25 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
 
     mot_object.data = corrected_df
 
-    time_scale = mot_object.data['time'] if 'time' in mot_object.data.columns.tolist() else np.arange(len(fy))
-    plt.figure(figsize=(12, 4))
-    plt.plot(time_scale, fy, label='Original', alpha=0.7)
-    plt.scatter(time_scale[swing_valleys], fy[swing_valleys], color='red', label='Swing Valleys')
-    plt.plot(time_scale, corrected_df[fz_col], label='Corrected', alpha=0.8)
-    plt.title(f"{fz_col} Baseline Correction")
-    plt.xlabel("Time [s]")
-    plt.ylabel("Force [N]")
-    plt.legend()
-    plt.grid(True)
-    os.makedirs(output_path, exist_ok=True)
-    file_name = f"{mot_object.filename.replace('.mot', '')}_baseline_correction_{fz_col}.png"
-    plt.savefig(os.path.join(output_path, file_name), bbox_inches='tight')
+    if (output_path is not None) or show:
+        time_scale = mot_object.data['time'] if 'time' in mot_object.data.columns.tolist() else np.arange(len(fy))
+        plt.figure(figsize=(12, 4))
+        plt.plot(time_scale, fy, label='Original', alpha=0.7)
+        plt.scatter(time_scale[swing_valleys], fy[swing_valleys], color='red', label='Swing Valleys')
+        plt.plot(time_scale, corrected_df[fz_col], label='Corrected', alpha=0.8)
+        plt.title(f"{fz_col} Baseline Correction")
+        plt.xlabel("Time [s]")
+        plt.ylabel("Force [N]")
+        plt.legend()
+        plt.grid(True)
+        os.makedirs(output_path, exist_ok=True)
+        file_name = f"{mot_object.filename.replace('.mot', '')}_baseline_correction_{fz_col}.png"
 
-    if show:
-        plt.show()
+        if output_path is not None:
+            plt.savefig(os.path.join(output_path, file_name), bbox_inches='tight')
+
+        if show:
+            plt.show()
 
 
 def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
@@ -273,7 +277,7 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
 
 
 def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]], mot_frame_rate: float = None,
-                            trc: TRC = None, save: bool = False) -> dict[str, dict[str, list[MOT | TRC]]]:
+                            trc: TRC = None, save: str = None) -> dict[str, dict[str, list[MOT | TRC]]]:
     """Segment MOT (and matching TRC) object(s) according to heel_strikes.
 
     Args:
@@ -282,7 +286,7 @@ def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]],
         trc: TRC object matching the given MOT. Optional.
         mot_frame_rate: frame rate of mot_file. Optional.
             Used when trc is not None, for faster results.
-        save: whether the segmented files should be saved. Default is False.
+        save: Where to save the segmented files. Optional. Don't save if None.
 
     Returns:
         dict: dictionary of the segmented objects, organized in lists by type (trc/mot) and side.
@@ -293,8 +297,8 @@ def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]],
     left_mots = mot.segment(heel_strike_moments['L'])[1:-1]
     res = {'mot': {"Right": right_mots, "Left": left_mots}}
 
-    if save:
-        path = os.path.join(local.get_segmented_mot_path(), mot.filename.replace('.mot', ''))
+    if save is not None:
+        path = os.path.join(save, mot.filename.replace('.mot', ''))
         MOT.save_multiple(right_mots, os.path.join(path, "Right"))
         MOT.save_multiple(left_mots, os.path.join(path, "Left"))
 
@@ -319,8 +323,8 @@ def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]],
         left_trcs = trc.segment(trc_heel_strike_moments['L'])[1:-1]
         res['trc'] = {"Right": right_trcs,  "Left": left_trcs}
 
-        if save:
-            path = os.path.join(local.get_segmented_trc_path(), mot.filename.replace('.mot', ''))
+        if save is not None:
+            path = os.path.join(save, mot.filename.replace('.mot', ''))
             TRC.save_multiple(right_trcs, os.path.join(path, "Right"))
             TRC.save_multiple(left_trcs, os.path.join(path, "Left"))
 

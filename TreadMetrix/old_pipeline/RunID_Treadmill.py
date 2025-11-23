@@ -14,9 +14,9 @@ This file is used to compute Inverse Dynamics data.
 # OpenSim
 configure_opensim()
 model_file = local.get_scaled_model_file()
-trc_path = local.get_segmented_trc_path()
-ik_path = local.get_segmented_mot_path()
-grf_path = local.get_segmented_mot_path()
+trc_path = local.get_segmented_path()
+ik_path = local.get_segmented_path()
+grf_path = local.get_segmented_path()
 external_loads_path = local.get_external_loads_path()
 id_results_path = local.get_id_results_path()
 
