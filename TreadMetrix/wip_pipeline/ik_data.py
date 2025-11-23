@@ -61,7 +61,7 @@ def read_mot_storage(filepath: str) -> (tuple, str):
 
     data = np.array(data_vec)
     time_vec = np.array(time_vec).reshape(-1, 1)
-    return labels, np.hstack((time_vec, data))
+    return labels, time_vec, data
 
 
 def set_up_ik_tool(model_file, marker_data, start_time, end_time):
@@ -151,12 +151,12 @@ def process(segmented_trcs: dict[str, list[TRC]], filename: str):
 
             # Read and filter:
             if os.path.exists(mot_path):
-                mot = MOT.load_from_mot(mot_path, separator=r"\t")
-                cols = mot.col_names[1:]
-                data = mot.data[cols]
-                header, data = read_mot_storage(mot_path)
-                mot.data = pd.DataFrame(filter_signals(data))
+                header, time_vec, data = read_mot_storage(mot_path)
+                data = filter_signals(data)
+                data = np.hstack((time_vec, data))
 
+                mot = MOT.load_from_mot(mot_path, separator=r"\t")
+                mot.data = pd.DataFrame(data)
                 mot.save(ik_output_path)
 
             else:
