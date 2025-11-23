@@ -162,7 +162,7 @@ class MOT:
 
         Args:
             separator: character used to separate data in the mot file.
-                r'\s' by default. OpenSim generated files require r'\t'.
+                r'\\s' by default. OpenSim generated files require r'\\t'.
             filepath (string): path to the MOT file.
             filename (string): name of the MOT file. \
                 Should be filled if path does not include filename, optional otherwise.
