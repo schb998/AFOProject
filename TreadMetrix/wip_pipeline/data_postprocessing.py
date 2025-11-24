@@ -72,10 +72,10 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
         plt.ylabel("Force [N]")
         plt.legend()
         plt.grid(True)
-        os.makedirs(output_path, exist_ok=True)
-        file_name = f"{mot_object.filename.replace('.mot', '')}_baseline_correction_{fz_col}.png"
 
         if output_path is not None:
+            os.makedirs(output_path, exist_ok=True)
+            file_name = f"{mot_object.filename.replace('.mot', '')}_baseline_correction_{fz_col}.png"
             plt.savefig(os.path.join(output_path, file_name), bbox_inches='tight')
 
         if show:
