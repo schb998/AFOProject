@@ -94,6 +94,8 @@ if __name__ == "__main__":
 
         else:
             print("IK postprocessing part fo the pipeline is still a WIP.")
-            ik.process(results[name]['segmented']['trc'], name)
+            results[name]['ik'] = ik.process(results[name]['segmented']['trc'],
+                                             local.get_scaled_model_file(),
+                                             os.path.join(local.get_ik_results_path(), name))
 
     print("\nAll files were processed.")
