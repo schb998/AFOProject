@@ -1,3 +1,4 @@
+import array
 import os
 import pathlib
 import pandas as pd
@@ -9,20 +10,20 @@ import opensim as osim
 
 """
 This file is used to compute Inverse Kinematic data.
-    Inputs: segmented .trc file, corresponding .osim file, array of the markers used.
-    Output: segmented .mot files of the IK data.
 """
 
+# todo: set the _ik_marker_errors.sto output of the ik tool in the given ik folder
 
-def filter_signals(data, fs=100, cutoff=6, order=2):
+
+def filter_signals(data: array.array, fs: int = 100, cutoff: int = 6, order: int = 2) -> np.ndarray:
     """
     Filter the signal according to the Butterworth method.
 
     Args:
-        data (array): signal to be filtered
-        fs (int): sampling frequency
-        cutoff (int): half cycles
-        order (int): order of the filter
+        data: array, signal to be filtered
+        fs: int, sampling frequency
+        cutoff: int, half cycles
+        order: int, order of the filter
 
     Returns:
         array: filtered signal
@@ -33,16 +34,17 @@ def filter_signals(data, fs=100, cutoff=6, order=2):
     return filtfilt(b, a, data, axis=0)
 
 
-def read_mot_storage(filepath: str) -> (tuple, str):
+def read_mot_storage(filepath: str) -> (list[str], np.array, np.array):
     """
-    Read a .mot file from the storage path.
+    Read a MOT file from the storage path.
 
     Args:
-        filepath: string, path to the mot file.
+        filepath: string, path to the MOT file.
 
     Returns:
-        String array: labels of the .mot file
-        Array: data of the .mot file
+        String list: labels of the MOT file
+        np.array: time vector of the MOT data
+        np.array: MOT data
 
     """
     storage = osim.Storage(filepath)
@@ -63,17 +65,18 @@ def read_mot_storage(filepath: str) -> (tuple, str):
     return labels, time_vec, data
 
 
-def set_up_ik_tool(model_file, marker_data, start_time, end_time):
+def set_up_ik_tool(model_file, marker_data, start_time, end_time) -> osim.InverseKinematicsTool:
     """
     Set up OpenSim's Inverse Kinematics tool.
 
     Args:
-        model_file:
-        marker_data:
-        start_time:
-        end_time:
+        model_file: str, path to the scaled OpenSim Model
+        marker_data: str, path to the OpenSim marker file (TRC).
+        start_time: float, time at the first frame to process
+        end_time: float, time at the last frame to process
 
     Returns:
+        set-up OpenSim's InverseKinematicsTool
 
     """
     tool = osim.InverseKinematicsTool()
@@ -84,17 +87,18 @@ def set_up_ik_tool(model_file, marker_data, start_time, end_time):
     return tool
 
 
-def marker_tasks(tool, markers, do_not_include_list):
+def marker_tasks(tool: osim.InverseKinematicsTool, markers: list[str], do_not_include_list: list[str]) \
+        -> osim.IKMarkerTask:
     """
-    Setup OpenSim's taskset with gicen markers.
+    Setup OpenSim's taskset with given markers.
 
     Args:
-        tool:
-        markers:
-        do_not_include_list:
+        tool: OpenSim Ik tool.
+        markers: string list, list of makers to add to the task
+        do_not_include_list: string list, list of markers to put aside
 
     Returns:
-
+        OpenSim Marker Task Set
     """
     taskset = tool.getIKTaskSet()
     for m in markers:
@@ -106,7 +110,19 @@ def marker_tasks(tool, markers, do_not_include_list):
     return taskset
 
 
-def process(segmented_trcs: dict[str, list[TRC]], scaled_model_file_path: str, ik_result_path: str, save=True):
+def process(segmented_trcs: dict[str, list[TRC]], scaled_model_file_path: str, ik_result_path: str, save: bool = True):
+    """Pipeline to process segmented TRC
+
+    Args:
+        segmented_trcs: trc objects organized by side, the gait cycles to process
+        scaled_model_file_path: path to the scaled model file
+        ik_result_path: where to save the resulting IK files
+        save: whether to save the IK files or not.
+
+    Returns:
+        Dictionary of the IK results, organized by side.
+    """
+
     os.makedirs(ik_result_path, exist_ok=True)
 
     marker_names = [
