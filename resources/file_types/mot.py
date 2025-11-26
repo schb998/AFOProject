@@ -8,6 +8,7 @@ from typing import Self
 import logging
 
 # todo: further testing with nested load/write & segmentation
+# todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")

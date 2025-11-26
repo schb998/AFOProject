@@ -12,6 +12,7 @@ from ptb.util.io.mocap.low_lvl.c3d import Reader
 
 # todo: further testing for segmentation methods comparison
 # todo: make get_first_frame method instead of first_frame attribute ?
+# todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
