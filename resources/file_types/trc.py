@@ -2,16 +2,17 @@ import os
 from copy import deepcopy
 import pandas as pd
 import numpy as np
-import numpy.typing
 import ast
 import random
 import time
 from typing import Self
 import logging
 import re
+from ptb.util.io.mocap.low_lvl.c3d import Reader
 
 # todo: further testing for segmentation methods comparison
 # todo: make get_first_frame method instead of first_frame attribute ?
+# todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
@@ -19,9 +20,11 @@ output = os.path.join(path, "test_output")
 # working files:
 filename_standard = "TRC_standard.trc"
 filename_nan = "TRC_nan.trc"  # missing values should be handled
+filename_c3d = "C3D_standard.c3d"
 # error management files:
 filename_missing_z7 = "TRC_missing_z7.trc"  # error : missing marker coordinate z7
 
+coordinates_names = ['X', 'Y', 'Z', 'T', 'N']
 
 class TRC(object):
     """TRC object.
@@ -34,27 +37,25 @@ class TRC(object):
         marker_dict: Dictionary of the columns associated with each marker.
         data:        Dataframe containing the data. The frames are used as index.
         first_frame: Integer, first frame of the data.
+        num_coordinates: Integer, number of coordinates by marker
         file_header: List of string, content of the TRC file's header line. Optional.
+
     """
 
-    def __init__(self,
-                 filename: str,
-                 meta_data: dict[str, str | int | float],
-                 marker_set: list[str],
-                 col_names: list[str],
-                 marker_dict: dict[str, list[str]],
-                 data: pd.DataFrame,
+    def __init__(self, filename: str, meta_data: dict[str, str | int | float], marker_set: list[str],
+                 col_names: list[str], marker_dict: dict[str, list[str]], data: pd.DataFrame, num_coordinates: int,
                  file_header: list[str] = None) \
             -> None:
         """Creates a TRC object.
 
         Args:
             filename: name of the TRC file associated with the object
-            meta_data: metadata of teh dataset
+            meta_data: metadata of the dataset
             marker_set: markers of the data
             col_names: (ordered) list of the markers' data coordinates from the file
             marker_dict: build in the form of {marker: list of associated coordinate columns}
             data: data
+            num_coordinates: number of coordinates by marker
             file_header: header line of the file
         """
         self.filename = filename
@@ -63,12 +64,12 @@ class TRC(object):
         self.col_names = col_names
         self.marker_dict = marker_dict
         self.data = data
+        self.num_coordinates = num_coordinates
         self.first_frame = data.index[0]
         if file_header is not None:
             self.file_header = file_header
         else:
             self.file_header = []
-
 
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
@@ -92,7 +93,6 @@ class TRC(object):
             return False
         return True
 
-
     def __ne__(self, other: object) -> bool:
         """Overrides the default implementation of inequality operation.
 
@@ -105,7 +105,6 @@ class TRC(object):
             bool
         """
         return not self.__eq__(other)
-
 
     def __gt__(self, other: Self) -> bool:
         """Overrides the default implementation of "strictly greater than" operation.
@@ -121,7 +120,6 @@ class TRC(object):
         if isinstance(other, TRC):
             return self.filename.lower() > other.filename.lower()
 
-
     def __lt__(self, other: Self) -> bool:
         """Overrides the default implementation of "strictly lower than" operation.
 
@@ -134,7 +132,6 @@ class TRC(object):
             bool
         """
         return self.filename.lower() < other.filename.lower()
-
 
     def __le__(self, other: Self) -> bool:
         """Overrides the default implementation of "equal or lower than" operation.
@@ -149,7 +146,6 @@ class TRC(object):
         """
         return self.filename.lower() <= other.filename.lower()
 
-
     def __ge__(self, other: Self) -> bool:
         """Overrides the default implementation of "equal or greater than" operation.
 
@@ -163,17 +159,19 @@ class TRC(object):
         """
         return self.filename.lower() >= other.filename.lower()
 
-
     @classmethod
-    def load(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> Self:
+    def load_from_trc(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t",
+                      num_coordinates=None) -> Self:
         """Reads data from a TRC file.
 
         Args:
+
             filepath: path to the TRC file.
             filename:  name of the TRC file. \
                 Should be filled if path does not include filename, optional otherwise.
             header: whether the TRC file includes a header. Default value is True.
             delimiter: delimiter of the TRC file. Default value is "\t".
+            num_coordinates: number of coordinates by marker
 
         Returns:
             TRC object
@@ -203,6 +201,14 @@ class TRC(object):
                 if header:
                     file_header = next(file).strip().split(delimiter)
 
+                    if num_coordinates is None:
+                        for element in file_header:
+                            if re.search(r'^\(.*\)$', element) is not None:
+                                num_coordinates = len(element.split("/"))
+
+                if num_coordinates is None:
+                    num_coordinates = 3
+
                 # meta_data
                 meta_data = {}
                 meta_data_keys = next(file).strip().split(delimiter)
@@ -218,7 +224,7 @@ class TRC(object):
                 headers = next(file).strip().split(delimiter)
                 headers = [headers[i] for i in range(0, len(headers)) if len(headers[i]) > 0]
                 sub_headers = next(file).strip().split(delimiter)
-                if len(sub_headers) != (len(headers)-2)*3:
+                if len(sub_headers) != (len(headers) - 2) * num_coordinates:
                     raise Exception(f"Issue reading {filepath}: wrong number of columns")
                 sub_headers.insert(0, headers[0])
                 sub_headers.insert(1, headers[1])
@@ -235,10 +241,10 @@ class TRC(object):
                 marker_dictionary = {}
                 i = 1
                 for m in range(len(marker_set)):
-                    marker_dictionary[marker_set[m]] = sub_headers[i:i + 3]
-                    i += 3
+                    marker_dictionary[marker_set[m]] = sub_headers[i:i + num_coordinates]
+                    i += num_coordinates
 
-                res = cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data,
+                res = cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data, num_coordinates,
                           file_header if header else None)
                 logging.info(f'TRC object successfully loaded from file {filepath}.')
                 return res
@@ -247,6 +253,88 @@ class TRC(object):
             logging.warning(error_message)
             raise OSError(error_message)
 
+    @classmethod
+    def load_from_c3d(cls, c3d: str, filename: str = None) -> Self:
+        """Reads data from a C3D file.
+
+        Args:
+            c3d:  path to a c3d file.
+            filename: name of the TRC file. Optional> if not given, filename will be the same as the c3d file.
+
+        Returns:
+            TRC object
+
+        Raises:
+            OSError: if the file cannot be read.
+        """
+
+        error_message = f"TRC object could not be loaded from file {c3d}: "
+
+        # test that given path is valid :
+        if (not os.path.isfile(c3d)) or (not c3d.endswith(".c3d")):
+            error_message = error_message + "given path does not lead to a C3D file."
+            logging.warning(error_message)
+            raise OSError(error_message)
+
+        with open(c3d, 'rb') as file:
+            reader = Reader(file)
+
+            if filename is None:
+                filename = os.path.basename(c3d).replace(".c3d", ".trc")
+            first_frame = reader.first_frame()
+
+            # get the number of frames and markers:
+            for _, points, _ in reader.read_frames():
+                num_markers = len(points)
+                num_coordinates = len(points[0])
+                break
+
+            # read metadata :
+            meta_data = {}
+            rate = reader.header.frame_rate
+            frames = reader.header.last_frame - reader.header.first_frame + 1
+            meta_data['CameraRate'] = rate
+            meta_data['DataRate'] = rate
+            meta_data['NumFrames'] = frames
+            meta_data['OrigDataRate'] = rate
+            meta_data['OrigDataStartFrame'] = reader.header.first_frame
+            meta_data['OrigNumFrames'] = frames
+            meta_data['Units'] = reader.groups['POINT'].params['UNITS'].bytes.decode("utf-8")
+            meta_data['NumMarkers'] = num_markers
+
+            # organize markers and their coordinates:
+            marker_set = [point.strip() for point in reader.point_labels]
+            marker_dictionary = {}
+            columns = []
+            for i in range(len(marker_set)):
+                label = marker_set[i]
+                str_i = str(i+1)
+                coo_list = []
+                global coordinates_names
+                if num_coordinates > len(coordinates_names):
+                    raise Exception("Too many coordinates to unpack.")
+                for j in range(num_coordinates):
+                    coo_list.append(coordinates_names[j] + str_i)
+                columns.extend(coo_list)
+                marker_dictionary[label] = coo_list
+
+            # data:
+            data = pd.DataFrame(columns=np.array(columns), index=range(first_frame, reader.last_frame()))
+            for frame_no, points, analog in reader.read_frames():
+                temp = []
+                for marker in points:
+                    temp.extend(marker)
+                data.loc[frame_no] = temp
+            num_coordinates = len(points[0])
+
+            res = cls(filename, meta_data, marker_set, columns, marker_dictionary, data, num_coordinates,
+                      file_header=None)
+            logging.info(f'TRC object successfully loaded from C3D.')
+
+            # close the file:
+            file.close()
+
+            return res
 
     def save(self, filepath: str, filename: str = None) -> None:
         """Saves data into a TRC file.
@@ -312,9 +400,9 @@ class TRC(object):
             writer.writelines(content)
         logging.info(f"File {filename} saved in directory {filepath}.")
 
-
     @classmethod
-    def adapt_to_opensim_use(cls, filepath: str, filename: str = None, header: bool = True, delimiter: str = "\t") -> None:
+    def adapt_to_opensim_use(cls, filepath: str, filename: str = None, header: bool = True,
+                             delimiter: str = "\t") -> None:
         """Overwrites a TRC file with a copy of data with added marker ZERO located at position (0,0,0) at all
         frames, as last marker column.
 
@@ -338,7 +426,7 @@ class TRC(object):
             temp = os.path.split(filepath)
             filename = temp[1]
             filepath = temp[0]
-        trc = cls.load(filepath, filename, header, delimiter)
+        trc = cls.load_from_trc(filepath, filename, header, delimiter)
         old_name = deepcopy(trc.filename)
         num_frames = trc.data.shape[0]
         if 'ZERO' in trc.marker_set and trc.col_names[-1] == trc.marker_dict['ZERO'][-1]:
@@ -348,7 +436,6 @@ class TRC(object):
                                 'Z': np.zeros(num_frames)})
         trc.rename(old_name)
         trc.save(filepath)
-
 
     def rename(self, filename: str):
         """This method updates the TRC object's name and/or file_name.
@@ -360,7 +447,6 @@ class TRC(object):
             self.filename = filename + ".trc"
         else:
             self.filename = filename
-
 
     def add_marker(self, marker_name: str, data: np.ndarray | dict[str, np.ndarray]) -> None:
         """Adds a marker to the data.
@@ -386,13 +472,13 @@ class TRC(object):
         while name in self.marker_set:
             logging.info(f"Marker {name} already exists, changing name to {marker_name + str(i)}")
             name = marker_name + str(i)
-            i = i+1
+            i = i + 1
         marker_name = name
         self.marker_set.append(marker_name)
         self.metadata['NumMarkers'] = self.metadata['NumMarkers'] + 1
 
         num = str(len(self.marker_set))
-        new_x_column_name, new_y_column_name, new_z_column_name = 'X'+num, 'Y'+num, 'Z'+num
+        new_x_column_name, new_y_column_name, new_z_column_name = 'X' + num, 'Y' + num, 'Z' + num
 
         if isinstance(data, np.ndarray):
             result = {new_x_column_name: data[:, 0:1],
@@ -408,7 +494,7 @@ class TRC(object):
                 y_column_name = [y for y in columns if re.search("^([Yy])|([Yy])$", y) is not None][0]
                 z_column_name = [z for z in columns if re.search("^([Zz])|([Zz])$", z) is not None][0]
 
-            except KeyError as e:
+            except KeyError:
                 logging.info(f"Given columns do not match expected X/Y/Z name formulation "
                              f"of starting or ending by X/Y/Z. "
                              f"Assigning them to coordinates X, Y, Z in this order.")
@@ -427,7 +513,6 @@ class TRC(object):
             self.data[coo] = result[coo]
         self.rename(self.filename.replace('.trc', f'added_{marker_name}'))
 
-
     def copy(self) -> Self:
         """Returns a copy of the object.
 
@@ -437,7 +522,6 @@ class TRC(object):
         copy = deepcopy(self)
         copy.filename = copy.filename.replace(".trc", "_copy.trc")
         return copy
-
 
     def sample(self, first_frame: int, last_frame: int) -> Self:
         """Samples the current TRC file between the given points.
@@ -468,8 +552,7 @@ class TRC(object):
         for col in self.data.columns.to_list():
             d[col] = self.data[col][first_frame - ff:last_frame - ff]
         return TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names), deepcopy(self.marker_dict),
-                   pd.DataFrame(data=d), file_header=deepcopy(self.file_header))
-
+                   pd.DataFrame(data=d), self.num_coordinates, file_header=deepcopy(self.file_header))
 
     def segment(self, points: list[int]) -> list[Self]:
         """Segments the data frame according to the given frames point.
@@ -510,11 +593,10 @@ class TRC(object):
             for col in self.data.columns.to_list():
                 d[col] = self.data[col][start - ff:end - ff]
             resulting_trcs.append(TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names),
-                                      deepcopy(self.marker_dict), pd.DataFrame(data=d),
+                                      deepcopy(self.marker_dict), pd.DataFrame(data=d), self.num_coordinates,
                                       file_header=deepcopy(self.file_header)))
 
         return resulting_trcs
-
 
     def segment_bis(self, points: list[int]) -> list[Self]:
         """Segments the data frame according to the given frames point.
@@ -544,7 +626,6 @@ class TRC(object):
                 resulting_trcs.append(self.sample(points[i], points[i + 1] + 1))
         return resulting_trcs
 
-
     @classmethod
     def load_all(cls, dir_path: str) -> list[Self]:
         """Loads TRC objects from TRC files.
@@ -564,11 +645,10 @@ class TRC(object):
         file_list = sorted(f for f in os.listdir(dir_path) if f.endswith('.trc'))
         for file in file_list:
             try:
-                resulting_trcs.append(TRC.load(os.path.join(dir_path, file)))
+                resulting_trcs.append(TRC.load_from_trc(os.path.join(dir_path, file)))
             except OSError:
                 pass
         return resulting_trcs
-
 
     @classmethod
     def save_multiple(cls, trcs: list[Self], dir_path: str) -> None:
@@ -588,13 +668,12 @@ class TRC(object):
             except OSError:
                 pass
 
-
     @classmethod
     def adapt_all_to_opensim_use(cls, dir_path: str) -> None:
         """Adapts all TRC file of given folder to be used with OpenSim. Sees method "adapt_to_opensim_use" for details.
 
         Args:
-            dir_path: path to dircetory in which to process the TRc files.
+            dir_path: path to directory in which to process the TRc files.
 
         Returns:
             None
@@ -608,6 +687,7 @@ class TRC(object):
 
 class _TRCCleanup:
     """Static class to clean up test files."""
+
     @staticmethod
     def delete_trc_file(path_to_trc: str, force_delete: bool = False) -> None:
         """Deletes TRC file from given path.
@@ -619,6 +699,7 @@ class _TRCCleanup:
         Raises:
             OSError: if a file could not be deleted.
         """
+
         def delete(file: str) -> None:
             try:
                 os.remove(file)
@@ -642,7 +723,6 @@ class _TRCCleanup:
             else:
                 logging.info(f"File {path_to_trc} has not been deleted.")
 
-
     @staticmethod
     def delete_all_files(path_to_directory: str, force_delete: bool = False) -> None:
         """Deletes all TRC files from given path.
@@ -651,6 +731,7 @@ class _TRCCleanup:
             path_to_directory: path to the directory where all TRC files are to be deleted.
             force_delete: whever to skip asking for confirmation before deletion.
         """
+
         def delete(files: list[str]) -> None:
             for file in files:
                 try:
@@ -706,15 +787,16 @@ class _Test:
     @staticmethod
     def _test_load() -> None:
         try:
-            TRC.load(path, filename_standard)
-            TRC.load(path, filename_nan)
-            TRC.load(os.path.join(path, filename_standard))
-            TRC.load(os.path.join(path, filename_nan))
+            TRC.load_from_trc(path, filename_standard)
+            TRC.load_from_trc(path, filename_nan)
+            TRC.load_from_trc(os.path.join(path, filename_standard))
+            TRC.load_from_trc(os.path.join(path, filename_nan))
+            TRC.load_from_c3d(os.path.join(path, filename_c3d))
             assert True
         except OSError:
             assert False, "File couldn't be loaded."
         try:
-            trc = TRC.load(os.path.join(path, filename_missing_z7))
+            TRC.load_from_trc(os.path.join(path, filename_missing_z7))
             assert False, f"File {filename_missing_z7} should raise an exception upon loading."
         except OSError:
             assert True
@@ -722,11 +804,11 @@ class _Test:
     @staticmethod
     def _test_nestled_loads() -> None:
         try:
-            trc = TRC.load(os.path.join(path, filename_nan))
+            trc = TRC.load_from_trc(os.path.join(path, filename_nan))
             trc.save(output, "first_save.trc")
-            trc_first_save = TRC.load(os.path.join(output, "first_save.trc"))
+            trc_first_save = TRC.load_from_trc(os.path.join(output, "first_save.trc"))
             trc_first_save.save(output, "second_save.trc")
-            trc_second_save = TRC.load(os.path.join(output, "second_save.trc"))
+            trc_second_save = TRC.load_from_trc(os.path.join(output, "second_save.trc"))
             assert True
         except OSError:
             assert False, "Couldn't load and save files in a loop."
@@ -734,13 +816,13 @@ class _Test:
 
     @staticmethod
     def _test_operations() -> None:
-        trc1 = TRC.load(path, filename_standard)
-        trc2 = TRC.load(path, filename_nan)
+        trc1 = TRC.load_from_trc(path, filename_standard)
+        trc2 = TRC.load_from_trc(path, filename_nan)
         assert trc1 == trc1 and trc2 == trc2, \
             "Equality operation is not working."
         assert trc1 != trc2 and trc2 != trc1, \
             "Inequality operation is not working."
-        assert trc1 == TRC.load(path, filename_standard) and trc2 == TRC.load(path, filename_nan), \
+        assert trc1 == TRC.load_from_trc(path, filename_standard) and trc2 == TRC.load_from_trc(path, filename_nan), \
             "Objects loaded from same file should be equal."
         trc3 = trc1.copy()
         trc3.rename('foo')
@@ -748,13 +830,13 @@ class _Test:
 
     @staticmethod
     def _test_copy() -> None:
-        trc = TRC.load(path, filename_standard)
+        trc = TRC.load_from_trc(path, filename_standard)
         assert trc.copy() == trc, \
             "Objects should be equal to copy."
 
     @staticmethod
     def _test_sample() -> None:
-        trc = TRC.load(os.path.join(path, filename_standard))
+        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
         length = trc.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
         rand1, rand2 = rands[0], rands[1]
@@ -773,7 +855,7 @@ class _Test:
 
     @staticmethod
     def _test_segmentation() -> None:
-        trc = TRC.load(os.path.join(path, filename_standard))
+        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
         rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
@@ -798,7 +880,7 @@ class _Test:
 
     @staticmethod
     def _test_segmentation_bis() -> None:
-        trc = TRC.load(os.path.join(path, filename_standard))
+        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
         rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
@@ -825,19 +907,19 @@ class _Test:
     def _test_load_all() -> None:
         trcs = TRC.load_all(path)
         for f in trcs:
-            assert f == TRC.load(
+            assert f == TRC.load_from_trc(
                 os.path.join(path, f.filename)), "Mass loaded objects should match object loaded from the same file."
 
     @staticmethod
     def _test_save() -> None:
-        trc1 = TRC.load(os.path.join(path, filename_standard))
+        trc1 = TRC.load_from_trc(os.path.join(path, filename_standard))
         try:
             trc1.save(output)
             assert True
         except OSError:
             assert False, "File not written."
         try:
-            trc2 = TRC.load(os.path.join(output, filename_standard))
+            trc2 = TRC.load_from_trc(os.path.join(output, filename_standard))
             assert True
         except OSError:
             assert False, "Written file could not be read."
@@ -847,7 +929,7 @@ class _Test:
     @staticmethod
     def _test_save_all() -> None:
         _TRCCleanup.delete_all_files(output, True)
-        trc = TRC.load(os.path.join(path, filename_standard))
+        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
         rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
@@ -871,7 +953,7 @@ class _Test:
 
     @staticmethod
     def _test_add_marker() -> None:
-        trc1 = TRC.load(path, filename_standard)
+        trc1 = TRC.load_from_trc(path, filename_standard)
         trc2 = trc1.copy()
         num_frames = trc2.data.shape[0]
         try:
@@ -887,7 +969,7 @@ class _Test:
 
     @staticmethod
     def _test_arrange() -> None:
-        trc = TRC.load(path, filename_standard).copy()
+        trc = TRC.load_from_trc(path, filename_standard).copy()
         trc.rename("test")
         trc.save(output)
 
@@ -896,7 +978,7 @@ class _Test:
             assert True
         except Exception as e:
             assert False, "Arrange method should not raise error: " + getattr(e, 'message', repr(e))
-        trc_arranged1 = TRC.load(output, "test.trc")
+        trc_arranged1 = TRC.load_from_trc(output, "test.trc")
         assert trc != trc_arranged1, "Raw file and arrange file should be different."
 
         try:
@@ -904,7 +986,7 @@ class _Test:
             assert True
         except Exception as e:
             assert False, "Arrange method should not raise error: " + getattr(e, 'message', repr(e))
-        trc_arranged2 = TRC.load(output, "test.trc")
+        trc_arranged2 = TRC.load_from_trc(output, "test.trc")
         assert trc_arranged1 == trc_arranged2, "Using arrange on already arranged TRC file should not have effect."
 
     @staticmethod
@@ -930,7 +1012,7 @@ class _Test:
                 - difference (duration segment - duration segment_bis)
             float:      mean value of the difference
         """
-        trc = TRC.load(path, path_to_file)
+        trc = TRC.load_from_trc(path, path_to_file)
         length = trc.data.shape[0]
         data = []
         for i in range(100):

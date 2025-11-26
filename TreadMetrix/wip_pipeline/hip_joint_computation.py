@@ -125,7 +125,7 @@ def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
 
     """
     try:
-        trc = TRC.load(input_path)
+        trc = TRC.load_from_trc(input_path)
         updated_trc = add_virtual_markers_to_trc(trc)
         if output_path is not None:
             updated_trc.save(output_path)

@@ -19,16 +19,17 @@ def set_up_window(window: Tk, window_width: int = 500, window_height: int = 300)
     window.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
 
 
-def infobox(message: str) -> None:
+def infobox(message: str, title=None) -> None:
     """Displays a tkinter information window with given message.
 
     Args:
+        title:
         message: message to display
 
     Returns:
         None
     """
-    showinfo(title='Information', message=message)
+    showinfo(title=title if title is not None else "Information", message=message)
 
 
 def on_closing(window: Tk, custom: str = None) -> bool:
@@ -49,17 +50,57 @@ def on_closing(window: Tk, custom: str = None) -> bool:
     return False
 
 
-def get_osim_file(instruction: str = None, mode: str = 'r') -> io.TextIOWrapper | None:
-    return askopenfile(title=instruction, mode=mode, filetypes=[('OpenSim Project files', '*.osim')])
+def get_osim_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
+    t = ""
+    if title is not None:
+        t = t + title
+    if instruction is not None:
+        if not t:
+            t = instruction
+        else:
+            t = t + " - " + instruction
+    if not t:
+        t = "Select OSIM file."
+    return askopenfile(title=t, mode=mode, filetypes=[('OpenSim Project files', '*.osim')])
 
 
-def get_mot_file(instruction: str = None, mode: str = 'r') -> io.TextIOWrapper | None:
-    return askopenfile(title=instruction, mode=mode, filetypes=[('OpenSim Motion files', '*.mot')])
+def get_mot_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
+    t = ""
+    if title is not None:
+        t = t + title
+    if instruction is not None:
+        if not t:
+            t = instruction
+        else:
+            t = t + " - " + instruction
+    if not t:
+        t = "Select MOT file."
+    return askopenfile(title=t, mode=mode, filetypes=[('OpenSim Motion files', '*.mot')])
 
 
-def get_xml_file(instruction: str = None, mode: str = 'r') -> io.TextIOWrapper | None:
-    return askopenfile(title=instruction, mode=mode, filetypes=[('Extensible Markup Language files', '*.xml')])
+def get_xml_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
+    t = ""
+    if title is not None:
+        t = t + title
+    if instruction is not None:
+        if not t:
+            t = instruction
+        else:
+            t = t + " - " + instruction
+    if not t:
+        t = "Select XML file."
+    return askopenfile(title=t, mode=mode, filetypes=[('Extensible Markup Language files', '*.xml')])
 
 
-def get_trc_file(instruction: str = None, mode: str = 'r') -> io.TextIOWrapper | None:
-    return askopenfile(title=instruction, mode=mode, filetypes=[('OpenSim Marker files', '*.trc')])
+def get_trc_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
+    t = ""
+    if title is not None:
+        t = t + title
+    if instruction is not None:
+        if not t:
+            t = instruction
+        else:
+            t = t + " - " + instruction
+    if not t:
+        t = "Select TRC file."
+    return askopenfile(title=t, mode=mode, filetypes=[('OpenSim Marker files', '*.trc')])

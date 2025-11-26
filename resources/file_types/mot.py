@@ -8,6 +8,7 @@ from typing import Self
 import logging
 
 # todo: further testing with nested load/write & segmentation
+# todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
@@ -34,7 +35,7 @@ class MOT:
                  filename: str,
                  header_lines: dict[str: object],
                  data: pd.DataFrame,
-                 first_frame: int = 0)\
+                 first_frame: int = 0) \
             -> None:
         """Creates a MOT object.
 
@@ -157,12 +158,13 @@ class MOT:
         else:
             return n > on
 
-
     @classmethod
-    def load(cls, filepath: str, filename: str = None) -> Self:
+    def load_from_mot(cls, filepath: str, filename: str = None, separator=r'\s') -> Self:
         """Reads data from a MOT file into a MOT object.
 
         Args:
+            separator: character used to separate data in the mot file.
+                r'\\s' by default. OpenSim generated files require r'\\t'.
             filepath (string): path to the MOT file.
             filename (string): name of the MOT file. \
                 Should be filled if path does not include filename, optional otherwise.
@@ -195,17 +197,16 @@ class MOT:
                 header_lines = {}
                 line = next(file).strip("\n")
                 while line != "endheader":
-                    temp = line.split('=')
-                    try:
-                        md = temp[1].strip()
-                        try:
-                            header_lines[temp[0].strip()] = ast.literal_eval(md)
-                        except ValueError:
-                            header_lines[temp[0].strip()] = md
-                    except IndexError:
-                        pass
+                    if line:
+                        temp = line.split('=')
+                        if len(temp) > 1:
+                            md = temp[1].strip()
+                            try:
+                                header_lines[temp[0].strip()] = ast.literal_eval(md)
+                            except ValueError:
+                                header_lines[temp[0].strip()] = md
                     line = next(file).strip("\n")
-                data = pd.read_csv(file, sep=r'\s', engine='python')
+                data = pd.read_csv(file, sep=separator, engine='python')
                 file.close()
                 return cls(name, filename, header_lines, data)
         except Exception as e:
@@ -377,7 +378,7 @@ class MOT:
         file_list = sorted(f for f in os.listdir(data_path_mot) if f.endswith('.mot'))
         for filename in file_list:
             file_path = os.path.join(data_path_mot, filename)
-            motion_data_list.append(cls.load(file_path))
+            motion_data_list.append(cls.load_from_mot(file_path))
         return motion_data_list
 
     @classmethod
@@ -403,6 +404,7 @@ class MOT:
 
 class _MOTCleanup:
     """Static class to clean up test files."""
+
     @staticmethod
     def delete_mot_file(path_to_mot: str, force_delete: bool = False) -> None:
         """Deletes MOT file located at given filepath.
@@ -414,6 +416,7 @@ class _MOTCleanup:
         Raises:
             OSError: if a file could not be deleted.
         """
+
         def delete(file: str) -> None:
             try:
                 os.remove(file)
@@ -437,7 +440,6 @@ class _MOTCleanup:
             else:
                 logging.info(f"File {path_to_mot} has not been deleted.")
 
-
     @staticmethod
     def delete_all_files(path_to_directory: str, force_delete: bool = False) -> None:
         """Deletes all MOT files from given directory.
@@ -446,6 +448,7 @@ class _MOTCleanup:
             path_to_directory: path to the directory where all MOT files are to be deleted.
             force_delete: whever to skip asking for confirmation before deletion.
         """
+
         def delete(files: list[str]) -> None:
             for file in files:
                 try:
@@ -495,26 +498,28 @@ class _Test:
     @staticmethod
     def _test_load() -> None:
         try:
-            MOT.load(os.path.join(path, filename_standard))
-            MOT.load(path, filename_nan)
-            MOT.load(path, filename_osim_generated)
+            MOT.load_from_mot(os.path.join(path, filename_standard))
+            MOT.load_from_mot(path, filename_nan)
+            MOT.load_from_mot(path, filename_osim_generated)
             assert True
         except OSError:
             assert False, \
                 "File not read."
-        assert MOT.load(os.path.join(path, filename_standard)) == MOT.load(os.path.join(path, filename_standard)), \
+        assert MOT.load_from_mot(os.path.join(path, filename_standard)) == MOT.load_from_mot(
+            os.path.join(path, filename_standard)), \
             "MOT Object from same file should be equal."
-        assert MOT.load(os.path.join(path, filename_standard)) != MOT.load(os.path.join(path, filename_nan)), \
+        assert MOT.load_from_mot(os.path.join(path, filename_standard)) != MOT.load_from_mot(
+            os.path.join(path, filename_nan)), \
             "MOT Object from different files should be not equal."
 
     @staticmethod
     def _test_nestled_loads() -> None:
         try:
-            mot = MOT.load(os.path.join(path, filename_nan))
+            mot = MOT.load_from_mot(os.path.join(path, filename_nan))
             mot.save(output, "first_save.mot")
-            mot_first_save = MOT.load(os.path.join(output, "first_save.mot"))
+            mot_first_save = MOT.load_from_mot(os.path.join(output, "first_save.mot"))
             mot_first_save.save(output, "second_save.mot")
-            mot_second_save = MOT.load(os.path.join(output, "second_save.mot"))
+            mot_second_save = MOT.load_from_mot(os.path.join(output, "second_save.mot"))
             assert True
         except OSError:
             assert False, "Couldn't load and save files in a loop."
@@ -522,29 +527,29 @@ class _Test:
 
     @staticmethod
     def _test_operations() -> None:
-        mot1 = MOT.load(os.path.join(path, filename_standard))
-        mot2 = MOT.load(os.path.join(path, filename_nan))
+        mot1 = MOT.load_from_mot(os.path.join(path, filename_standard))
+        mot2 = MOT.load_from_mot(os.path.join(path, filename_nan))
         assert mot1 == mot1 and mot2 == mot2, \
             "Equality operation is not working."
         assert mot1 != mot2 and mot2 != mot1, \
             "Inequality operation is not working."
-        assert mot1 == MOT.load(path, filename_standard) and mot2 == MOT.load(path, filename_nan), \
+        assert mot1 == MOT.load_from_mot(path, filename_standard) and mot2 == MOT.load_from_mot(path, filename_nan), \
             "Objects loaded from same file should be equal."
         mot3, mot4 = mot1.copy(), mot1.copy()
         mot3.rename(name='foo', filename=mot1.filename)
         mot4.rename(name=mot1.name, filename='foo')
-        assert mot1 > mot3 and mot1 >= mot3 and mot3 < mot1 and mot3 <= mot1 and\
-            mot1 > mot4 and mot1 >= mot4 and mot4 < mot1 and mot4 <= mot1, "Comparison operations are not working."
+        assert mot1 > mot3 and mot1 >= mot3 and mot3 < mot1 and mot3 <= mot1 and \
+               mot1 > mot4 and mot1 >= mot4 and mot4 < mot1 and mot4 <= mot1, "Comparison operations are not working."
 
     @staticmethod
     def _test_copy() -> None:
-        mot = MOT.load(os.path.join(path, filename_standard))
+        mot = MOT.load_from_mot(os.path.join(path, filename_standard))
         assert mot.copy() == mot, \
             "Copy method is not working."
 
     @staticmethod
     def _test_sample() -> None:
-        mot = MOT.load(os.path.join(path, filename_standard))
+        mot = MOT.load_from_mot(os.path.join(path, filename_standard))
         length = mot.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
         rand1, rand2 = rands[0], rands[1]
@@ -563,7 +568,7 @@ class _Test:
 
     @staticmethod
     def _test_segmentation() -> None:
-        mot = MOT.load(os.path.join(path, filename_standard))
+        mot = MOT.load_from_mot(os.path.join(path, filename_standard))
         length = mot.data.shape[0]
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
         rand1, rand2 = rands[0], rands[1]
@@ -587,14 +592,14 @@ class _Test:
 
     @staticmethod
     def _test_save() -> None:
-        mot1 = MOT.load(os.path.join(path, filename_standard))
+        mot1 = MOT.load_from_mot(os.path.join(path, filename_standard))
         try:
             mot1.save(output)
             assert True
         except OSError:
             assert False, "File not written."
         try:
-            mot2 = MOT.load(os.path.join(output, filename_standard))
+            mot2 = MOT.load_from_mot(os.path.join(output, filename_standard))
             assert True
         except OSError:
             assert False, "Written file could not be read."
@@ -605,7 +610,3 @@ class _Test:
 if __name__ == "__main__":
     logging.basicConfig(filename='test.log', level=logging.INFO)
     _Test.main()
-
-
-
-
