@@ -2,54 +2,272 @@ import os.path
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 from typing import Self
+from custom_exceptions import *
+
+# todo: update joint power documentation
 
 
 class GaitCycle:
-    def __init__(self, number: int, side: str, mot: MOT, trc: TRC) -> None:
-        self.number = number
-        self.side = side
-        self.trc = trc
-        self.mot = mot
-        self.inverse_kinematics = None
-        self.inverse_dynamic = None
-        self.joint_power = None
+    """
+    Structure regrouping data of a gait cycle in one objet.
 
-    def __gt__(self, other: Self) -> bool:
-        """Overrides the default implementation of "strictly greater than" operation.
+    Attributes:
+        side: str, side of the gait cycle.
+        num: int, id number of the gait cycle
+        grf: MOT object, ground force reaction data
+        trc: TRC object, marker data
+        ik: MOT object, inverse kinematic data
+        id: MOT object, inverse dynamic data
+        jp: joint power data
+    """
+
+    def __init__(self, side: str, number: int, ground_reaction_forces: MOT = None, markers_trajectory: TRC = None,
+                 inverse_kinematic: MOT = None, inverse_dynamic: MOT = None, joint_power: MOT = None) -> None:
+        """Creates a GaitCycle object.
 
         Args:
-            other: GaitCycle object to compare
+            side: str, side of the gait cycle.
+            number: int, id number of the gait cycle
+            ground_reaction_forces: MOT object, ground force reaction data
+            markers_trajectory: TRC object, marker data
+            inverse_kinematic: MOT object, inverse kinematic data
+            inverse_dynamic: MOT object, inverse dynamic data
+            joint_power: MOT object (to check), joint power data
+        """
+        if side.lower() in ["right", "r"]:
+            self.side = "Right"
+        elif side.lower() in ["left", "l"]:
+            self.side = "Left"
+        else:
+            raise KeyError(f"Given gait cycle cannot be added to the trial: {side} is not a valid side.")
+        self.num = number
+        self.grf = ground_reaction_forces
+        self.trc = markers_trajectory
+        self.ik = inverse_kinematic
+        self.id = inverse_dynamic
+        self.jp = joint_power
+
+    def add_grf(self, ground_reaction_forces: MOT | str, **kwargs) -> None:
+        """Add the ground reaction forces data to the object.
+
+        Args:
+            ground_reaction_forces: MOT object, or path (str) to a loadable MOT file.
+
+        Keyword Args:
+            separator: str, additional argument when the MOT file has to be loaded and is coded in a particular way.
 
         Returns:
-            bool
+            None
         """
-        return self.number > other.number
+        if isinstance(ground_reaction_forces, MOT):
+            self.grf = ground_reaction_forces
+        else:
+            if not os.path.isfile(ground_reaction_forces) or not os.path.basename(ground_reaction_forces).endswith(".mot"):
+                raise WrongExtensionException("Ground reaction force Motion file", ground_reaction_forces, ".mot")
+            self.grf = MOT.load_from_mot(ground_reaction_forces, separator=kwargs["separator"] if "separator" in kwargs else None)
 
-    def add_ik(self, mot: MOT) -> None:
-        self.inverse_kinematics = mot
+    def add_trc(self, markers_trajectory: TRC | str, **kwargs) -> None:
+        """Add the ground reaction forces data to the object.
 
-    def add_id(self, mot: MOT) -> None:
-        self.inverse_dynamic = mot
+        Args:
+            markers_trajectory: TRC object, or path (str) to a loadable TRC file.
 
-    def add_joint_power(self, mot: MOT) -> None:
-        self.joint_power = mot
+        Keyword Args:
+            header: bool, additional argument when the TRC file has to be loaded and the presence of a header needs to be precised.
+            delimiter: str, additional argument when the TRC file has to be loaded and is coded the data is separated in a particular way.
+            num_coordinates, int: str, additional argument when the TRC file has to be loaded and contains a specific number of coordinates by marker.
+
+        Returns:
+            None
+        """
+        self.trc = markers_trajectory
+        if isinstance(markers_trajectory, MOT):
+            self.trc = markers_trajectory
+        else:
+            if not os.path.isfile(markers_trajectory) or not os.path.basename(markers_trajectory).endswith(".trc"):
+                raise WrongExtensionException("Markers file", markers_trajectory, ".trc")
+            self.trc = TRC.load_from_trc(markers_trajectory, header=kwargs["header"] if "header" in kwargs else None,
+                                         delimiter=kwargs["delimiter"] if "delimiter" in kwargs else None,
+                                         num_coordinates=kwargs["num_coordinates"] if "num_coordinates" in kwargs else None)
+
+    def add_ik(self, inverse_kinematic: MOT | str) -> None:
+        """Add the inverse kinematics data to the object.
+
+        Args:
+            inverse_kinematic: MOT object, or path (str) to a loadable MOT file.
+
+        Returns:
+            None
+        """
+        if isinstance(inverse_kinematic, MOT):
+            self.ik = inverse_kinematic
+        else:
+            if not os.path.isfile(inverse_kinematic) or not os.path.basename(inverse_kinematic).endswith(".mot"):
+                raise WrongExtensionException("OpenSim generated Inverse Kinematics file", inverse_kinematic, ".mot")
+            self.ik = MOT.load_from_mot(inverse_kinematic,  separator=r"\t")
+
+
+    def add_id(self, inverse_dynamic: MOT | str) -> None:
+        """Add the inverse dynamic data to the object.
+
+        Args:
+            inverse_dynamic : MOT object, or path (str) to a loadable MOT file.
+
+        Returns:
+            None
+        """
+        if isinstance(inverse_dynamic, MOT):
+            self.id = inverse_dynamic
+        else:
+            if not os.path.isfile(inverse_dynamic) or not os.path.basename(inverse_dynamic).endswith(".mot"):
+                raise WrongExtensionException("OpenSim generated Inverse Dynamic file", inverse_dynamic, ".mot")
+            self.id = MOT.load_from_mot(inverse_dynamic, separator=r"\t")
+
+    def add_joint_power(self, joint_power) -> None:
+        """Add the joint power data to the object.
+
+        Args:
+            joint_power : joint power data.
+
+        Returns:
+            None
+        """
+        self.jp = joint_power
+
+    def is_empty(self):
+        """Check if the current object contains any data.
+
+        Returns:
+            bool, whether the current object is empty
+        """
+        return (self.grf is None
+                and self.trc is None
+                and self.ik is None
+                and self.id is None
+                and self.jp is None)
+
+    def get_time_frame(self) -> None | (float, float):
+        """Returns the first and last timestamp of the data, or None if the object does not contain any data.
+
+        Returns:
+            first and last timestamp of the data. None if there is no data.
+        """
+        def get_start_and_end(obj: MOT | TRC) -> (float, float):
+            return obj.data['Time'].iloc(0), obj.data['Time'].iloc(obj.data.shape[0] - 1)
+
+        if self.grf is not None:
+            return get_start_and_end(self.grf)
+        if self.trc is not None:
+            return get_start_and_end(self.trc)
+        if self.ik is not None:
+            return get_start_and_end(self.ik)
+        if self.id is not None:
+            return get_start_and_end(self.id)
+        if self.jp is not None:
+            return get_start_and_end(self.jp)
+        return None
+
+    def is_included(self, starting_time: float, ending_time: float) -> bool:
+        """Check if the current object is included in the given time frame.
+
+        Args:
+            starting_time: starting time of the time frame
+            ending_time: ending time of the time frame
+
+        Returns:
+
+        """
+        time = self.get_time_frame()
+        if time is None:
+            return False
+        s = time[0]
+        e = time[1]
+        return s > starting_time and e < ending_time
+
+    def save(self, path: str) -> None:
+        """Save all data of the object in a "/side/number/" subdirectory of the given directory.
+
+        Args:
+            path: str, directory in which to save the files
+
+        Returns:
+            None
+
+        """
+        new_path = os.path.join(path, self.side, "cycle_" + str(self.num))
+        os.makedirs(new_path, exist_ok=True)
+        for obj in [self.grf, self.trc, self.ik, self.id, self.jp]:
+            if obj is not None:
+                obj.save(new_path)
 
 
 class Trial:
-    def __init__(self, mot_path: str, trc_path: str) -> None:
-        self.mot = MOT.load_from_mot(mot_path)
-        self.name = os.path.basename(mot_path).replace(".mot", ".trc")
-        self.trc = TRC.load_from_trc(trc_path)
+    """
+    Structure regrouping trial in one objet.
+
+    Attributes:
+        name: str, name of the trial
+        mot: MOT object, ground force forces
+        trc: TRC object, marker data
+        gait_cycles: directory of GaitCycles objects, by side.
+    """
+    def __init__(self, mot: MOT, trc: TRC) -> None:
+        """Creates a new Trial object.
+
+        Args:
+            mot: MOT object, grf of the trial
+            trc: TRC object, markers positions data of the trial
+        """
+        self.name = mot.name.replace(".mot", "")
+        self.mot = mot
+        self.trc = trc
         self.gait_cycles = {"Right": [], "Left": []}
 
     def add_cycles(self, right_cycles: list[GaitCycle], left_cycles: list[GaitCycle]) -> None:
-        self.gait_cycles["Right"] = right_cycles
-        self.gait_cycles["Left"] = left_cycles
+        """Adding the given GaitCycles to the trial data, at the end of their respective sides.
+
+        Args:
+            right_cycles:
+            left_cycles:
+
+        Returns:
+
+        """
+        self.gait_cycles["Right"].extend(right_cycles)
+        self.gait_cycles["Left"].extend(left_cycles)
 
     def add_cycle(self, cycle: GaitCycle) -> None:
-        side = cycle.side
-        self.gait_cycles[side].append(cycle)
+        """Insert the given GaitCycle in the Trial gaitcycles, at the cycle's number index in the cycle's side list.
 
-    def sort_cycles(self) -> None:
+        Args:
+            cycle: GaitCycle, gait cycle object to add to the Trial data
+
+        Returns:
+            None
+        """
+        self.gait_cycles[cycle.side].insert(cycle.num, cycle)
+
+    def sample(self, starting_time: float, ending_time: float) -> Self:
+        """Sample the Trial between the given time bounds.
+
+        Args:
+            starting_time: float, lower time bound
+            ending_time: float, upper time bound
+
+        Returns:
+            Trial asmpled fromm the current objesct.
+        """
+        time = [starting_time, ending_time]
+        time.sort()
+        starting_time = time[0]
+        ending_time = time[1]
+        cycles = {"Right": [], "Left": []}
         for side in ["Right", "Left"]:
-            self.gait_cycles[side].sort()
+            for cycle in self.gait_cycles[side]:
+                if cycle.is_included(starting_time, ending_time):
+                    cycles[side].append(cycle)
+        trc = self.trc.sample(starting_time, ending_time, force_time=True)
+        mot = self.mot.sample(starting_time, ending_time, force_time=True)
+        trial = Trial(mot, trc)
+        trial.add_cycles(cycles["Right"], cycles["Left"])
+        return trial
