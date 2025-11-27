@@ -1,14 +1,13 @@
-import numpy as np
 import os
 import re
 from tkinter import messagebox
-
+import resources.paths.paths_access as local
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
-import resources.paths.paths_access as local
-import data_postprocessing as pp
+from resources.trial_class import Trial
 import osim_gestion as osim
-import ik_data as ik
+from data_postprocessing import process as post_processing
+from ik_data import process as compute_ik
 
 
 if __name__ == "__main__":
@@ -24,78 +23,29 @@ if __name__ == "__main__":
         save = messagebox.askokcancel("Save optional files", "Save optional files")
         show = messagebox.askokcancel("Show plots when running", "Show plots on screen during processing")
 
-    # read paths
-    raw_mot_files = local.get_raw_mot_path()
-    raw_trc_files = local.get_raw_trc_path()
-    mot_corrected_output = local.get_corrected_mot_path()
-
-    # loads files:
-    results = {}
-    for file in raw_mot_files:
+    # loads files into Trial objects:
+    trials = {}
+    for file in local.get_raw_mot_path():
         try:
-            m = MOT.load_from_mot(file)
-        except OSError:
-            print(f"File {file} couldn't be loaded. Skipping.")
-            break
-        results[m.filename.replace('.mot', '')] = {'mot': m}
-    raw_mot_files = results.keys()
-
-    # process files:
-    for name in raw_mot_files:
-        m = results[name]['mot']
-        time = m.data['time']
-        frame_rate = 1 / np.mean(np.diff(time))
-        print(f"\nProcessing: {m.filename} with sampling frequency: {frame_rate:.2f} Hz.")
-        save_corrected_path = os.path.join(mot_corrected_output, name)
-
-        # apply filters and baseline correction:
-        pp.filter_grf(m, frame_rate)
-        pp.baseline_correct_debug(m, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'],
-                                  save_corrected_path if save else None, show=show)
-        pp.baseline_correct_debug(m, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'],
-                                  save_corrected_path if save else None, show=show)
-        toe_off_moments = pp.detect_toe_offs(m, frame_rate)
-        heel_strike_moments = pp.detect_heel_strikes(m, frame_rate)
-        right_mot = m.copy()
-        pp.zero_swing_phase(m, toe_off_moments, heel_strike_moments, 'right')
-        pp.zero_swing_phase(m, toe_off_moments, heel_strike_moments, 'left')
-        m.rename(name=m.filename.replace('.mot', '') + "_corrected",
-                 filename=m.filename.replace('.mot', '_corrected.mot'), )
-        if save:
-            pp.plot_grf_details(m, heel_strike_moments, toe_off_moments, str(save_corrected_path), show=show)
-        m.save(save_corrected_path)
-
-        # segment according to heel strikes:
-        trc = None
-        trc_name_regex = name + "\\.trc$"
-        trc_found = False
-
-        try:
-            matching_trc = [t for t in raw_trc_files if re.search(trc_name_regex, t) is not None][0]
-            trc_found = True
-        except IndexError:
-            print(f"No selected TRC file matching MOT file {name}. Skipping.")
-            matching_trc = None
-
-        if trc_found:
+            mot = MOT.load_from_mot(file)
+            trial_name = mot.filename.replace('.mot', '')
             try:
-                TRC.adapt_to_opensim_use(matching_trc)
-                trc = TRC.load_from_trc(matching_trc)
-                results[name]['segmented'] \
-                    = pp.segment_at_heel_strikes(m, heel_strike_moments, mot_frame_rate=frame_rate, trc=trc,
-                                                 save=local.get_segmented_path() if save else None)
-            except OSError:
-                print("Could not TRC load")
-                trc_found = False
+                trc = [t for t in local.get_raw_trc_path() if re.search(trial_name + r"\.trc$", t) is not None][0]
+            except IndexError:
+                raise OSError
+            trials[trial_name] = Trial(mot, trc=TRC.load_from_trc(trc))
+        except OSError:
+            print(f"Trial could not be loaded from {file} couldn't be loaded. Skipping.")
+            break
 
-        if not trc_found:
-            results[name]['segmented'] = pp.segment_at_heel_strikes(m, heel_strike_moments,
-                                                                    save=local.get_segmented_path() if save else None)
+    # process the trials:
+    for name in trials:
+        trial = trials[name]
 
-        else:
-            print("IK postprocessing part fo the pipeline is still a WIP.")
-            results[name]['ik'] = ik.process(results[name]['segmented']['trc'],
-                                             local.get_scaled_model_file(),
-                                             os.path.join(local.get_ik_results_path(), name))
+        post_processing(trial, save_corrected_path=local.get_corrected_mot_path() if save else None,
+                        save_segmented_path=local.get_segmented_path() if save else None, show=show)
+
+        print("IK postprocessing part fo the pipeline is still a WIP.")
+        compute_ik(trial, local.get_scaled_model_file(), os.path.join(local.get_ik_results_path(), name), save=save)
 
     print("\nAll files were processed.")

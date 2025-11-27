@@ -1,11 +1,13 @@
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
-import resources.paths.paths_access as local
+from resources.custom_exceptions import MissingPathException
 import os
 from copy import deepcopy
 from scipy.signal import butter, filtfilt, find_peaks
 import matplotlib.pyplot as plt
 import numpy as np
+from resources.trial_class import Trial, GaitCycle
+
 
 # todo: check segment_at_heel_strikes function when mot_frame_rate is None // trc_rate is not in trc.metadata
 
@@ -187,7 +189,7 @@ def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> di
     return heel_contacts
 
 
-def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: dict[str, list[int]], side: str)\
+def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: dict[str, list[int]], side: str) \
         -> None:
     """Sets GRF and related columns to zero between toe-off and next heel strike.
 
@@ -276,14 +278,13 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
         plt.show()
 
 
-def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]], mot_frame_rate: float = None,
-                            trc: TRC = None, save: str = None) -> dict[str, dict[str, list[MOT | TRC]]]:
+def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[int]], mot_frame_rate: float = None,
+                            save: str = None) -> None:
     """Segment MOT (and matching TRC) object(s) according to heel_strikes.
 
     Args:
-        mot: MOT object to process.
+        trial: Trial object, corresponds to the trial to process the data from
         heel_strike_moments: dictionary of heel strikes, listed by side ("R"/"L").
-        trc: TRC object matching the given MOT. Optional.
         mot_frame_rate: frame rate of mot_file. Optional.
             Used when trc is not None, for faster results.
         save: Where to save the segmented files. Optional. Don't save if None.
@@ -292,10 +293,14 @@ def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]],
         dict: dictionary of the segmented objects, organized in lists by type (trc/mot) and side.
 
     """
+    mot = trial.corrected_grf
+    trc = trial.trc
+
     # segment mot object:
     right_mots = mot.segment(heel_strike_moments['R'])[1:-1]
     left_mots = mot.segment(heel_strike_moments['L'])[1:-1]
-    res = {'mot': {"Right": right_mots, "Left": left_mots}}
+    trial.gait_cycles["Right"] = GaitCycle.to_gait_cycles(side="Right", grfs=right_mots)
+    trial.gait_cycles["Left"] = GaitCycle.to_gait_cycles(side="Left", grfs=left_mots)
 
     if save is not None:
         path = os.path.join(save, mot.filename.replace('.mot', ''))
@@ -321,11 +326,62 @@ def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]],
         # segment trc:
         right_trcs = trc.segment(trc_heel_strike_moments['R'])[1:-1]
         left_trcs = trc.segment(trc_heel_strike_moments['L'])[1:-1]
-        res['trc'] = {"Right": right_trcs,  "Left": left_trcs}
+        GaitCycle.add_to_gait_cycles(trial.gait_cycles["Right"], trcs=right_trcs)
+        GaitCycle.add_to_gait_cycles(trial.gait_cycles["Left"], trcs=left_trcs)
 
         if save is not None:
             path = os.path.join(save, mot.filename.replace('.mot', ''))
             TRC.save_multiple(right_trcs, os.path.join(path, "Right"))
             TRC.save_multiple(left_trcs, os.path.join(path, "Left"))
 
-    return res
+
+def process(trial: Trial, save_corrected_path: str = None, save_segmented_path: str = None, show: bool = True) -> None:
+    """Pipeline to process the raw data of a trial.
+
+     This method filters, applies baseline corrections, zeros the swing phases and segments the data at heel strikes.
+     It stores the results in the given Trial object.
+
+    Args:
+        trial: Trial object, trial to process
+        save_corrected_path: str, path to save the plots and corrected Ground Force Reaction (MOT) object.
+            Does not save if None.
+        save_segmented_path: str, path to save the segmented MOT and TRC objects. Does not save if None.
+        show: bool, whether to show the plots.
+
+    Returns:
+        None.
+
+    """
+    frame_rate = 1 / np.mean(np.diff(trial.grf.data['time']))
+    print(f"\nProcessing: {trial.grf.filename} with sampling frequency: {frame_rate:.2f} Hz.")
+
+    # apply filters and baseline correction:
+    corrected_grf = trial.grf.copy()
+    save_corrected_path = os.path.join(save_corrected_path, trial.name) if save_corrected_path is not None else None
+    filter_grf(corrected_grf, frame_rate)
+    baseline_correct_debug(corrected_grf, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'],
+                           save_corrected_path, show=show)
+    baseline_correct_debug(corrected_grf, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'],
+                           save_corrected_path, show=show)
+
+    # detect toe off and heel strikes:
+    toe_off_moments = detect_toe_offs(corrected_grf, frame_rate)
+    heel_strike_moments = detect_heel_strikes(corrected_grf, frame_rate)
+
+    # zero swing phases and correct the baseline:
+    zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'right')
+    zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'left')
+    corrected_grf.rename(name=trial.grf.filename.replace('.mot', '') + "_corrected",
+                         filename=trial.grf.filename.replace('.mot', '_corrected.mot'), )
+
+    # plot and save the corrected data:
+    if save_corrected_path is not None:
+        plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_corrected_path, show=show)
+        corrected_grf.save(save_corrected_path)
+    trial.corrected_grf = corrected_grf
+
+    # segment according to heel strikes:
+    if trial.trc is None:
+        raise MissingPathException(f"Markers trajectory object (TRC) for trial {trial.name}", "No such object given.")
+    segment_at_heel_strikes(trial, heel_strike_moments, save=os.path.join(save_segmented_path, trial.name) if
+                            save_segmented_path is not None else None)

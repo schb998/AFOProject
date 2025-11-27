@@ -2,7 +2,8 @@ import os.path
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 from typing import Self
-from custom_exceptions import *
+from resources.custom_exceptions import *
+
 
 # todo: update joint power documentation
 
@@ -62,9 +63,11 @@ class GaitCycle:
         if isinstance(ground_reaction_forces, MOT):
             self.grf = ground_reaction_forces
         else:
-            if not os.path.isfile(ground_reaction_forces) or not os.path.basename(ground_reaction_forces).endswith(".mot"):
+            if not os.path.isfile(ground_reaction_forces) or not os.path.basename(ground_reaction_forces).endswith(
+                    ".mot"):
                 raise WrongExtensionException("Ground reaction force Motion file", ground_reaction_forces, ".mot")
-            self.grf = MOT.load_from_mot(ground_reaction_forces, separator=kwargs["separator"] if "separator" in kwargs else None)
+            self.grf = MOT.load_from_mot(ground_reaction_forces,
+                                         separator=kwargs["separator"] if "separator" in kwargs else None)
 
     def add_trc(self, markers_trajectory: TRC | str, **kwargs) -> None:
         """Add the ground reaction forces data to the object.
@@ -81,14 +84,15 @@ class GaitCycle:
             None
         """
         self.trc = markers_trajectory
-        if isinstance(markers_trajectory, MOT):
+        if isinstance(markers_trajectory, TRC):
             self.trc = markers_trajectory
         else:
             if not os.path.isfile(markers_trajectory) or not os.path.basename(markers_trajectory).endswith(".trc"):
                 raise WrongExtensionException("Markers file", markers_trajectory, ".trc")
             self.trc = TRC.load_from_trc(markers_trajectory, header=kwargs["header"] if "header" in kwargs else None,
                                          delimiter=kwargs["delimiter"] if "delimiter" in kwargs else None,
-                                         num_coordinates=kwargs["num_coordinates"] if "num_coordinates" in kwargs else None)
+                                         num_coordinates=kwargs[
+                                             "num_coordinates"] if "num_coordinates" in kwargs else None)
 
     def add_ik(self, inverse_kinematic: MOT | str) -> None:
         """Add the inverse kinematics data to the object.
@@ -104,8 +108,7 @@ class GaitCycle:
         else:
             if not os.path.isfile(inverse_kinematic) or not os.path.basename(inverse_kinematic).endswith(".mot"):
                 raise WrongExtensionException("OpenSim generated Inverse Kinematics file", inverse_kinematic, ".mot")
-            self.ik = MOT.load_from_mot(inverse_kinematic,  separator=r"\t")
-
+            self.ik = MOT.load_from_mot(inverse_kinematic, separator=r"\t")
 
     def add_id(self, inverse_dynamic: MOT | str) -> None:
         """Add the inverse dynamic data to the object.
@@ -146,12 +149,13 @@ class GaitCycle:
                 and self.id is None
                 and self.jp is None)
 
-    def get_time_frame(self) -> None | (float, float):
+    def get_time_frame(self):
         """Returns the first and last timestamp of the data, or None if the object does not contain any data.
 
         Returns:
             first and last timestamp of the data. None if there is no data.
         """
+
         def get_start_and_end(obj: MOT | TRC) -> (float, float):
             return obj.data['Time'].iloc(0), obj.data['Time'].iloc(obj.data.shape[0] - 1)
 
@@ -200,6 +204,91 @@ class GaitCycle:
             if obj is not None:
                 obj.save(new_path)
 
+    @classmethod
+    def to_gait_cycles(cls, grfs: list[MOT | str], side: str,
+                       trcs: list[TRC | str] = None,
+                       iks: list[MOT | str] = None,
+                       ids: list[MOT | str] = None,
+                       jps=None) -> list[Self]:
+        length = len(grfs)
+        check_trc, check_ik, check_id, check_jp = False, False, False, False
+
+        if trcs is not None:
+            if len(trcs) != length:
+                raise Exception("Error matching Ground Reaction Forces (MOT) objects and Marker Positions (TRC) "
+                                "objects: mismatched number of objects.")
+            check_trc = True
+        if iks is not None:
+            if len(iks) != length:
+                raise Exception("Error matching Ground Reaction Forces (MOT) objects and Inverse Kinematics (MOT) "
+                                "objects: mismatched number of objects.")
+            check_ik = True
+        if ids is not None:
+            if len(ids) != length:
+                raise Exception("Error matching Ground Reaction Forces (MOT) objects and Inverse Dynamics (MOT) "
+                                "objects: mismatched number of objects.")
+            check_id = True
+        if jps is not None:
+            if len(jps) != length:
+                raise Exception("Error matching Ground Reaction Forces (MOT) objects and Joint Powers (XML) objects: "
+                                "mismatched number of objects.")
+            check_jp = True
+
+        cycles = []
+        for i in range(length):
+            cycle = GaitCycle(side, i, grfs[i])
+            if check_trc:
+                cycle.add_trc(trcs[i])
+            if check_ik:
+                cycle.add_ik(iks[i])
+            if check_id:
+                cycle.add_id(ids[i])
+            if check_jp:
+                cycle.add_joint_power(jps[i])
+            cycles.append(cycle)
+
+        return cycles
+
+    @classmethod
+    def add_to_gait_cycles(cls, cycles: list[Self], trcs: list[TRC | str] = None,
+                           iks: list[MOT | str] = None,
+                           ids: list[MOT | str] = None,
+                           jps=None) -> None:
+        length = len(cycles)
+        check_trc, check_ik, check_id, check_jp = False, False, False, False
+
+        if trcs is not None:
+            if len(trcs) != length:
+                raise Exception("Error matching GaitCycles objects and Marker Positions (TRC) "
+                                "objects: mismatched number of objects.")
+            check_trc = True
+        if iks is not None:
+            if len(iks) != length:
+                raise Exception("Error matching GaitCycles objects and Inverse Kinematics (MOT) "
+                                "objects: mismatched number of objects.")
+            check_ik = True
+        if ids is not None:
+            if len(ids) != length:
+                raise Exception("Error matching GaitCycles objects and Inverse Dynamics (MOT) "
+                                "objects: mismatched number of objects.")
+            check_id = True
+        if jps is not None:
+            if len(jps) != length:
+                raise Exception("Error matching GaitCycles objects and Joint Powers (XML) objects: "
+                                "mismatched number of objects.")
+            check_jp = True
+
+        for i in range(length):
+            cycle = cycles[i]
+            if check_trc:
+                cycle.add_trc(trcs[i])
+            if check_ik:
+                cycle.add_ik(iks[i])
+            if check_id:
+                cycle.add_id(ids[i])
+            if check_jp:
+                cycle.add_joint_power(jps[i])
+
 
 class Trial:
     """
@@ -207,20 +296,26 @@ class Trial:
 
     Attributes:
         name: str, name of the trial
-        mot: MOT object, ground force forces
+        grf: MOT object, ground force forces
         trc: TRC object, marker data
+        corrected_grf: MOT object, corrected grf
+        notes: str, notes on the trial.
         gait_cycles: directory of GaitCycles objects, by side.
     """
-    def __init__(self, mot: MOT, trc: TRC) -> None:
+
+    def __init__(self, mot: MOT, trc: TRC = None, notes: str = None) -> None:
         """Creates a new Trial object.
 
         Args:
             mot: MOT object, grf of the trial
             trc: TRC object, markers positions data of the trial
+            notes: str, notes on the trial. Optional.
         """
         self.name = mot.name.replace(".mot", "")
-        self.mot = mot
+        self.grf = mot
         self.trc = trc
+        self.corrected_grf = None
+        self.notes = None
         self.gait_cycles = {"Right": [], "Left": []}
 
     def add_cycles(self, right_cycles: list[GaitCycle], left_cycles: list[GaitCycle]) -> None:
@@ -247,6 +342,29 @@ class Trial:
         """
         self.gait_cycles[cycle.side].insert(cycle.num, cycle)
 
+    def save(self, path: str) -> None:
+        """Save the trial files at the given path.
+
+        Args:
+            path: str, path in which to save the trial data.
+
+        Returns:
+            None
+        """
+        new_path = os.path.join(path, 'trial_' + self.name)
+        for file in [self.grf, self.trc, self.corrected_grf]:
+            if file is not None:
+                file.save(new_path)
+
+        if self.notes is not None:
+            note_file = os.path.join(new_path, 'notes.txt')
+            with open(note_file, 'w') as f:
+                f.write(self.notes)
+
+        for side in ["Right", "Left"]:
+            for cycle in self.gait_cycles[side]:
+                cycle.save(new_path)
+
     def sample(self, starting_time: float, ending_time: float) -> Self:
         """Sample the Trial between the given time bounds.
 
@@ -267,7 +385,7 @@ class Trial:
                 if cycle.is_included(starting_time, ending_time):
                     cycles[side].append(cycle)
         trc = self.trc.sample(starting_time, ending_time, force_time=True)
-        mot = self.mot.sample(starting_time, ending_time, force_time=True)
+        mot = self.grf.sample(starting_time, ending_time, force_time=True)
         trial = Trial(mot, trc)
         trial.add_cycles(cycles["Right"], cycles["Left"])
         return trial

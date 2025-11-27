@@ -8,6 +8,8 @@ from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 import opensim as osim
 
+from resources.trial_class import Trial, GaitCycle
+
 """
 This file is used to compute Inverse Kinematic data.
 """
@@ -110,17 +112,17 @@ def marker_tasks(tool: osim.InverseKinematicsTool, markers: list[str], do_not_in
     return taskset
 
 
-def process(segmented_trcs: dict[str, list[TRC]], scaled_model_file_path: str, ik_result_path: str, save: bool = True):
-    """Pipeline to process segmented TRC
+def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save: bool = True):
+    """Pipeline to compute the Internal Kinematics results from a trial's gait cycles.
 
     Args:
-        segmented_trcs: trc objects organized by side, the gait cycles to process
-        scaled_model_file_path: path to the scaled model file
-        ik_result_path: where to save the resulting IK files
-        save: whether to save the IK files or not.
+        trial: Trial object, trial to processs
+        scaled_model_file_path: str, path to the scaled model file
+        ik_result_path: str, where to save the resulting IK files
+        save: bool, whether to keep the saved IK files or not
 
     Returns:
-        Dictionary of the IK results, organized by side.
+        None
     """
 
     os.makedirs(ik_result_path, exist_ok=True)
@@ -133,16 +135,14 @@ def process(segmented_trcs: dict[str, list[TRC]], scaled_model_file_path: str, i
     ]
     do_not_include = ['RKneeMedial', 'RAnkleMedial', 'RToe', 'LKneeMedial', 'LAnkleMedial', 'LToe']
 
-    res = {'Right': [], 'Left': []}
-
     for side in ["Right", "Left"]:
-        trcs = segmented_trcs[side]
         ik_output_path = os.path.join(ik_result_path, side)
         temp_trc_directory = os.path.join(ik_output_path, "temp")
         os.makedirs(temp_trc_directory, exist_ok=True)
 
-        cycle_num = 1
-        for trc in trcs:
+        for cycle in trial.gait_cycles[side]:
+            trc = cycle.trc
+
             print(f"Processing {side}/{trc.filename}...")
 
             trc.save(temp_trc_directory)
@@ -153,7 +153,7 @@ def process(segmented_trcs: dict[str, list[TRC]], scaled_model_file_path: str, i
                                      float(trc.data['Time'].iloc[-1]))
 
             # Name format
-            cycle_name = f"{side.lower()}_cycle_{cycle_num}"
+            cycle_name = f"{side.lower()}_cycle_{cycle.num}"
             mot_name = f"{cycle_name}.mot"
             mot_path = os.path.join(ik_output_path, mot_name)
             ik_tool.setOutputMotionFileName(mot_path)
@@ -172,7 +172,7 @@ def process(segmented_trcs: dict[str, list[TRC]], scaled_model_file_path: str, i
                 mot = MOT.load_from_mot(mot_path, separator=r"\t")
                 mot.data = pd.DataFrame(data)
 
-                res[side].append(mot)
+                cycle.add_ik(mot)
 
                 if save:
                     mot.save(ik_output_path)
@@ -183,9 +183,7 @@ def process(segmented_trcs: dict[str, list[TRC]], scaled_model_file_path: str, i
                 print(f"IK failed for: {trc.filename}")
 
             os.remove(trc_full_path)
-            cycle_num = cycle_num + 1
 
         pathlib.Path.rmdir(pathlib.Path(temp_trc_directory))
 
     print("\nAll IK trials processed.")
-    return res
