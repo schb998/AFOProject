@@ -11,8 +11,6 @@ import logging
 import re
 from ptb.util.io.mocap.low_lvl.c3d import Reader
 
-# todo: further testing for segmentation methods comparison
-# todo: make get_first_frame method instead of first_frame attribute ?
 # todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
@@ -527,7 +525,7 @@ class TRC(object):
     def sample(self, first_point: int | float, last_point: int | float, force_time: bool = False) -> Self:
         """Samples the current TRC file between the given points.
 
-        Objject will be sampled at frames if both points are integers and force_time is False, and at time if not.
+        Object will be sampled at frames if both points are integers and force_time is False, and at time if not.
 
         Args:
             first_point: int or float, the index or the time of the first frame, included.
@@ -535,7 +533,7 @@ class TRC(object):
             force_time: bool, whether the previous are to be read as timestamps even if they're integers
 
         Returns:
-            TRC: A new TRC object.
+            TRC: sampled TRC object.
 
         Raises:
             IndexError: if the given points are out of bound for the data.
@@ -547,12 +545,12 @@ class TRC(object):
         ff = self.first_frame
 
         if isinstance(first_point, int) and isinstance(last_point, int) and not force_time:
-            if (first_point < self.first_frame) or (last_point > self.first_frame + self.data.shape[0]):
+            if (first_point < ff) or (last_point > ff + self.data.shape[0]):
                 raise IndexError("Cannot cut at given frames: out of bound index.")
 
         else:
             time_scale = self.data['Time']
-            if first_point < time_scale[self.first_frame] or last_point > time_scale[self.first_frame + self.data.shape[0] -1]:
+            if first_point < time_scale[ff] or last_point > time_scale[ff + self.data.shape[0] - 1]:
                 raise IndexError("Cannot cut at given times: out of bound index.")
 
             first_point = bisect.bisect_left(time_scale, first_point)
@@ -873,31 +871,6 @@ class _Test:
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment(rands)
-        assert len(trcs) == 3, \
-            error_message + "wrong number of segments."
-        assert trcs[0].data.shape[1] == trc.data.shape[1] \
-               and trcs[1].data.shape[1] == trc.data.shape[1] \
-               and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
-        assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
-            error_message + "data lost in segmentation."
-        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 - ff \
-               and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == (length + ff) - rand2, (
-                error_message + "segmentation at wrong frames.")
-        assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
-            error_message + "original TRC object should not equal to segmented objects."
-        assert trcs == trc.segment([rand1, rand2]), \
-            error_message + "calls on object with same parameters should be equal."
-
-    @staticmethod
-    def _test_segmentation_bis() -> None:
-        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
-        ff = trc.first_frame
-        length = trc.data.shape[0]
-        rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
-        rand1, rand2 = rands[0], rands[1]
-        error_message = f"Segmentation method is not working with values {rand1, rand2}: "
-        trcs = trc.segment_bis(rands)
         assert len(trcs) == 3, \
             error_message + "wrong number of segments."
         assert trcs[0].data.shape[1] == trc.data.shape[1] \

@@ -1,3 +1,4 @@
+import bisect
 import os
 from copy import deepcopy
 import pandas as pd
@@ -7,7 +8,6 @@ import random
 from typing import Self
 import logging
 
-# todo: further testing with nested load/write & segmentation
 # todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
@@ -291,12 +291,15 @@ class MOT:
         copy.name += '_copy'
         return copy
 
-    def sample(self, first_frame: int, last_frame: int) -> Self:
+    def sample(self, first_point: int | float, last_point: int | float, force_time: bool = False) -> Self:
         """Samples the current MOT file between the given points.
 
+        Object will be sampled at frames if both points are integers and force_time is False, and at time if not.
+
         Args:
-            first_frame (int): index of the first frame.
-            last_frame  (int): index of the last frame.
+            first_point: int or float, the index or the time of the first frame, included.
+            last_point: int or float, the index or the time of the last frame, included.
+            force_time: bool, whether the previous are to be read as timestamps even if they're integers
 
         Returns:
             MOT: sampled MOT object.
@@ -304,23 +307,37 @@ class MOT:
         Raises:
             IndexError: if the given points are out of bound for the data.
         """
-        frames = sorted((first_frame, last_frame))
-        first_frame = frames[0]
-        last_frame = frames[1]
+        frames = sorted((first_point, last_point))
+        first_point = frames[0]
+        last_point = frames[1]
 
-        if (first_frame < 0) or (last_frame > self.data.shape[0]):
+        ff = self.first_frame
+
+        if isinstance(first_point, int) and isinstance(last_point, int) and not force_time:
+            if (first_point < ff) or (last_point > ff + self.data.shape[0]):
+                raise IndexError("Cannot cut at given frames: out of bound index.")
+
+        else:
+            time_scale = self.data['time']
+            if first_point < time_scale[ff] or last_point > time_scale[ff + self.data.shape[0] - 1]:
+                raise IndexError("Cannot cut at given times: out of bound index.")
+
+            first_point = bisect.bisect_left(time_scale, first_point)
+            last_point = bisect.bisect_right(time_scale, last_point)
+
+        if (first_point < 0) or (last_point > self.data.shape[0]):
             message = f"Cannot cut {self.name} at given frames: out of bound index."
             logging.warning(message)
             raise IndexError(message)
 
         headers = deepcopy(self.header_lines)
-        headers['nRows'] = last_frame - first_frame
-        name = self.name + "_segmented_" + str(first_frame) + "-" + str(last_frame - 1)
+        headers['nRows'] = last_point - first_point
+        name = self.name + "_segmented_" + str(first_point) + "-" + str(last_point - 1)
         file_name = name + ".mot"
         d = {}
         for col in self.data.columns.to_list():
-            d[col] = self.data[col][first_frame:last_frame]
-        return MOT(name, file_name, headers, pd.DataFrame(data=d), first_frame)
+            d[col] = self.data[col][first_point:last_point]
+        return MOT(name, file_name, headers, pd.DataFrame(data=d), first_point)
 
     def segment(self, points: list[int]) -> list[Self]:
         """Segments the current MOT file.
@@ -487,8 +504,9 @@ class _Test:
         _Test._test_load()
         _Test._test_operations()
         _Test._test_copy()
-        _Test._test_sample()
-        _Test._test_segmentation()
+        for i in range(10):
+            _Test._test_sample()
+            _Test._test_segmentation()
         _Test._test_save()
         print("All tests passed, deleting testing files...")
         _MOTCleanup.delete_all_files(output, True)
@@ -549,9 +567,11 @@ class _Test:
     def _test_sample() -> None:
         mot = MOT.load_from_mot(os.path.join(path, filename_standard))
         length = mot.data.shape[0]
+
+        # test on frame sampling:
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
         rand1, rand2 = rands[0], rands[1]
-        error_message = f"Sampling method is not working with values {rand1, rand2}: "
+        error_message = f"Sampling method (frame) is not working with values {rand1, rand2}: "
         sample = mot.sample(rand1, rand2)
         assert sample.data.shape[1] == mot.data.shape[1], \
             error_message + "wrong number of columns."
@@ -563,6 +583,31 @@ class _Test:
         sample2 = mot.sample(rand1, rand2)
         assert sample == sample2, \
             error_message + "calls on object with same parameters should be equal."
+
+        # test on time sampling:
+        time_scale = mot.data['time']
+        time_firstframe = time_scale[mot.first_frame]
+        time_lastframe = time_scale[mot.first_frame + mot.data.shape[0] - 1]
+
+        rands = sorted([random.uniform(time_firstframe, time_lastframe - 1),
+                        random.uniform(time_firstframe, time_lastframe - 1)])
+        rand1, rand2 = rands[0], rands[1]
+        frame1, frame2 = bisect.bisect_left(time_scale, rand1), bisect.bisect_right(time_scale, rand2)
+
+        error_message = f"Sampling method (time) is not working with values {rand1, rand2}: "
+        sample = mot.sample(rand1, rand2)
+        assert sample.data.shape[1] == mot.data.shape[1], \
+            error_message + "wrong number of columns."
+        assert sample.data.shape[0] == frame2 - frame1 \
+               and mot.data.shape[0] == sample.data.shape[0] + frame1 + (length - frame2), (
+                error_message + "sampling at wrong frames.")
+        assert mot != sample, \
+            error_message + "original MOT object should not equal sampled objects."
+        sample2 = mot.sample(rand1, rand2)
+        assert sample == sample2, \
+            error_message + "calls on object with same parameters should be equal."
+
+
 
     @staticmethod
     def _test_segmentation() -> None:
