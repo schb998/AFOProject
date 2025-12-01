@@ -158,7 +158,7 @@ class MOT:
             return n > on
 
     @classmethod
-    def load_from_mot(cls, filepath: str, filename: str = None, separator=r'\s') -> Self:
+    def load_from_mot(cls, filepath: str, filename: str = None, separator=r'\s+') -> Self:
         """Reads data from a MOT file into a MOT object.
 
         Args:
@@ -515,8 +515,8 @@ class _Test:
     @staticmethod
     def _test_load() -> None:
         try:
-            MOT.load_from_mot(os.path.join(path, filename_standard))
-            MOT.load_from_mot(path, filename_nan)
+            m1 = MOT.load_from_mot(os.path.join(path, filename_standard))
+            m2 = MOT.load_from_mot(path, filename_nan)
             assert True
         except OSError:
             assert False, \

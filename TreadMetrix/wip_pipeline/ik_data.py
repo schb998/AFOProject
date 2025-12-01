@@ -169,7 +169,7 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
                 data = filter_signals(data)
                 data = np.hstack((time_vec, data))
 
-                mot = MOT.load_from_mot(mot_path, separator=r"\t")
+                mot = MOT.load_from_mot(mot_path)
                 mot.data = pd.DataFrame(data)
 
                 cycle.add_ik(mot)

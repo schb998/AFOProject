@@ -383,5 +383,4 @@ def process(trial: Trial, save_corrected_path: str = None, save_segmented_path: 
     # segment according to heel strikes:
     if trial.trc is None:
         raise MissingPathException(f"Markers trajectory object (TRC) for trial {trial.name}", "No such object given.")
-    segment_at_heel_strikes(trial, heel_strike_moments, save=os.path.join(save_segmented_path, trial.name) if
-                            save_segmented_path is not None else None)
+    segment_at_heel_strikes(trial, heel_strike_moments, save=save_segmented_path)

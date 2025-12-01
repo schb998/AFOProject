@@ -8,13 +8,16 @@ from resources.trial_class import Trial
 import osim_gestion as osim
 from data_postprocessing import process as post_processing
 from ik_data import process as compute_ik
+from id_data import process as compute_id
 
 
 if __name__ == "__main__":
 
+    # quick setup for debug
     if local.call_quick_setup():
         save = False
         show = False
+
     else:
         # update local paths:
         local.main_gui()
@@ -42,10 +45,14 @@ if __name__ == "__main__":
     for name in trials:
         trial = trials[name]
 
-        post_processing(trial, save_corrected_path=local.get_corrected_mot_path() if save else None,
-                        save_segmented_path=local.get_segmented_path() if save else None, show=show)
 
-        print("IK postprocessing part fo the pipeline is still a WIP.")
+        post_processing(trial, save_corrected_path=os.path.join(local.get_corrected_mot_path(), name) if save else None,
+                        save_segmented_path=os.path.join(local.get_segmented_path(), name) if save else None, show=show)
+
+        trial = trial.sample(15.0, 30.0)
+
         compute_ik(trial, local.get_scaled_model_file(), os.path.join(local.get_ik_results_path(), name), save=save)
+        compute_id(trial, os.path.join(local.get_external_loads_path(), name),
+                   os.path.join(local.get_id_results_path(), name), local.get_scaled_model_file())
 
     print("\nAll files were processed.")

@@ -1,4 +1,7 @@
 import os.path
+
+import opensim as osim
+
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 from typing import Self
@@ -18,12 +21,13 @@ class GaitCycle:
         grf: MOT object, ground force reaction data
         trc: TRC object, marker data
         ik: MOT object, inverse kinematic data
+        exl: XML, extermnal loads data
         id: MOT object, inverse dynamic data
         jp: joint power data
     """
 
     def __init__(self, side: str, number: int, ground_reaction_forces: MOT = None, markers_trajectory: TRC = None,
-                 inverse_kinematic: MOT = None, inverse_dynamic: MOT = None, joint_power: MOT = None) -> None:
+                 inverse_kinematic: MOT = None, external_loads: osim.ExternalForce = None, inverse_dynamic: MOT = None, joint_power: MOT = None) -> None:
         """Creates a GaitCycle object.
 
         Args:
@@ -32,6 +36,7 @@ class GaitCycle:
             ground_reaction_forces: MOT object, ground force reaction data
             markers_trajectory: TRC object, marker data
             inverse_kinematic: MOT object, inverse kinematic data
+            external_loads: OpenSim.ExternalForce object, external forces data
             inverse_dynamic: MOT object, inverse dynamic data
             joint_power: MOT object (to check), joint power data
         """
@@ -45,6 +50,7 @@ class GaitCycle:
         self.grf = ground_reaction_forces
         self.trc = markers_trajectory
         self.ik = inverse_kinematic
+        self.external_loads = external_loads
         self.id = inverse_dynamic
         self.jp = joint_power
 
@@ -110,6 +116,14 @@ class GaitCycle:
                 raise WrongExtensionException("OpenSim generated Inverse Kinematics file", inverse_kinematic, ".mot")
             self.ik = MOT.load_from_mot(inverse_kinematic, separator=r"\t")
 
+    def add_external_loads(self, external_loads: osim.ExternalLoads | str) -> None:
+        if isinstance(external_loads,  osim.ExternalLoads):
+            self.external_loads = external_loads
+        else:
+            if not os.path.isfile(external_loads) or not os.path.basename(external_loads).endswith(".xml"):
+                raise WrongExtensionException("OpenSim generated External Forces file", external_loads, ".xml")
+            self.external_loads = osim.ExternalLoads(external_loads)
+
     def add_id(self, inverse_dynamic: MOT | str) -> None:
         """Add the inverse dynamic data to the object.
 
@@ -157,7 +171,8 @@ class GaitCycle:
         """
 
         def get_start_and_end(obj: MOT | TRC) -> (float, float):
-            return obj.data['Time'].iloc(0), obj.data['Time'].iloc(obj.data.shape[0] - 1)
+            timestring = 'time' if isinstance(obj, MOT) else 'Time'
+            return obj.data[timestring][obj.first_frame], obj.data[timestring][obj.first_frame + obj.data.shape[0] - 1]
 
         if self.grf is not None:
             return get_start_and_end(self.grf)
@@ -167,8 +182,6 @@ class GaitCycle:
             return get_start_and_end(self.ik)
         if self.id is not None:
             return get_start_and_end(self.id)
-        if self.jp is not None:
-            return get_start_and_end(self.jp)
         return None
 
     def is_included(self, starting_time: float, ending_time: float) -> bool:
@@ -188,21 +201,22 @@ class GaitCycle:
         e = time[1]
         return s > starting_time and e < ending_time
 
-    def save(self, path: str) -> None:
+    def save(self, path: str, categorize: bool = False) -> None:
         """Save all data of the object in a "/side/number/" subdirectory of the given directory.
 
         Args:
             path: str, directory in which to save the files
+            categorize:
 
         Returns:
             None
 
         """
-        new_path = os.path.join(path, self.side, "cycle_" + str(self.num))
-        os.makedirs(new_path, exist_ok=True)
+        path = os.path.join(path, self.side, "cycle_" + str(self.num)) if categorize else path
+        os.makedirs(path, exist_ok=True)
         for obj in [self.grf, self.trc, self.ik, self.id, self.jp]:
             if obj is not None:
-                obj.save(new_path)
+                obj.save(path)
 
     @classmethod
     def to_gait_cycles(cls, grfs: list[MOT | str], side: str,
@@ -303,20 +317,21 @@ class Trial:
         gait_cycles: directory of GaitCycles objects, by side.
     """
 
-    def __init__(self, mot: MOT, trc: TRC = None, notes: str = None) -> None:
+    def __init__(self, mot: MOT, trc: TRC = None, name: str = None, notes: str = None) -> None:
         """Creates a new Trial object.
 
         Args:
             mot: MOT object, grf of the trial
             trc: TRC object, markers positions data of the trial
+            name: str, name of the trial if doesn't match the name of the gfr file
             notes: str, notes on the trial. Optional.
         """
-        self.name = mot.name.replace(".mot", "")
+        self.name = mot.name.replace(".mot", "") if name is None else name
         self.grf = mot
         self.trc = trc
         self.corrected_grf = None
-        self.notes = None
-        self.gait_cycles = {"Right": [], "Left": []}
+        self.notes = notes
+        self.gait_cycles: dict[str, list[GaitCycle]] = {"Right": [], "Left": []}
 
     def add_cycles(self, right_cycles: list[GaitCycle], left_cycles: list[GaitCycle]) -> None:
         """Adding the given GaitCycles to the trial data, at the end of their respective sides.
@@ -363,7 +378,7 @@ class Trial:
 
         for side in ["Right", "Left"]:
             for cycle in self.gait_cycles[side]:
-                cycle.save(new_path)
+                cycle.save(new_path, categorize=True)
 
     def sample(self, starting_time: float, ending_time: float) -> Self:
         """Sample the Trial between the given time bounds.
@@ -373,7 +388,7 @@ class Trial:
             ending_time: float, upper time bound
 
         Returns:
-            Trial asmpled fromm the current objesct.
+            Trial sampled from the current objesct.
         """
         time = [starting_time, ending_time]
         time.sort()
@@ -386,6 +401,7 @@ class Trial:
                     cycles[side].append(cycle)
         trc = self.trc.sample(starting_time, ending_time, force_time=True)
         mot = self.grf.sample(starting_time, ending_time, force_time=True)
-        trial = Trial(mot, trc)
+        trial = Trial(mot, trc, name=self.name,
+                      notes=f"Trial sampled from original trial between the time {starting_time} and {ending_time}")
         trial.add_cycles(cycles["Right"], cycles["Left"])
         return trial
