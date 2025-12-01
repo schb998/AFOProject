@@ -7,8 +7,8 @@ from resources.file_types.trc import TRC
 from resources.trial_class import Trial
 import osim_gestion as osim
 from data_postprocessing import process as post_processing
-from ik_data import process as compute_ik
-from id_data import process as compute_id
+from ik_computing import process as compute_ik
+from id_computing import process as compute_id
 
 
 if __name__ == "__main__":
