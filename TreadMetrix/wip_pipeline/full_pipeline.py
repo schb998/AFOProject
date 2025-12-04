@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     # quick setup for debug
     if local.call_quick_setup():
-        save = True
+        save = False
         show = False
 
     else:
@@ -50,6 +50,6 @@ if __name__ == "__main__":
 
         compute_ik(trial, local.get_scaled_model_file(), local.get_ik_results_path(name), save=save)
         compute_id(trial, local.get_external_loads_path(name), local.get_id_results_path(name), local.get_scaled_model_file())
-       # compute_jp(trial, local.get_power_filtered_path(name))
+        compute_jp(trial, local.get_power_filtered_path(name))
 
     print("\nAll files were processed.")

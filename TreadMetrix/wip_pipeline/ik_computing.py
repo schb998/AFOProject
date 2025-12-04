@@ -137,8 +137,8 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
 
     for side in ["Right", "Left"]:
         ik_output_path = os.path.join(ik_result_path, side)
-        temp_trc_directory = os.path.join(ik_output_path, "temp")
-        os.makedirs(temp_trc_directory, exist_ok=True)
+        temp_directory = os.path.join(ik_output_path, "temp")
+        os.makedirs(temp_directory, exist_ok=True)
 
         for cycle in trial.gait_cycles[side]:
             trc = cycle.trc
@@ -148,8 +148,8 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
             if cycle.paths.trc is not None:
                 trc_full_path = cycle.paths.trc
             else:
-                trc.save(temp_trc_directory)
-                trc_full_path = os.path.join(temp_trc_directory, trc.filename)
+                trc.save(temp_directory)
+                trc_full_path = os.path.join(temp_directory, trc.filename)
 
             # Setup IK Tool
             ik_tool = set_up_ik_tool(scaled_model_file_path, trc_full_path, float(trc.data['Time'].iloc[0]),
@@ -181,8 +181,12 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
             else:
                 print(f"IK failed for: {trc.filename}")
 
-            os.remove(trc_full_path)
+            for file in os.listdir(temp_directory):
+                os.remove(os.path.join(temp_directory, file))
 
-        pathlib.Path.rmdir(pathlib.Path(temp_trc_directory))
+        try:
+            pathlib.Path.rmdir(pathlib.Path(temp_directory))
+        except OSError:
+            print(f"Error deleting temporary directory {temp_directory}.")
 
     print("\nAll IK trials processed.")

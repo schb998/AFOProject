@@ -4,7 +4,7 @@ import numpy as np
 import re
 from scipy import interpolate
 from scipy.signal import butter, filtfilt
-import resources.paths.paths_access as local
+from resources.trial_class import Trial, GaitCycle
 
 """
 This file is used to compute joint power from processed .mot files of Inverse Kinematics & Dynamics.
@@ -13,7 +13,7 @@ This file is used to compute joint power from processed .mot files of Inverse Ki
 """
 
 
-def read_mot_files(data_path_mot):
+def read_mot_files(file_path):
     """
     Read data from a .mot file.
 
@@ -24,30 +24,21 @@ def read_mot_files(data_path_mot):
         Data from the .mot file, in the form of a list with elements fileName (string), rawData (dataFrame) and colNames (list of the columns' names).
 
     """
-    motion_data_list = []
-    file_list = sorted(f for f in os.listdir(data_path_mot) if f.endswith('.mot'))
+    filename = os.path.basename(file_path)
+    try:
+        with open(file_path, 'r') as file:
 
-    for filename in file_list:
-        file_path = os.path.join(data_path_mot, filename)
-        print(f"Reading MOT file: {file_path}")
+            for _ in range(6):  # Skip the first 6 header rows
+                next(file)
+            data = pd.read_csv(file, sep=r'\s+')
+        return {
+            'fileName': filename,
+            'rawData': data,
+            'colNames': data.columns.to_list()
+        }
 
-        try:
-            with open(file_path, 'r') as file:
-
-                for _ in range(6):  # Skip the first 6 header rows
-                    next(file)
-                data = pd.read_csv(file, sep=r'\s+')
-            motion_data_list.append({
-                'fileName': filename,
-                'rawData': data,
-                'colNames': data.columns.to_list()
-            })
-
-
-        except Exception as e:
-            print(f"Error reading {filename}: {e}")
-
-    return motion_data_list
+    except Exception as e:
+        print(f"Error reading {filename}: {e}")
 
 
 # todo check usefulness of moments argument
@@ -145,31 +136,37 @@ def get_matched_columns(ik_columns, id_columns, gaitcycle):
     return matched_ik_columns, matched_id_columns
 
 
-# Main Paths
-ik_folder = local.get_ik_results_path()
-id_folder = local.get_id_results_path()
-power_output_folder = local.get_power_filtered_path()
+def process(trial: Trial, power_output_path: str):
+    # Main Paths
+    for side in ["Right", "Left"]:
+        output_path = os.path.join(power_output_path, side)
+        temp_directory = os.path.join(output_path, "temp")
+        os.makedirs(temp_directory, exist_ok=True)
 
-for side in ["Right", "Left"]:
-    ik_path = os.path.join(ik_folder, side)
-    id_path = os.path.join(id_folder, side)
-    output_path = os.path.join(power_output_folder, side)
-    os.makedirs(output_path, exist_ok=True)
+        for cycle in trial.gait_cycles[side]:
+            if cycle.paths.ik_results is not None:
+                ik_path = cycle.paths.ik_results
+            else:
+                cycle.ik.save(temp_directory)
+                ik_path = os.path.join(temp_directory, cycle.ik.filename)
 
-    ik_mot_files = read_mot_files(ik_path)
-    id_mot_files = read_mot_files(id_path)
+            if cycle.paths.id_results is not None:
+                id_path = cycle.paths.id_results
+            else:
+                cycle.id.save(temp_directory)
+                id_path = os.path.join(temp_directory, cycle.id.filename)
 
-    for ik_data_dict, id_data_dict in zip(ik_mot_files, id_mot_files):
-        ik_filename = ik_data_dict['fileName']
-        id_filename = id_data_dict['fileName']
-        ik_data = ik_data_dict['rawData']
-        id_data = id_data_dict['rawData']
+            ik_object = read_mot_files(ik_path)
+            id_object = read_mot_files(id_path)
+            ik_data = ik_object['rawData']
+            id_data = id_object['rawData']
 
-        angular_velocity = compute_angular_velocity(ik_data, ik_filename)
-        joint_power = compute_joint_power(angular_velocity, id_data, side)
+            angular_velocity = compute_angular_velocity(ik_data, trial.name)
+            joint_power = compute_joint_power(angular_velocity, id_data, side)
 
-        output_filename = ik_filename.replace("IK", "Power").replace(".mot", ".csv")
-        output_file_path = os.path.join(output_path, output_filename)
-        joint_power.to_csv(output_file_path, index=False)
+            output_filename = f"{trial.name}_{side}_{cycle.num}.csv"
+            output_file_path = os.path.join(output_path, output_filename)
+            joint_power.to_csv(output_file_path, index=False)
+            cycle.add_joint_power(output_file_path, joint_power)
 
-        print(f"Successfully processed: {ik_filename} -> {output_filename}")
+            print(f"Successfully processed: {cycle.ik.filename} -> {output_filename}")

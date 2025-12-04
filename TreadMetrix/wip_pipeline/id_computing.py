@@ -103,7 +103,10 @@ def process(trial: Trial,
             for file in os.listdir(temp_path):
                 os.remove(os.path.join(temp_path, file))
 
-        pathlib.Path.rmdir(pathlib.Path(temp_path))
+        try:
+            pathlib.Path.rmdir(pathlib.Path(temp_path))
+        except OSError:
+            print(f"Error deleting temporary directory {temp_path}.")
 
     print(f"Internal Dynamics for trial {name} processed.")
 
