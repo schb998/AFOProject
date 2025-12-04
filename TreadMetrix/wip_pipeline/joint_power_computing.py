@@ -156,13 +156,11 @@ def process(trial: Trial, power_output_path: str):
                 cycle.id.save(temp_directory)
                 id_path = os.path.join(temp_directory, cycle.id.filename)
 
-            ik_object = read_mot_files(ik_path)
-            id_object = read_mot_files(id_path)
-            ik_data = ik_object['rawData']
-            id_data = id_object['rawData']
+            ik_data = read_mot_files(ik_path)
+            id_data = read_mot_files(id_path)
 
-            angular_velocity = compute_angular_velocity(ik_data, trial.name)
-            joint_power = compute_joint_power(angular_velocity, id_data, side)
+            angular_velocity = compute_angular_velocity(ik_data['rawData'], trial.name)
+            joint_power = compute_joint_power(angular_velocity, id_data['rawData'], side)
 
             output_filename = f"{trial.name}_{side}_{cycle.num}.csv"
             output_file_path = os.path.join(output_path, output_filename)
