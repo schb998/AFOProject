@@ -4,6 +4,49 @@ import opensim as osim
 from resources.file_types.mot import MOT
 from resources.trial_class import Trial, GaitCycle
 
+def compute_external_loads(df, grf_path, xml_file_path):
+    external_loads = osim.ExternalLoads()
+    external_loads.setDataFileName(grf_path)
+    # left side
+    if df[['ground_force1_vx', 'ground_force1_vy', 'ground_force1_vz']].abs().sum().sum() > 0:
+        ext1 = osim.ExternalForce()
+        ext1.setName("FP1")
+        ext1.set_applied_to_body("calcn_l")
+        ext1.set_force_expressed_in_body("ground")
+        ext1.set_point_expressed_in_body("ground")
+        ext1.set_force_identifier("ground_force1_v")
+        ext1.set_point_identifier("ground_force1_p")
+        ext1.set_torque_identifier("ground_torque1_")
+        external_loads.cloneAndAppend(ext1)
+
+    # right side
+    if df[['ground_force2_vx', 'ground_force2_vy', 'ground_force2_vz']].abs().sum().sum() > 0:
+        ext2 = osim.ExternalForce()
+        ext2.setName("FP2")
+        ext2.set_applied_to_body("calcn_r")
+        ext2.set_force_expressed_in_body("ground")
+        ext2.set_point_expressed_in_body("ground")
+        ext2.set_force_identifier("ground_force2_v")
+        ext2.set_point_identifier("ground_force2_p")
+        ext2.set_torque_identifier("ground_torque2_")
+        external_loads.cloneAndAppend(ext2)
+
+    # save the external loads
+    print(f"Created: {xml_file_path}")
+    external_loads.printToXML(xml_file_path)
+    return external_loads
+
+def setup_id_tool(scaled_model_file, start_time, end_time, ik_path, xml_file_path, output_directory, output_file):
+    id_tool = osim.InverseDynamicsTool()
+    id_tool.setModelFileName(scaled_model_file)
+    id_tool.setStartTime(start_time)
+    id_tool.setEndTime(end_time)
+    id_tool.setCoordinatesFileName(ik_path)
+    id_tool.setExternalLoadsFileName(xml_file_path)
+    id_tool.setResultsDir(output_directory)
+    id_tool.setOutputGenForceFileName(output_file)
+    return id_tool
+
 
 def process(trial: Trial,
             external_loads_path: str,
@@ -42,37 +85,9 @@ def process(trial: Trial,
             else:
                 grf.save(temp_path)
                 grf_path = os.path.join(temp_path, grf.filename)
-            external_loads = osim.ExternalLoads()
-            external_loads.setDataFileName(grf_path)
 
-            # left side
-            if df[['ground_force1_vx', 'ground_force1_vy', 'ground_force1_vz']].abs().sum().sum() > 0:
-                ext1 = osim.ExternalForce()
-                ext1.setName("FP1")
-                ext1.set_applied_to_body("calcn_l")
-                ext1.set_force_expressed_in_body("ground")
-                ext1.set_point_expressed_in_body("ground")
-                ext1.set_force_identifier("ground_force1_v")
-                ext1.set_point_identifier("ground_force1_p")
-                ext1.set_torque_identifier("ground_torque1_")
-                external_loads.cloneAndAppend(ext1)
-
-            # right side
-            if df[['ground_force2_vx', 'ground_force2_vy', 'ground_force2_vz']].abs().sum().sum() > 0:
-                ext2 = osim.ExternalForce()
-                ext2.setName("FP2")
-                ext2.set_applied_to_body("calcn_r")
-                ext2.set_force_expressed_in_body("ground")
-                ext2.set_point_expressed_in_body("ground")
-                ext2.set_force_identifier("ground_force2_v")
-                ext2.set_point_identifier("ground_force2_p")
-                ext2.set_torque_identifier("ground_torque2_")
-                external_loads.cloneAndAppend(ext2)
-
-            # save the external loads
             xml_file_path = os.path.join(side_xml, f"{name}_{side}_cycle{cycle.num}.xml")
-            print(f"Created: {xml_file_path}")
-            external_loads.printToXML(xml_file_path)
+            external_loads = compute_external_loads(df, grf_path, xml_file_path)
             cycle.add_external_loads(external_loads_path=xml_file_path, exl_object=external_loads)
 
             if cycle.paths.ik_results is not None:
@@ -83,15 +98,8 @@ def process(trial: Trial,
 
             # Run Inverse Dynamics
             print(f"Running ID: {name}/{side}/{cycle.num}")
-            id_tool = osim.InverseDynamicsTool()
-            id_tool.setModelFileName(scaled_model_file)
-            id_tool.setStartTime(start_time)
-            id_tool.setEndTime(end_time)
-            id_tool.setCoordinatesFileName(ik_path)
-            id_tool.setExternalLoadsFileName(xml_file_path)
-            id_tool.setResultsDir(side_out)
             output_mot = f"{name}_{side}_cycle{cycle.num}.mot"
-            id_tool.setOutputGenForceFileName(output_mot)
+            id_tool = setup_id_tool(scaled_model_file, start_time, end_time, ik_path, xml_file_path, side_out, output_mot)
 
             try:
                 id_tool.run()
@@ -102,6 +110,7 @@ def process(trial: Trial,
 
             for file in os.listdir(temp_path):
                 os.remove(os.path.join(temp_path, file))
+
 
         try:
             pathlib.Path.rmdir(pathlib.Path(temp_path))
