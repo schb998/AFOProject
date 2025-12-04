@@ -1,3 +1,4 @@
+from timeit import default_number
 from tkinter import *
 from tkinter import messagebox
 from tkinter.filedialog import askdirectory, askopenfilenames
@@ -8,7 +9,7 @@ import resources.paths.paths_back as back
 LABELS: dict[Label, str] = {}
 BUTTON: Button
 CURRENT_ROW = 0
-title = "AFO project"
+default_title = "AFO project"
 
 def _update_labels():
     """Update content labels of the gui.
@@ -87,7 +88,7 @@ def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     def select_button_click():
         message = "Select the directory in which to save the pipeline's files."
         tbox.infobox(message)
-        value = askdirectory(title=title + message, initialdir=back.get_default_searching_path())
+        value = askdirectory(title=default_title + message, initialdir=back.get_default_searching_path())
         valid = back.set_output_directory(value)
         if not valid:
             tbox.infobox("Selection does not match requirement. Issue could be existence or writeability.")
@@ -267,9 +268,9 @@ def _setup_new_row(root: Tk, label_name: str, name_in_json: str, select_action, 
     return label, selected, select_button, unselect_button
 
 
-def quick_setup() -> bool:
-    return messagebox.askokcancel("Quick setup", "Quick setup?")
-
+def ask_question(question: str, title: str = None) -> bool:
+    answer = messagebox.askquestion(title if title is not None else default_title, question)
+    return answer.lower() == "yes"
 
 
 def main() -> None:

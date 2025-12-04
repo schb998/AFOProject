@@ -1,9 +1,6 @@
 import os
 import re
-from tkinter import messagebox
 import resources.paths.paths_access as local
-from resources.file_types.mot import MOT
-from resources.file_types.trc import TRC
 from resources.trial_class import Trial
 import osim_gestion as osim
 from data_postprocessing import process as post_processing
@@ -24,8 +21,8 @@ if __name__ == "__main__":
         local.main_gui()
         osim.configure_opensim()
         # ask user's preference
-        save = messagebox.askokcancel("Save optional files", "Save optional files")
-        show = messagebox.askokcancel("Show plots when running", "Show plots on screen during processing")
+        save = local.call_should_save()
+        show = local.call_should_show()
 
     # loads files into Trial objects:
     trials = {}
@@ -53,6 +50,6 @@ if __name__ == "__main__":
 
         compute_ik(trial, local.get_scaled_model_file(), local.get_ik_results_path(name), save=save)
         compute_id(trial, local.get_external_loads_path(name), local.get_id_results_path(name), local.get_scaled_model_file())
-        # compute_jp(trial, local.get_power_filtered_path(name))
+       # compute_jp(trial, local.get_power_filtered_path(name))
 
     print("\nAll files were processed.")

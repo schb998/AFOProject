@@ -1,7 +1,7 @@
 import os
 from resources.custom_exceptions import *
 import resources.paths.paths_back as model
-from resources.paths.paths_gui import main as main_gui, quick_setup
+from resources.paths.paths_gui import main as main_gui, ask_question
 
 
 def call_to_gui() -> None:
@@ -9,8 +9,13 @@ def call_to_gui() -> None:
 
 
 def call_quick_setup() -> bool:
-    return quick_setup()
+    return ask_question("Run the pipeline using quick setup?", "Quick setup")
 
+def call_should_save() -> bool:
+    return ask_question("Save the optional files?", "Saving preference")
+
+def call_should_show() -> bool:
+    return ask_question("Show the plots as the code run?", "Show preference")
 
 def get_output_path(trial_name: str = None) -> str:
     """Get the pipeline's saved output path.
