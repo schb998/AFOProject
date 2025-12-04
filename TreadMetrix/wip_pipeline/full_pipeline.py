@@ -43,8 +43,9 @@ if __name__ == "__main__":
     for name in trials:
         trial = trials[name]
 
-        post_processing(trial, save_plot_path=local.get_corrected_mot_path(name) if save else None,
-                        save_segmented_path=local.get_segmented_path(name) if save else None, show=show)
+        post_processing(trial, save_plot_path=local.get_corrected_mot_path(name),
+                        save_segmented_path=local.get_segmented_path(name) if save else None,
+                        show=show, save_optionals=save)
 
         trial = trial.sample(15.0, 30.0)
 

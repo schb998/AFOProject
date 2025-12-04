@@ -232,8 +232,7 @@ def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: 
     mot_df.data = df_corrected
 
 
-def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]],
-                     output: str, show: bool = False) -> None:
+def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]], output: str) -> None:
     """Saves plot of the vertical forces with toe offs and heel strikes.
 
     Args:
@@ -241,7 +240,6 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
         heel_strikes: heel strikes moment, listed in directory by side.
         toe_offs: toe offs moment, listed in directory by side
         output: output directory name.
-        show: whether to show the figure when method is called.
 
     """
     plt.figure(figsize=(14, 6))
@@ -274,8 +272,7 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
     plt.savefig(os.path.join(output,
                              f"{mot.filename.replace('.mot', '')}_vertical_grfs_with_toeoffs_heelstrikes.png"),
                 bbox_inches='tight')
-    if show:
-        plt.show()
+    plt.show()
 
 
 def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[int]], mot_frame_rate: float = None,
@@ -343,13 +340,15 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
             GaitCycle.add_to_gait_cycles(trial.gait_cycles["Left"], trcs=left_trcs)
 
 
-def process(trial: Trial, save_plot_path: str = None, save_segmented_path: str = None, show: bool = True) -> None:
+def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, show: bool = True,
+            save_optionals=False) -> None:
     """Pipeline to process the raw data of a trial.
 
      This method filters, applies baseline corrections, zeros the swing phases and segments the data at heel strikes.
      It stores the results in the given Trial object.
 
     Args:
+        save_optionals:
         trial: Trial object, trial to process
         save_plot_path: str, path to save the plots and corrected Ground Force Reaction (MOT) object.
             Does not save if None.
@@ -368,9 +367,9 @@ def process(trial: Trial, save_plot_path: str = None, save_segmented_path: str =
     corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
     filter_grf(corrected_grf, frame_rate)
     baseline_correct_debug(corrected_grf, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'],
-                           save_plot_path, show=show)
+                           output_path=save_plot_path if save_optionals else None, show=show)
     baseline_correct_debug(corrected_grf, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'],
-                           save_plot_path, show=show)
+                           output_path=save_plot_path if save_optionals else None, show=show)
 
     # detect toe off and heel strikes:
     toe_off_moments = detect_toe_offs(corrected_grf, frame_rate)
@@ -381,8 +380,8 @@ def process(trial: Trial, save_plot_path: str = None, save_segmented_path: str =
     zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'left')
 
     # plot and save the corrected data:
-    if save_plot_path is not None:
-        plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path, show=show)
+    plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path)
+    if save_optionals:
         corrected_grf.save(save_plot_path)
         trial.add_corrected_grf(corrected_grf=corrected_grf,
                                 path_to_corrected_grf=os.path.join(save_plot_path, corrected_grf.filename))
