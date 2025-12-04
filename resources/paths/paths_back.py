@@ -319,6 +319,34 @@ def set_raw_trcs(selection: list[str] | None) -> (bool, str | None):
     return True, message
 
 
+def set_raw_directory(selection: str | None) -> (bool, str | None):
+    """Set up the given directory into the virtual save if valid.
+
+    Args:
+        selection: filepath to save if valid
+
+    Returns:
+        bool, whether the given path is valid
+        str | None, details such as the listed invalid files, or an error message
+    """
+    error_message = "Failed attempt at updating selection of directory whose files to process: "
+
+    # case: no file selected
+    if selection is None or not selection:
+        error_message = error_message + f"no directory selected."
+        logging.warning(error_message)
+        return False, error_message
+
+    if os.path.isdir(selection):
+        error_message = error_message + f"selected path {selection} is not a directory."
+        logging.warning(error_message)
+        return False, error_message
+
+    _update_local("raw_directory", selection)
+    return True, None
+
+
+
 def set_osim_path(selection: str | None) -> (bool, str | None):
     """If valid, save selected OpenSim source folder in both local and file save.
 

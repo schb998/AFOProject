@@ -297,15 +297,19 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
     trc = trial.trc
 
     # segment mot object:
-    right_mots = mot.segment(heel_strike_moments['R'])[1:-1]
-    left_mots = mot.segment(heel_strike_moments['L'])[1:-1]
-    trial.gait_cycles["Right"] = GaitCycle.to_gait_cycles(side="Right", grfs=right_mots)
-    trial.gait_cycles["Left"] = GaitCycle.to_gait_cycles(side="Left", grfs=left_mots)
+    right_mots = mot.segment(heel_strike_moments['R'], True)[1:-1]
+    left_mots = mot.segment(heel_strike_moments['L'], True)[1:-1]
 
     if save is not None:
-        path = os.path.join(save, mot.filename.replace('.mot', ''))
-        MOT.save_multiple(right_mots, os.path.join(path, "Right"))
-        MOT.save_multiple(left_mots, os.path.join(path, "Left"))
+        right_path = os.path.join(save, "Right")
+        left_path = os.path.join(save, "Left")
+        MOT.save_multiple(right_mots, right_path)
+        MOT.save_multiple(left_mots, left_path)
+        trial.gait_cycles["Right"] = GaitCycle.to_gait_cycles(side="Right", grfs=right_mots, grf_path=right_path)
+        trial.gait_cycles["Left"] = GaitCycle.to_gait_cycles(side="Left", grfs=left_mots, grf_path=left_path)
+    else:
+        trial.gait_cycles["Right"] = GaitCycle.to_gait_cycles(side="Right", grfs=right_mots)
+        trial.gait_cycles["Left"] = GaitCycle.to_gait_cycles(side="Left", grfs=left_mots)
 
     # process trc object:
     if trc is not None:
@@ -324,18 +328,22 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
                 trc_heel_strike_moments[side].append(int(heel_strike_moments[side][i] * rate_conversion))
 
         # segment trc:
-        right_trcs = trc.segment(trc_heel_strike_moments['R'])[1:-1]
-        left_trcs = trc.segment(trc_heel_strike_moments['L'])[1:-1]
-        GaitCycle.add_to_gait_cycles(trial.gait_cycles["Right"], trcs=right_trcs)
-        GaitCycle.add_to_gait_cycles(trial.gait_cycles["Left"], trcs=left_trcs)
+        right_trcs = trc.segment(trc_heel_strike_moments['R'], True)[1:-1]
+        left_trcs = trc.segment(trc_heel_strike_moments['L'], True)[1:-1]
 
         if save is not None:
-            path = os.path.join(save, mot.filename.replace('.mot', ''))
-            TRC.save_multiple(right_trcs, os.path.join(path, "Right"))
-            TRC.save_multiple(left_trcs, os.path.join(path, "Left"))
+            right_path = os.path.join(save, "Right")
+            left_path = os.path.join(save, "Left")
+            TRC.save_multiple(right_trcs, right_path)
+            TRC.save_multiple(left_trcs, left_path)
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Right"], trcs=right_trcs, trc_path=right_path)
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Left"], trcs=left_trcs, trc_path=left_path)
+        else:
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Right"], trcs=right_trcs)
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Left"], trcs=left_trcs)
 
 
-def process(trial: Trial, save_corrected_path: str = None, save_segmented_path: str = None, show: bool = True) -> None:
+def process(trial: Trial, save_plot_path: str = None, save_segmented_path: str = None, show: bool = True) -> None:
     """Pipeline to process the raw data of a trial.
 
      This method filters, applies baseline corrections, zeros the swing phases and segments the data at heel strikes.
@@ -343,7 +351,7 @@ def process(trial: Trial, save_corrected_path: str = None, save_segmented_path: 
 
     Args:
         trial: Trial object, trial to process
-        save_corrected_path: str, path to save the plots and corrected Ground Force Reaction (MOT) object.
+        save_plot_path: str, path to save the plots and corrected Ground Force Reaction (MOT) object.
             Does not save if None.
         save_segmented_path: str, path to save the segmented MOT and TRC objects. Does not save if None.
         show: bool, whether to show the plots.
@@ -357,12 +365,12 @@ def process(trial: Trial, save_corrected_path: str = None, save_segmented_path: 
 
     # apply filters and baseline correction:
     corrected_grf = trial.grf.copy()
-    save_corrected_path = os.path.join(save_corrected_path, trial.name) if save_corrected_path is not None else None
+    corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
     filter_grf(corrected_grf, frame_rate)
     baseline_correct_debug(corrected_grf, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'],
-                           save_corrected_path, show=show)
+                           save_plot_path, show=show)
     baseline_correct_debug(corrected_grf, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'],
-                           save_corrected_path, show=show)
+                           save_plot_path, show=show)
 
     # detect toe off and heel strikes:
     toe_off_moments = detect_toe_offs(corrected_grf, frame_rate)
@@ -371,14 +379,15 @@ def process(trial: Trial, save_corrected_path: str = None, save_segmented_path: 
     # zero swing phases and correct the baseline:
     zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'right')
     zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'left')
-    corrected_grf.rename(name=trial.grf.filename.replace('.mot', '') + "_corrected",
-                         filename=trial.grf.filename.replace('.mot', '_corrected.mot'), )
 
     # plot and save the corrected data:
-    if save_corrected_path is not None:
-        plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_corrected_path, show=show)
-        corrected_grf.save(save_corrected_path)
-    trial.corrected_grf = corrected_grf
+    if save_plot_path is not None:
+        plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path, show=show)
+        corrected_grf.save(save_plot_path)
+        trial.add_corrected_grf(corrected_grf=corrected_grf,
+                                path_to_corrected_grf=os.path.join(save_plot_path, corrected_grf.filename))
+    else:
+        trial.add_corrected_grf(corrected_grf=corrected_grf)
 
     # segment according to heel strikes:
     if trial.trc is None:

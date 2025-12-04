@@ -10,30 +10,26 @@ def process(trial: Trial,
             id_results_path: str,
             scaled_model_file: str) -> None:
 
+    name = trial.name
     for side in ["Right", "Left"]:
         cycles = trial.gait_cycles[side]
         temp_path = os.path.join(id_results_path, side, "temp")
         side_xml = os.path.join(external_loads_path, side)
         side_out = os.path.join(id_results_path, side)
+        os.makedirs(temp_path, exist_ok=True)
         os.makedirs(side_xml, exist_ok=True)
         os.makedirs(side_out, exist_ok=True)
-        name = trial.name
 
         for cycle in cycles:
-            error_message = f"Couldn't compute Internal Dynamics of the trial {name} for the gait cycle {side, cycle.num}:"
+            error_message = f"Couldn't compute Internal Dynamics of the trial {name} for the gait cycle {side}, {cycle.num}:"
 
             grf = cycle.grf
             trc = cycle.trc
             ik = cycle.ik
 
             if grf is None or trc is None or ik is None:
-                print(error_message + "unsuffisant data in trial.")
+                print(error_message + "insufficient data in trial.")
                 break
-
-            cycle.save(temp_path)
-
-            xml_file_path = os.path.join(side_xml, f"{name}_{side}_{cycle.num}.xml")
-            output_mot = f"{name}_{side}_{cycle.num}.mot"
 
             # Read start/end time from TRC
             start_time = float(trc.data['Time'][trc.first_frame])
@@ -41,8 +37,13 @@ def process(trial: Trial,
 
             # Generate ExternalLoads XML
             df = grf.data
+            if cycle.paths.grf is not None:
+                grf_path = cycle.paths.grf
+            else:
+                grf.save(temp_path)
+                grf_path = os.path.join(temp_path, grf.filename)
             external_loads = osim.ExternalLoads()
-            external_loads.setDataFileName(os.path.join(temp_path, grf.filename))
+            external_loads.setDataFileName(grf_path)
 
             # left side
             if df[['ground_force1_vx', 'ground_force1_vy', 'ground_force1_vz']].abs().sum().sum() > 0:
@@ -69,9 +70,16 @@ def process(trial: Trial,
                 external_loads.cloneAndAppend(ext2)
 
             # save the external loads
+            xml_file_path = os.path.join(side_xml, f"{name}_{side}_cycle{cycle.num}.xml")
             print(f"Created: {xml_file_path}")
             external_loads.printToXML(xml_file_path)
-            cycle.add_external_loads(external_loads)
+            cycle.add_external_loads(external_loads_path=xml_file_path, exl_object=external_loads)
+
+            if cycle.paths.ik_results is not None:
+                ik_path = cycle.paths.ik_results
+            else:
+                ik.save(temp_path)
+                ik_path = os.path.join(temp_path, ik.filename)
 
             # Run Inverse Dynamics
             print(f"Running ID: {name}/{side}/{cycle.num}")
@@ -79,15 +87,16 @@ def process(trial: Trial,
             id_tool.setModelFileName(scaled_model_file)
             id_tool.setStartTime(start_time)
             id_tool.setEndTime(end_time)
-            id_tool.setCoordinatesFileName(os.path.join(temp_path, ik.filename))
+            id_tool.setCoordinatesFileName(ik_path)
             id_tool.setExternalLoadsFileName(xml_file_path)
             id_tool.setResultsDir(side_out)
+            output_mot = f"{name}_{side}_cycle{cycle.num}.mot"
             id_tool.setOutputGenForceFileName(output_mot)
 
             try:
                 id_tool.run()
                 print(f"Saved: {output_mot}")
-                cycle.add_id(MOT.load_from_mot(output_mot))
+                cycle.add_id(os.path.join(side_out, output_mot))
             except Exception as e:
                 print(f"Error for {name}: {e}")
 

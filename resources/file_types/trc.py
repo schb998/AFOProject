@@ -566,7 +566,7 @@ class TRC(object):
         return TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names), deepcopy(self.marker_dict),
                    pd.DataFrame(data=d), self.num_coordinates, file_header=deepcopy(self.file_header))
 
-    def segment(self, points: list[int]) -> list[Self]:
+    def segment(self, points: list[int], index: bool = False) -> list[Self]:
         """Segments the data frame according to the given frames point.
 
          Each fragment contains frames from points[i-1] (included) to points[i] (excluded),
@@ -575,6 +575,8 @@ class TRC(object):
 
         Parameters:
             points: list of integer, frames to segment the object at.
+            index (bool): whether to rename the segments by their index.
+                If False, segment name will include their starting and ending frame.
 
         Returns:
             List of the segmented TRC objects.
@@ -600,7 +602,8 @@ class TRC(object):
             end = points[i + 1] if i + 1 != len(points) else points[i + 1] + 1
             metadata = deepcopy(self.metadata)
             metadata['NumFrames'] = end - start
-            file_name = self.filename.replace(".trc", "_segmented_" + str(start) + "-" + str(end - 1) + ".trc")
+            file_name = self.filename.replace(".trc", "_segmented_" + str(start) + "-" + str(end - 1) + ".trc") \
+                if not index else self.filename.replace(".trc", "_cycle" + str(i) + ".trc")
             d = {}
             for col in self.data.columns.to_list():
                 d[col] = self.data[col][start - ff:end - ff]

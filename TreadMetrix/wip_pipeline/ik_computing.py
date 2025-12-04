@@ -116,7 +116,7 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
     """Pipeline to compute the Internal Kinematics results from a trial's gait cycles.
 
     Args:
-        trial: Trial object, trial to processs
+        trial: Trial object, trial to process
         scaled_model_file_path: str, path to the scaled model file
         ik_result_path: str, where to save the resulting IK files
         save: bool, whether to keep the saved IK files or not
@@ -145,15 +145,18 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
 
             print(f"Processing {side}/{trc.filename}...")
 
-            trc.save(temp_trc_directory)
-            trc_full_path = os.path.join(temp_trc_directory, trc.filename)
+            if cycle.paths.trc is not None:
+                trc_full_path = cycle.paths.trc
+            else:
+                trc.save(temp_trc_directory)
+                trc_full_path = os.path.join(temp_trc_directory, trc.filename)
 
             # Setup IK Tool
             ik_tool = set_up_ik_tool(scaled_model_file_path, trc_full_path, float(trc.data['Time'].iloc[0]),
                                      float(trc.data['Time'].iloc[-1]))
 
             # Name format
-            cycle_name = f"{side.lower()}_cycle_{cycle.num}"
+            cycle_name = f"{trial.name}_{side.lower()}_cycle{cycle.num}"
             mot_name = f"{cycle_name}.mot"
             mot_path = os.path.join(ik_output_path, mot_name)
             ik_tool.setOutputMotionFileName(mot_path)
@@ -172,12 +175,8 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
                 mot = MOT.load_from_mot(mot_path)
                 mot.data = pd.DataFrame(data)
 
-                cycle.add_ik(mot)
-
-                if save:
-                    mot.save(ik_output_path)
-                else:
-                    os.remove(mot_path)
+                mot.save(ik_output_path)
+                cycle.add_ik(inverse_kinematic=mot_path, ik_object=mot)
 
             else:
                 print(f"IK failed for: {trc.filename}")

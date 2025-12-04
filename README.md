@@ -28,7 +28,7 @@ If existing, have a look at the [`local.json`](resources/paths/local.json) file.
 > If it does not exist yet, don't worry: running the code will automatically create it.
 
 This file will be used to locally store the paths to the files used in the code, such as the directory where modified 
-files will be saved, or results of computations. It was prehemptily added to the [`.gitignore`](.gitignore) file, which 
+files will be saved, or results of computations. It was preemptively added to the [`.gitignore`](.gitignore) file, which 
 means it's not going to be pushed to the GitHub repository.
 
 When running the code, a window will appear and ask you to select paths and files that will be used during the pipeline. 

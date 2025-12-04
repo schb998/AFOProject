@@ -339,13 +339,15 @@ class MOT:
             d[col] = self.data[col][first_point:last_point]
         return MOT(name, file_name, headers, pd.DataFrame(data=d), first_point)
 
-    def segment(self, points: list[int]) -> list[Self]:
+    def segment(self, points: list[int], index: bool = False) -> list[Self]:
         """Segments the current MOT file.
 
         Does so at the given points, returning a list of segmented MOT objects.
 
         Args:
             points (list of int): list of the frames before which the file needs to be segmented.
+            index (bool): whether to rename the segments by their index.
+                If False, segment name will include their starting and ending frame.
 
         Returns:
             list: list of MOT objects.
@@ -369,7 +371,8 @@ class MOT:
         for i in range(len(points) - 1):
             start = points[i]
             end = points[i + 1]
-            name = self.name + "_segmented_" + str(start) + "-" + str(end - 1)
+            name = self.name + "_segmented_" + str(start) + "-" + str(end - 1) \
+                if not index else self.name + "_cycle" + str(i)
             file_name = name + ".mot"
             d = {}
             for col in self.data.columns.to_list():
