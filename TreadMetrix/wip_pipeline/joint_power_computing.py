@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import numpy as np
 import re
+
+from matplotlib import pyplot, pyplot as plt
 from scipy import interpolate
 from scipy.signal import butter, filtfilt
 from resources.trial_class import Trial, GaitCycle
@@ -166,5 +168,8 @@ def process(trial: Trial, power_output_path: str):
             output_file_path = os.path.join(output_path, output_filename)
             joint_power.to_csv(output_file_path, index=False)
             cycle.add_joint_power(output_file_path, joint_power)
+
+            # plt.plot(joint_power['time'], joint_power['ankle_angle_r_power'])
+            # plt.show()
 
             print(f"Successfully processed: {cycle.ik.filename} -> {output_filename}")

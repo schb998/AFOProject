@@ -3,6 +3,7 @@ import os
 import pathlib
 import pandas as pd
 import numpy as np
+from matplotlib import pyplot as plt
 from scipy.signal import butter, filtfilt
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
@@ -174,9 +175,13 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
 
                 mot = MOT.load_from_mot(mot_path)
                 mot.data = pd.DataFrame(data)
+                mot.data.columns = header
 
                 mot.save(ik_output_path)
                 cycle.add_ik(inverse_kinematic=mot_path, ik_object=mot)
+
+                # plt.plot(cycle.ik.data['time'], cycle.ik.data['ankle_angle_r'])
+                # plt.show()
 
             else:
                 print(f"IK failed for: {trc.filename}")

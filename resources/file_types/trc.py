@@ -588,9 +588,11 @@ class TRC(object):
         # sort the frames at which to segment the object:
         points = sorted(points)
         ff = self.first_frame
-        lf = self.first_frame + self.data.shape[0]
+        lf = ff + self.data.shape[0]
         if (points[0] < ff) or (points[-1] > lf):
-            raise IndexError("Cannot cut at given frames: out of bound index.")
+            message = f"Cannot cut {self.filename} at given frames: out of bound index."
+            logging.warning(message)
+            raise IndexError(message)
         points.append(lf)
         points.insert(0, ff)
 
@@ -598,15 +600,17 @@ class TRC(object):
 
         # segment the file:
         for i in range(len(points) - 1):
-            start = points[i]
-            end = points[i + 1] if i + 1 != len(points) else points[i + 1] + 1
-            metadata = deepcopy(self.metadata)
-            metadata['NumFrames'] = end - start
+            start = points[i] + 1 if i != 0 else points[i]
+            end = points[i + 1] + 1 if i != len(points) - 1 else points[i + 1]
+
             file_name = self.filename.replace(".trc", "_segmented_" + str(start) + "-" + str(end - 1) + ".trc") \
                 if not index else self.filename.replace(".trc", "_cycle" + str(i) + ".trc")
+
             d = {}
             for col in self.data.columns.to_list():
-                d[col] = self.data[col][start - ff:end - ff]
+                d[col] = self.data[col][start-ff:end-ff]
+            metadata = deepcopy(self.metadata)
+            metadata['NumFrames'] = len(d["Time"])
             resulting_trcs.append(TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names),
                                       deepcopy(self.marker_dict), pd.DataFrame(data=d), self.num_coordinates,
                                       file_header=deepcopy(self.file_header)))
@@ -868,9 +872,11 @@ class _Test:
     @staticmethod
     def _test_segmentation() -> None:
         trc = TRC.load_from_trc(os.path.join(path, filename_standard))
-        ff = trc.first_frame
         length = trc.data.shape[0]
-        rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
+        ff = trc.first_frame
+        lf = length + ff - 1
+
+        rands = sorted((random.randint(ff, lf), random.randint(ff, lf)))
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment(rands)
@@ -881,9 +887,9 @@ class _Test:
                and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
-        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 - ff \
+        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 + 1 - ff \
                and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == (length + ff) - rand2, (
+               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == lf - rand2, (
                 error_message + "segmentation at wrong frames.")
         assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
             error_message + "original TRC object should not equal to segmented objects."

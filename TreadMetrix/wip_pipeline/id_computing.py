@@ -1,6 +1,9 @@
 import os
 import pathlib
 import opensim as osim
+
+from matplotlib import pyplot as plt
+
 from resources.file_types.mot import MOT
 from resources.trial_class import Trial, GaitCycle
 
@@ -105,6 +108,10 @@ def process(trial: Trial,
                 id_tool.run()
                 print(f"Saved: {output_mot}")
                 cycle.add_id(os.path.join(side_out, output_mot))
+
+                # plt.plot(cycle.id.data['time'], cycle.id.data['ankle_angle_r_moment'])
+                # plt.show()
+
             except Exception as e:
                 print(f"Error for {name}: {e}")
 

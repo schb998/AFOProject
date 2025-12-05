@@ -343,6 +343,7 @@ class MOT:
         """Segments the current MOT file.
 
         Does so at the given points, returning a list of segmented MOT objects.
+        The segments are in the form ]points[i], points[i+1]] except for the first segment who includes the first frame.
 
         Args:
             points (list of int): list of the frames before which the file needs to be segmented.
@@ -357,27 +358,31 @@ class MOT:
         """
         # sort the frames at which to segment the object:
         points = sorted(points)
-        if (points[0] < 0) or (points[-1] > self.data.shape[0]):
+        first_frame = self.first_frame
+        last_frame =  first_frame + self.data.shape[0]
+        if (points[0] < self.first_frame) or (points[-1] > last_frame):
             message = f"Cannot cut {self.name} at given frames: out of bound index."
             logging.warning(message)
             raise IndexError(message)
-        points.append(self.data.shape[0])
-        points.insert(0, 0)
+        points.append(last_frame)
+        points.insert(0, self.first_frame)
 
         resulting_mots = []
         headers = deepcopy(self.header_lines)
 
         # segment the file:
         for i in range(len(points) - 1):
-            start = points[i]
-            end = points[i + 1]
+            start = points[i] + 1 if i != first_frame else points[i]
+            end = points[i + 1] + 1 if i != len(points) - 1 else points[i + 1]
+
             name = self.name + "_segmented_" + str(start) + "-" + str(end - 1) \
                 if not index else self.name + "_cycle" + str(i)
             file_name = name + ".mot"
+
             d = {}
             for col in self.data.columns.to_list():
-                d[col] = self.data[col][start:end]
-            headers['nRows'] = end - start
+                d[col] = self.data[col][start-first_frame:end-first_frame]
+            headers['nRows'] = len(d["time"])
             resulting_mots.append(MOT(name, file_name, deepcopy(headers), pd.DataFrame(data=d), start))
 
         # return:
@@ -610,13 +615,13 @@ class _Test:
         assert sample == sample2, \
             error_message + "calls on object with same parameters should be equal."
 
-
-
     @staticmethod
     def _test_segmentation() -> None:
         mot = MOT.load_from_mot(os.path.join(path, filename_standard))
         length = mot.data.shape[0]
-        rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
+        ff = mot.first_frame
+        lf = length + ff - 1
+        rands = sorted((random.randint(ff, lf), random.randint(ff, lf)))
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         mots = mot.segment(rands)
@@ -627,9 +632,9 @@ class _Test:
                and mots[2].data.shape[1] == mot.data.shape[1], error_message + "wrong number of columns."
         assert mots[0].data.shape[0] + mots[1].data.shape[0] + mots[2].data.shape[0] == mot.data.shape[0], \
             error_message + "data lost in segmentation."
-        assert mots[0].data.shape[0] == mots[0].header_lines['nRows'] == rand1 \
-               and mots[1].data.shape[0] == mots[1].header_lines['nRows'] == rand2 - rand1 \
-               and mots[2].data.shape[0] == mots[2].header_lines['nRows'] == length - rand2, (
+        assert mots[0].data.shape[0] == mots[0].header_lines['nRows'] == rand1 + 1 - ff
+        assert mots[1].data.shape[0] == mots[1].header_lines['nRows'] == rand2 - rand1
+        assert mots[2].data.shape[0] == mots[2].header_lines['nRows'] == lf - rand2, (
                 error_message + "segmentation at wrong frames.")
         assert mot != mots[0] and mot != mots[1] and mot != mots[2], \
             error_message + "original MOT object should not equal to segmented objects."
