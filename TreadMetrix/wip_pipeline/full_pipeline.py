@@ -47,7 +47,12 @@ if __name__ == "__main__":
                         save_segmented_path=local.get_segmented_path(name) if save else None,
                         show=show, save_optionals=save)
 
-        trial = trial.sample(15.0, 30.0)
+        print("Enter starting point of the span to process:")
+        starting_point = float(input())
+        print("Enter ending point of the span to process:")
+        ending_point = float(input())
+
+        trial = trial.sample(starting_point, ending_point)
 
         compute_ik(trial, local.get_scaled_model_file(), local.get_ik_results_path(name), save=save)
         compute_id(trial, local.get_external_loads_path(name), local.get_id_results_path(name), local.get_scaled_model_file())
