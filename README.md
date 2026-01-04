@@ -3,22 +3,18 @@
 This workflow filters and compute data from OSIM, MOT and TRC files to help the study of gait analysis.
 
 
-## WIP pipeline
+## Pipeline
 
 The pipeline in progress is located in [this](TreadMetrix/wip_pipeline) directory.
 
-The pipeline in progress is [`full_pipeline.py`](TreadMetrix/wip_pipeline/full_pipeline.py).  
+The pipeline in progress is [`full_pipeline.py`](TreadMetrix/full_pipeline.py).  
 It uses custom MOT and TRC classes of the [`resources/filetypes_gestion`](resources/file_types) directory, 
 and automatically follows the steps of the pipeline 
-using functions located in [`data_postprocessing.py`](TreadMetrix/wip_pipeline/data_postprocessing.py).  
+using functions located in [`data_postprocessing.py`](TreadMetrix/data_postprocessing.py), 
+[`ik_computing.py`](TreadMetrix/ik_computing.py), [`id_computing.py`](TreadMetrix/id_computing.py) 
+and [`joint_power_computing.py`](TreadMetrix/joint_power_computing.py).  
 
-You just have to run [`full_pipeline.py`](TreadMetrix/wip_pipeline/full_pipeline.py).  
-
-
-## Old pipeline  
-
-The remaining files of the old pipeline are located in [this](TreadMetrix/old_pipeline) directory.
-They are programmed for deletion once adapted into the new pipeline and may not function as intended in the meantime.
+You just have to run [`full_pipeline.py`](TreadMetrix/full_pipeline.py).  
 
 
 ## Path management  
