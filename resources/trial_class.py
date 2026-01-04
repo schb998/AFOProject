@@ -24,7 +24,7 @@ class CyclePaths:
         ik_results: str, path to the Internal Dynamics file (MOT)
         external_loads: str, path to the External Loads file (XML)
         id_results: str, path to the Internal Dynamics file (MOT)
-        joint_power_results: str, path to the Joint Power file
+        joint_power_results: str, path to the Joint Power file (CSV)
     """
 
     def __init__(self):
@@ -252,7 +252,7 @@ class GaitCycle:
 
         Args:
             joint_power_path : str, path to the joint power data.
-            jp_object: object, joint power object
+            jp_object: pd.DataFrame, joint power data if already loaded
 
         Returns:
             None
@@ -309,6 +309,8 @@ class GaitCycle:
             return get_start_and_end(self.ik)
         if self.id is not None:
             return get_start_and_end(self.id)
+        if self.jp is not None:
+            return self.jp['time'].iloc[0], self.jp['time'].iloc[-1]
         return None
 
     def is_included(self, starting_time: float, ending_time: float) -> bool:
@@ -341,9 +343,12 @@ class GaitCycle:
         """
         path = os.path.join(path, self.side, "cycle_" + str(self.num)) if categorize else path
         os.makedirs(path, exist_ok=True)
-        for obj in [self.grf, self.trc, self.ik, self.id, self.jp]:
+        for obj in [self.grf, self.trc, self.ik, self.id]:
             if obj is not None:
                 obj.save(path)
+        if self.jp is not None:
+            self.jp.to_csv(os.path.join(path, "joint_power.csv"), index=False)
+
 
     @staticmethod
     def _objects_and_paths(grfs: list[MOT] = None, grf_path: str | list[str] = None,
@@ -352,8 +357,39 @@ class GaitCycle:
                            exls: list[osim.ExternalLoads] = None, exl_path: str | list[str] = None,
                            ids: list[MOT] = None, id_path: str | list[str] = None,
                            jps: list[pd.DataFrame] = None, jp_path: str | list[str] = None):
+        """Organize the objects and the paths to the matching files.
 
-        def management_call(objects: list | None, path: str | list[str]):
+        Args:
+            grfs: list of MOT objects, MOT objects of the ground force reactions data if already loaded
+            grf_path: path to the ground force reaction data files, can be a directory of a list of files
+            trcs: list of TRC objects, if already loaded
+            trc_path: path to the trc data files, can be a directory of a list of files
+            iks: list of MOT objects, MOT objects of the inverse kinematic data if already loaded
+            ik_path: path to the inverse kinematic data files, can be a directory of a list of files
+            exls: list of OpenSim ExternalLoads objects, if already loaded
+            exl_path: path to the external loads data files, can be a directory of a list of files
+            ids: list of MOT objects, MOT objects of the inverse dynamic data if already loaded
+            id_path: path to the inverse dynamic data files, can be a directory of a list of files
+            jps: list of panda DataFrame objects, if already loaded
+            jp_path: path to the join power data files, can be a directory of a list of files
+
+        Returns:
+            given parameters, updated, in the order listed above
+
+        """
+
+        def management_call(objects: list | None, path: None | str | list[str]):
+            """Manage the paths and input whether objects should be loaded
+
+            Args:
+                objects: list of the loaded objects, can be None
+                path: path(s) to the objects, can be None
+
+            Returns:
+                list of string: listed paths
+                bool: whether objects should be loaded from the paths
+
+            """
             if objects is not None:
                 if path is not None and isinstance(path, str):
                     temp = []
@@ -393,6 +429,25 @@ class GaitCycle:
 
         return grfs, grf_path, trcs, trc_path, iks, ik_path, exls, exl_path, ids, id_path, jps, jp_path
 
+    @staticmethod
+    def _are_same_length(*args: list | None):
+        """Verifies that if existing, all list of objects passed in arguments are of the same length.
+
+        Args:
+            *args: list of object whose sizes are to be compared
+
+        Returns:
+            bool: whether the length of the objects match
+            int: value of the matching length if matching
+        """
+        l = len(args[0]) if args[0] is not None else -1
+        for a in args[1:]:
+            if a is not None:
+                if l == -1:
+                    l = len(a)
+                elif len(a) != l:
+                    return False, None
+        return True, l
 
     @classmethod
     def to_gait_cycles(cls, side: str,
@@ -402,13 +457,29 @@ class GaitCycle:
                        exls: list[osim.ExternalLoads] = None, exl_path: str | list[str] = None,
                        ids: list[MOT] = None, id_path: str | list[str] = None,
                        jps: list[pd.DataFrame] = None, jp_path: str | list[str] = None) -> list[Self]:
+        """Create GaitCycles objects from the given data.
 
-        def are_same_length(*args: list | None):
-            l = len(args[0])
-            for a in args[1:]:
-                if a is not None and len(a) != l:
-                    return False, l
-            return True, l
+        Args:
+            side: str, side of the gait cycle.
+            grfs: list of MOT objects, MOT objects of the ground force reactions data if already loaded
+            grf_path: path to the ground force reaction data files, can be a directory of a list of files
+            trcs: list of TRC objects, if already loaded
+            trc_path: path to the trc data files, can be a directory of a list of files
+            iks: list of MOT objects, MOT objects of the inverse kinematic data if already loaded
+            ik_path: path to the inverse kinematic data files, can be a directory of a list of files
+            exls: list of OpenSim ExternalLoads objects, if already loaded
+            exl_path: path to the external loads data files, can be a directory of a list of files
+            ids: list of MOT objects, MOT objects of the inverse dynamic data if already loaded
+            id_path: path to the inverse dynamic data files, can be a directory of a list of files
+            jps: list of panda DataFrame objects, if already loaded
+            jp_path: path to the join power data files, can be a directory of a list of files
+
+        Returns:
+            GaitCycles from the given data
+
+        Raises:
+            Exception if the number of objects do not match
+        """
 
         # if there are objects to load:
         grfs, grf_path, \
@@ -423,7 +494,7 @@ class GaitCycle:
                                               ids, id_path,
                                               jps, jp_path)
 
-        sl, length = are_same_length(grfs, trcs, iks, exls, ids, jps)
+        sl, length = cls._are_same_length(grfs, trcs, iks, exls, ids, jps)
         if not sl:
             raise Exception("GaitCycles not generated: couldn't match the objects, numbers of objects do not match.")
 
@@ -454,14 +525,29 @@ class GaitCycle:
                            exls: list[osim.ExternalLoads] = None, exl_path: str | list[str] = None,
                            ids: list[MOT] = None, id_path: str | list[str] = None,
                            jps: list[pd.DataFrame] = None, jp_path: str | list[str] = None):
+        """Add data to given GaitCycles.
 
-        def are_same_length(*args: list | None) -> bool:
-            l = len(cycles)
-            for a in args:
-                if a is not None and len(a) != l:
-                    return False
-            return True
+        Args:
+            cycles: list of GaitCycles objects to which data has to be added
+            grfs: list of MOT objects, MOT objects of the ground force reactions data if already loaded
+            grf_path: path to the ground force reaction data files, can be a directory of a list of files
+            trcs: list of TRC objects, if already loaded
+            trc_path: path to the trc data files, can be a directory of a list of files
+            iks: list of MOT objects, MOT objects of the inverse kinematic data if already loaded
+            ik_path: path to the inverse kinematic data files, can be a directory of a list of files
+            exls: list of OpenSim ExternalLoads objects, if already loaded
+            exl_path: path to the external loads data files, can be a directory of a list of files
+            ids: list of MOT objects, MOT objects of the inverse dynamic data if already loaded
+            id_path: path to the inverse dynamic data files, can be a directory of a list of files
+            jps: list of panda DataFrame objects, if already loaded
+            jp_path: path to the join power data files, can be a directory of a list of files
 
+        Returns:
+            None
+
+        Raises:
+            Exception if the number of objects do not match
+        """
         # if there are objects to load:
         grfs, grf_path, \
             trcs, trc_path, \
@@ -475,10 +561,11 @@ class GaitCycle:
                                               ids, id_path,
                                               jps, jp_path)
 
-        if not are_same_length(grfs, trcs, iks, exls, ids, jps):
-            raise Exception("GaitCycles not generated: couldn't match the number of objects to the cycles.")
+        sl, length = cls._are_same_length(cycles, grfs, trcs, iks, exls, ids, jps)
+        if not sl:
+            raise Exception("GaitCycles not generated: couldn't match the objects, numbers of objects do not match.")
 
-        for i in range(len(cycles)):
+        for i in range(length):
             cycles[i].add_to_cycle(grfs[i] if grfs is not None else None, grf_path[i] if grf_path is not None else None,
                                trcs[i] if trcs is not None else None, trc_path[i] if trc_path is not None else None,
                                iks[i] if iks is not None else None, ik_path[i] if ik_path is not None else None,

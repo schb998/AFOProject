@@ -43,7 +43,6 @@ def read_mot_files(file_path):
         print(f"Error reading {filename}: {e}")
 
 
-# todo check usefulness of moments argument
 def matches(method_name, column_names, gaitcycle):
     """
 
