@@ -43,14 +43,9 @@ if __name__ == "__main__":
     for name in trials:
         trial = trials[name]
 
-        post_processing(trial, save_plot_path=local.get_corrected_mot_path(name),
+        starting_point, ending_point = post_processing(trial, save_plot_path=local.get_corrected_mot_path(name),
                         save_segmented_path=local.get_segmented_path(name) if save else None,
                         show=show, save_optionals=save)
-
-        print("Enter starting point of the span to process:")
-        starting_point = float(input())
-        print("Enter ending point of the span to process:")
-        ending_point = float(input())
 
         trial = trial.sample(starting_point, ending_point)
 
