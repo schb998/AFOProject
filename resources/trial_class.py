@@ -1,17 +1,10 @@
 import os.path
-
 import opensim as osim
-import re
-
-import numpy as np
 import pandas as pd
-
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 from typing import Self
 from resources.custom_exceptions import *
-
-# todo: update joint power documentation
 
 
 class CyclePaths:
