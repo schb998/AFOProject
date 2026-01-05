@@ -269,7 +269,6 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
 
     selected_start = time_scale.iloc[0]
     selected_end = time_scale.iloc[-1]
-    print(selected_start, selected_end)
 
     ax1.plot(time_scale, right_fy, label='Right Fy', alpha=0.7, color='orange')
     ax1.plot(time_scale, left_fy, label='Left Fy', alpha=0.7, color='green')
@@ -287,17 +286,12 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
                 color='darkgreen', marker='o', label='Left Heel Strikes')
 
 
-
-    line2, = ax2.plot([], [])
-
     def onselect(xmin, xmax):
         global selected_start
         global selected_end
 
         indmin, indmax = np.searchsorted(time_scale, (xmin, xmax))
         indmax = min(len(time_scale) - 1, indmax)
-
-        print(indmin, indmax)
 
         x_time = list(time_scale[indmin:indmax])
         y_right = right_fy[indmin:indmax]
@@ -441,7 +435,6 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
 
     corrected_grf = corrected_grf.sample(int(selected_start), int(selected_end))
     corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
-    print(selected_start, selected_end)
     for side in ["L", "R"]:
         heel_strike_moments[side] = [strike for strike in heel_strike_moments[side]
                                      if (selected_start <= strike <= selected_end)]
