@@ -50,6 +50,11 @@ def on_closing(window: Tk, custom: str = None) -> bool:
     return False
 
 
+def ask_question(question: str, title: str = None) -> bool:
+    answer = messagebox.askquestion(title, question)
+    return answer.lower() == "yes"
+
+
 def get_osim_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
     t = ""
     if title is not None:

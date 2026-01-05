@@ -1,6 +1,4 @@
-from timeit import default_number
 from tkinter import *
-from tkinter import messagebox
 from tkinter.filedialog import askdirectory, askopenfilenames
 from tkinter.ttk import *
 import resources.tkinter_toolbox as tbox
@@ -220,57 +218,6 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
 
     _update_row()
     return label, selected, select_button, unselect_button
-
-
-def _setup_new_row(root: Tk, label_name: str, name_in_json: str, select_action, unselect_action):
-    """Set up a line on given window to manage a specific path. Has issues, not to use at the moment.
-
-    Args:
-        root: root Tk window.
-        label_name: explanatory text of what is aked to the user.
-        name_in_json: name of the data to access in the path save.
-        select_action: method to call first when select button is clicked. Method should have no parameter.
-        unselect_action: method to call first when unselect button is clicked. Method should have no parameter.
-
-    Returns:
-        Explanatory Tkinter Label of the path asked.
-        Tkinter Label containing current content of the local save.
-        Selection Tkinter Button.
-        Deselection Tkinter Button.
-    """
-    raise NotImplemented
-    label = Label(root, text=label_name)
-    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
-
-    selected = Label(root, text=_reformat(back.get_local(name_in_json)), background="darkgrey")
-    selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
-    LABELS.update({selected: name_in_json})
-
-    def select_button_click():
-        select_action()
-        _update_labels()
-        _update_button()
-
-    select_button = Button(root, text="Select",
-                           command=lambda: {select_button_click()})
-    select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
-
-    def unselect_button_click():
-        unselect_action()
-        _update_labels()
-        _update_button()
-
-    unselect_button = Button(root, text="Unselect",
-                             command=lambda: {unselect_button_click()})
-    unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
-
-    _update_row()
-    return label, selected, select_button, unselect_button
-
-
-def ask_question(question: str, title: str = None) -> bool:
-    answer = messagebox.askquestion(title if title is not None else default_title, question)
-    return answer.lower() == "yes"
 
 
 def main() -> None:

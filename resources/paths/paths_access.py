@@ -1,7 +1,8 @@
 import os
 from resources.custom_exceptions import *
 import resources.paths.paths_back as model
-from resources.paths.paths_gui import main as main_gui, ask_question
+from resources.paths.paths_gui import main as main_gui
+from resources.tkinter_toolbox import ask_question
 
 
 def call_to_gui() -> None:
