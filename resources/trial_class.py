@@ -652,7 +652,7 @@ class Trial:
         if path_to_corrected_grf is not None:
             if corrected_grf is None:
                 try:
-                    self.grf = MOT.load_from_mot(path_to_corrected_grf)
+                    self.corrected_grf = MOT.load_from_mot(path_to_corrected_grf)
                 except OSError as e:
                     raise MissingPathException("Corrected Ground Reaction Forces (MOT) file", detail=e.strerror)
             self.paths.corrected_grf = path_to_corrected_grf
