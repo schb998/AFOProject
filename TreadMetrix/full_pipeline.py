@@ -43,11 +43,9 @@ if __name__ == "__main__":
     for name in trials:
         trial = trials[name]
 
-        starting_point, ending_point = post_processing(trial, save_plot_path=local.get_corrected_mot_path(name),
+        post_processing(trial, save_plot_path=local.get_corrected_mot_path(name),
                         save_segmented_path=local.get_segmented_path(name) if save else None,
                         show=show, save_optionals=save)
-
-        trial = trial.sample(starting_point, ending_point)
 
         compute_ik(trial, local.get_scaled_model_file(), local.get_ik_results_path(name), save=save)
         compute_id(trial, local.get_external_loads_path(name), local.get_id_results_path(name), local.get_scaled_model_file())

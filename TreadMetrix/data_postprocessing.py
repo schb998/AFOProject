@@ -309,8 +309,8 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
             ax2.set_xlim(x_time[0], x_time[-1])
             ax2.set_ylim(min(y_right.min(), y_left.min()), max(y_right.max(), y_left.max()))
             fig.canvas.draw_idle()
-            selected_start = time_scale[indmin]
-            selected_end = time_scale[indmax]
+            selected_start = indmin
+            selected_end = indmax
 
 
     span = SpanSelector(
@@ -397,7 +397,7 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
 
 
 def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, show: bool = True,
-            save_optionals=False) -> tuple[float, float]:
+            save_optionals=False) -> None:
     """Pipeline to process the raw data of a trial.
 
      This method filters, applies baseline corrections, zeros the swing phases and segments the data at heel strikes.
@@ -438,6 +438,14 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
 
     # plot and save the corrected data:
     plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path)
+
+    corrected_grf = corrected_grf.sample(int(selected_start), int(selected_end))
+    corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
+    print(selected_start, selected_end)
+    for side in ["L", "R"]:
+        heel_strike_moments[side] = [strike for strike in heel_strike_moments[side]
+                                     if (selected_start <= strike <= selected_end)]
+
     if save_optionals:
         corrected_grf.save(save_plot_path)
         trial.add_corrected_grf(corrected_grf=corrected_grf,
@@ -449,4 +457,3 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
     if trial.trc is None:
         raise MissingPathException(f"Markers trajectory object (TRC) for trial {trial.name}", "No such object given.")
     segment_at_heel_strikes(trial, heel_strike_moments, save=save_segmented_path)
-    return selected_start, selected_end
