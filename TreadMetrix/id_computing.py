@@ -1,11 +1,8 @@
 import os
 import pathlib
 import opensim as osim
-
 from matplotlib import pyplot as plt
-
-from resources.file_types.mot import MOT
-from resources.trial_class import Trial, GaitCycle
+from resources.trial_class import Trial
 
 def compute_external_loads(df, grf_path, xml_file_path):
     external_loads = osim.ExternalLoads()

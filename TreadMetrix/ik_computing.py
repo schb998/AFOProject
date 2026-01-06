@@ -6,10 +6,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.signal import butter, filtfilt
 from resources.file_types.mot import MOT
-from resources.file_types.trc import TRC
 import opensim as osim
-
-from resources.trial_class import Trial, GaitCycle
+from resources.trial_class import Trial
 
 """
 This file is used to compute Inverse Kinematic data.

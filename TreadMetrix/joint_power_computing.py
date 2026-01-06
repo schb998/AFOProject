@@ -2,11 +2,10 @@ import os
 import pandas as pd
 import numpy as np
 import re
-
 from matplotlib import pyplot, pyplot as plt
 from scipy import interpolate
 from scipy.signal import butter, filtfilt
-from resources.trial_class import Trial, GaitCycle
+from resources.trial_class import Trial
 
 """
 This file is used to compute joint power from processed .mot files of Inverse Kinematics & Dynamics.
