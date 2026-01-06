@@ -69,6 +69,13 @@ def get_base_model_file() -> str:
     raise MissingPathException("base OpenSim model")
 
 
+def get_raw_directory() -> str:
+    content = model.get_local("raw_directory")
+    if content is not None:
+        return content
+    raise MissingPathException("raw directory")
+
+
 def get_raw_mot_path() -> list[str]:
     path = model.get_local("raw_mot")
     if path is not None:

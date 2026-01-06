@@ -220,6 +220,58 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     return label, selected, select_button, unselect_button
 
 
+def _set_up_raw_directory(root: Tk) -> (Label, Label, Button, Button):
+    """Set up a line on given window to manage raw MOT files to process.
+
+        Args:
+            root: root Tk window
+
+        Returns:
+            Explanatory Tkinter Label of the path asked.
+            Tkinter Label containing current content of the local save.
+            Selection Tkinter Button.
+            Deselection Tkinter Button.
+        """
+    label = Label(root, text="Directory to process:")
+    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
+
+    selected = Label(root, text=_reformat(back.get_local("raw_directory")), background="darkgrey")
+    selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
+    LABELS.update({selected: "raw_directory"})
+
+    def select_button_click():
+        message = "Select the directory whose files should be processed."
+        tbox.infobox(message)
+        selection = askdirectory(title=message, initialdir=back.get_default_searching_path())
+        valid, detail = back.set_raw_directory(selection)
+        if not valid:
+            message = f"Selection does not match requirement."
+            if detail is not None:
+                message = message + " " + detail
+            tbox.infobox(message)
+            return
+        if detail is not None:
+            tbox.infobox(detail)
+        _update_labels()
+        _update_button()
+
+    select_button = Button(root, text="Select",
+                           command=lambda: {select_button_click()})
+    select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
+
+    def unselect_button_click():
+        back.delete_raw_directory()
+        _update_labels()
+        _update_button()
+
+    unselect_button = Button(root, text="Unselect",
+                             command=lambda: {unselect_button_click()})
+    unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
+
+    _update_row()
+    return label, selected, select_button, unselect_button
+
+
 def main() -> None:
     root = Tk()
     root.title("Path management")
@@ -227,6 +279,12 @@ def main() -> None:
     root.columnconfigure(4)
 
     _setup_output_directory(root)
+    _set_up_raw_directory(root)
+
+    label = Label(root, text="OR")
+    label.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
+    _update_row()
+
     _setup_raw_mot(root)
     _setup_raw_trc(root)
 

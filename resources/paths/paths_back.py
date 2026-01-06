@@ -93,8 +93,6 @@ def _remove_from_local(key: str) -> None:
 
 # test if all the files required to run the pipeline has been filled and save:
 
-_load_bearing_paths: list[str] = ["output_path", "raw_mot", "raw_trc"]
-
 
 def _delete_invalid_paths():
     """Delete the invalid paths in the local save file.
@@ -145,25 +143,23 @@ def are_loadbearing_paths_filled(detail: bool = False) -> bool | tuple[bool, lis
         bool: whether all the needed paths are filled
         list[str]: if detail is True, list of the missing paths
     """
-    global _load_bearing_paths
 
     if not detail:
-        for name in _load_bearing_paths:
-            local_content = get_local(name)
-            if local_content is None:
-                logging.warning(f"Missing load bearing paths.")
-                return False
-        logging.info(f"All load bearing paths of the save file are filled.")
-        return True
+        return get_local("output_path") is not None and ( (get_local("raw_directory") is not None) or (get_local("raw_mot") is not None and get_local("raw_trc") is not None) )
 
     else:
         res = True
         faulty = []
-        for name in _load_bearing_paths:
-            local_content = get_local(name)
-            if local_content is None:
-                res = False
-                faulty.append(name)
+        if get_local("output_path") is None:
+            res = False
+            faulty.append("output_path")
+        if get_local("raw_directory") is None:
+            faulty.append("raw_directory")
+            for name in ["raw_mot", "raw_trc"]:
+                local_content = get_local(name)
+                if local_content is None:
+                    res = False
+                    faulty.append(name)
         if res:
             logging.info(f"All load bearing paths of the save file are filled.")
         else:
@@ -337,14 +333,13 @@ def set_raw_directory(selection: str | None) -> (bool, str | None):
         logging.warning(error_message)
         return False, error_message
 
-    if os.path.isdir(selection):
+    if not os.path.isdir(selection):
         error_message = error_message + f"selected path {selection} is not a directory."
         logging.warning(error_message)
         return False, error_message
 
     _update_local("raw_directory", selection)
     return True, None
-
 
 
 def set_osim_path(selection: str | None) -> (bool, str | None):
@@ -416,3 +411,9 @@ def delete_raw_trc() -> None:
         None
     """
     _remove_from_local("raw_trc")
+
+def delete_raw_directory() -> None:
+    """Delete the selected raw directory from the virtual save.
+    Returns: None
+    """
+    _remove_from_local("raw_directory")

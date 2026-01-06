@@ -1,6 +1,9 @@
 import os
 import re
 import resources.paths.paths_access as local
+from TreadMetrix.speed_categories import mot_file
+from resources.custom_exceptions import MissingPathException
+from resources.file_types.trc import filename_standard
 from resources.trial_class import Trial
 import osim_gestion as osim
 from data_postprocessing import process as post_processing
@@ -26,12 +29,24 @@ if __name__ == "__main__":
 
     # loads files into Trial objects:
     trials = {}
-    for file in local.get_raw_mot_path():
+
+    try:
+        directory = local.get_raw_directory()
+        mot_files = [os.path.join(directory, file) for file in os.listdir(directory) if file.endswith(".mot")]
+        trc_files = [os.path.join(directory, file) for file in os.listdir(directory) if file.endswith(".trc")]
+    except MissingPathException:
+        mot_files = local.get_raw_mot_path()
+        trc_files = local.get_raw_trc_path()
+
+    mot_files.sort()
+    trc_files.sort()
+
+    for file in mot_files:
         trial_name = os.path.basename(file).replace('.mot', '')
         try:
             trial = Trial(mot=file)
             try:
-                trial.add_trc([t for t in local.get_raw_trc_path() if re.search(trial_name + r"\.trc$", t) is not None][0])
+                trial.add_trc([t for t in trc_files if re.search(trial_name + r"\.trc$", t) is not None][0])
             except IndexError:
                 raise OSError
             trials[trial_name] = trial
