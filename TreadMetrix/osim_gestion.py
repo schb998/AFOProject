@@ -12,11 +12,14 @@ import resources.paths.paths_access as c
 # todo: update configure_opensim so paths_back manage configuration instead
 # todo: continue separation osim_gestion // paths_back for model selection
 
-
 LABEL: Label
 BUTTON: Button
 CURRENT_ROW = 0
 
+setup = r"C:\Users\lgre690\Documents\MyData\osim_code\setup_final.xml"
+base_model = r"C:\Users\lgre690\Documents\MyData\osim_code\gait2392_simbody_37 ABI full markerset _ lilas.osim"
+static = r"lilas\Static_0102.trc"
+output = r"C:\Users\lgre690\Documents\MyData\osim_code\lilas\LALALALWEGOTARESULT.osim"
 
 def _update_label():
     global LABEL
@@ -147,31 +150,42 @@ def get_base_model_filename() -> str | None:
     return None
 
 
-def scale_model() -> str:
-    message = "Select the base model file."
-    tbox.infobox(message)
-    base_model_file = tbox.get_osim_file(instruction=message)
-    if base_model_file is None:
-        raise MissingPathException("OpenSim base project file", "interrupting")
-    base_model_filename = base_model_file.name
-    base_model = osim.Model(base_model_filename)
+def scale_model(base_model_filename:str = None, static_filename: str = None, scale_setup_filename: str = None):
+    if base_model_filename is None:
+        message = "Select the base model file."
+        tbox.infobox(message)
+        base_model_file = tbox.get_osim_file(instruction=message)
+        if base_model_file is None:
+            raise MissingPathException("OpenSim base project file", "interrupting")
+        base_model_filename = base_model_file.name
 
-    message = "Select the static file."
-    tbox.infobox(message)
-    static = tbox.get_trc_file(instruction=message)
-    if static is None:
-        raise MissingPathException("Static TRC file", "interrupting")
-    static_filename = static.name
+    if static_filename is None:
+        message = "Select the static file."
+        tbox.infobox(message)
+        static = tbox.get_trc_file(instruction=message)
+        if static is None:
+            raise MissingPathException("Static TRC file", "interrupting")
+        static_filename = static.name
 
-    message = "Select the scaling setup file."
-    tbox.infobox(message)
-    scale_setup = tbox.get_xml_file(instruction=message)
-    if scale_setup is None:
-        raise MissingPathException("Scaling tool setup XML file", "interrupting")
-    scale_setup_filename = scale_setup.name
+    if scale_setup_filename is None:
+        message = "Select the scaling setup file."
+        tbox.infobox(message)
+        scale_setup = tbox.get_xml_file(instruction=message)
+        if scale_setup is None:
+            raise MissingPathException("Scaling tool setup XML file", "interrupting")
+        scale_setup_filename = scale_setup.name
 
     scale_tool = osim.ScaleTool(scale_setup_filename)
-    return static_filename
+    scale_tool.getModelScaler().setMarkerFileName(static_filename)
+
+    scale_tool.setPrintResultFiles(True)
+    scale_tool.getModelScaler().setOutputModelFileName(output)
+    scale_tool.getMarkerPlacer().setOutputModelFileName(output)
+    scale_tool.getMarkerPlacer().setCoordinateFileName(static_filename)
+
+    scale_tool.run()
+
+    print("Something happened")
 
 
 def setup_ik():
@@ -202,7 +216,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    scale_model(base_model, static, setup)
+
 
 
 
