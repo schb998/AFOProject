@@ -1,4 +1,5 @@
 import opensim as osim
+import shutil
 from tkinter import *
 from tkinter.filedialog import askdirectory
 from tkinter.ttk import *
@@ -8,6 +9,7 @@ import resources.tkinter_toolbox as tbox
 from resources.custom_exceptions import *
 import resources.paths.paths_back as m
 import resources.paths.paths_access as c
+import xml.etree.ElementTree as ET
 
 # todo: update configure_opensim so paths_back manage configuration instead
 # todo: continue separation osim_gestion // paths_back for model selection
@@ -16,10 +18,38 @@ LABEL: Label
 BUTTON: Button
 CURRENT_ROW = 0
 
-setup = r"C:\Users\lgre690\Documents\MyData\osim_code\setup_final.xml"
-base_model = r"C:\Users\lgre690\Documents\MyData\osim_code\gait2392_simbody_37 ABI full markerset _ lilas.osim"
-static = r"lilas\Static_0102.trc"
-output = r"C:\Users\lgre690\Documents\MyData\osim_code\lilas\LALALALWEGOTARESULT.osim"
+osim_files_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), r"resources/osim_files")
+setup = os.path.join(osim_files_path, "scaling_setup.xml")
+base_model = os.path.join(osim_files_path, "markerset.osim")
+
+
+def _update_scaling_setup_file(scaling_setup: str, base_model_filepath: str = None) -> None:
+    """Update the scaling setup file to have the valid absolute path of the base model file
+
+    Args:
+        scaling_setup: str, path to the scaling setup to update
+        base_model_filepath: str, path to the base model file if the default one is not to be used.
+
+    Returns:
+        None
+
+    """
+    tree = ET.parse(scaling_setup, ET.XMLParser(encoding="utf-8"))
+    model_file = tree.getroot().find("ScaleTool").find("GenericModelMaker").find('model_file')
+    txt = model_file.text
+    if base_model_filepath is None:
+        base_model_filepath = base_model
+    if txt != base_model_filepath:
+        for x in tree.getroot().find("ScaleTool").find("GenericModelMaker").iter('model_file'):
+            x.text = str(base_model_filepath)
+        tree.write(scaling_setup, encoding="utf-8", xml_declaration=True)
+
+
+def prepare_scaling_setup(directory_path: str, base_model_filepath: str = None) -> None:
+    destination = os.path.join(directory_path, "scaling_setup.xml")
+    shutil.copy(setup, destination)
+    _update_scaling_setup_file(destination, base_model_filepath)
+
 
 def _update_label():
     global LABEL
@@ -150,48 +180,45 @@ def get_base_model_filename() -> str | None:
     return None
 
 
-def scale_model(base_model_filename:str = None, static_filename: str = None, scale_setup_filename: str = None):
-    if base_model_filename is None:
-        message = "Select the base model file."
-        tbox.infobox(message)
-        base_model_file = tbox.get_osim_file(instruction=message)
-        if base_model_file is None:
-            raise MissingPathException("OpenSim base project file", "interrupting")
-        base_model_filename = base_model_file.name
+def scale_model(static_filepath: str, output_filepath: str = None, setup_path: str = None, base_model_file: str = None) -> str | None:
+    """Scale an Osim model according to the static file provided.
 
-    if static_filename is None:
-        message = "Select the static file."
-        tbox.infobox(message)
-        static = tbox.get_trc_file(instruction=message)
-        if static is None:
-            raise MissingPathException("Static TRC file", "interrupting")
-        static_filename = static.name
+    Args:
+        static_filepath: str, path to the static file (trc)
+        output_filepath: str, path to the directory in which to save the scaled model.
+            If none, scaled model will be saved in the same directory as the static file.
+        setup_path: str, path to an XML scaling set up file if default setup is not to be used
+        base_model_file:
 
-    if scale_setup_filename is None:
-        message = "Select the scaling setup file."
-        tbox.infobox(message)
-        scale_setup = tbox.get_xml_file(instruction=message)
-        if scale_setup is None:
-            raise MissingPathException("Scaling tool setup XML file", "interrupting")
-        scale_setup_filename = scale_setup.name
+    Returns:
+        Full path to the scaled model if scaling was a success, None if it failed.
 
-    scale_tool = osim.ScaleTool(scale_setup_filename)
-    scale_tool.getModelScaler().setMarkerFileName(static_filename)
+    """
+    static_file = os.path.basename(static_filepath)
+    output_file = output_filepath if output_filepath is not None else static_filepath.replace(".trc", "_scaled_model.osim")
+
+    scaling_directory = os.path.dirname(static_filepath)
+    prepare_scaling_setup(scaling_directory, base_model_file)
+    scaling_setup_file = os.path.join(scaling_directory, "scaling_setup.xml")
+
+    scale_tool = osim.ScaleTool(scaling_setup_file)
+
+    scale_tool.getModelScaler().setMarkerFileName(static_file)
 
     scale_tool.setPrintResultFiles(True)
-    scale_tool.getModelScaler().setOutputModelFileName(output)
-    scale_tool.getMarkerPlacer().setOutputModelFileName(output)
-    scale_tool.getMarkerPlacer().setCoordinateFileName(static_filename)
+    scale_tool.getModelScaler().setOutputModelFileName(output_file)
+    scale_tool.getMarkerPlacer().setOutputModelFileName(output_file)
+    scale_tool.getMarkerPlacer().setCoordinateFileName(static_file)
 
-    scale_tool.run()
+    worked = scale_tool.run()
 
-    print("Something happened")
+    return output_file if worked else None
 
 
 def setup_ik():
-    setup = tbox.get_xml_file('Select the XML set up file for IK tool.')
-    if setup is not None:
-        return osim.InverseKinematicsTool(setup)
+    ik_setup = tbox.get_xml_file('Select the XML set up file for IK tool.')
+    if ik_setup is not None:
+        return osim.InverseKinematicsTool(ik_setup)
     return None
 
 
@@ -216,8 +243,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    static = r"C:\Users\lgre690\Documents\MyData\test_osim\temp\Static_0102.trc"
+    output = r"C:\Users\lgre690\Documents\MyData\test_osim\temp\scaling_result.osim"
+
     # main()
-    scale_model(base_model, static, setup)
+    print(scale_model(static, output))
 
 
 
