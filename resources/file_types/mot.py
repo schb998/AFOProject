@@ -7,6 +7,7 @@ import ast
 import random
 from typing import Self
 import logging
+from ptb.util.data import Yac3do
 
 # todo: double-check operations when int/float/double difference
 
@@ -212,6 +213,25 @@ class MOT:
             error_message = error_message + getattr(e, 'message', repr(e))
             logging.warning(error_message)
             raise OSError(error_message)
+
+    @classmethod
+    def load_from_c3d(cls, filepath: str, filename: str = None,) -> Self:
+        c3d = Yac3do(filepath)
+        c3d_name = os.path.basename(c3d.filename)
+        ptb_mot = c3d.analog
+
+        data_columns = ptb_mot.columns.values.tolist()[2:]
+        frames = [int((ptb_mot.values[i][0] - 1) * 10 + ptb_mot.values[i][1] + 1) for i in
+                  range(ptb_mot.values.shape[0])]
+
+        data = pd.DataFrame(ptb_mot.values[:,2::], columns=data_columns, index=frames)
+
+        return cls(name=c3d_name.replace(".c3d", "") if filename is None else filename.replace(".mot", ""),
+                   filename = c3d_name.replace(".c3d", ".mot") if filename is None else filename,
+                   header_lines={},
+                   data=data,
+                   first_frame=frames[0])
+
 
     def rename(self, name: str = None, filename: str = None):
         """Updates the MOT object's name and/or file_name.

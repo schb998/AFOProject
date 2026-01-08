@@ -258,7 +258,7 @@ class TRC(object):
 
         Args:
             c3d:  path to a c3d file.
-            filename: name of the TRC file. Optional> if not given, filename will be the same as the c3d file.
+            filename: name of the TRC file. Optional. if not given, filename will be the same as the c3d file.
 
         Returns:
             TRC object
