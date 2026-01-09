@@ -22,7 +22,7 @@ if __name__ == "__main__":
     else:
         # update local paths:
         local.main_gui()
-        osim.configure_opensim()
+        osim.main()
         # ask user's preference
         save = local.call_should_save()
         show = local.call_should_show()

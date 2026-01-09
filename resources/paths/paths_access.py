@@ -62,13 +62,6 @@ def get_scaled_model_file() -> str:
     raise MissingPathException("scaled OpenSim model")
 
 
-def get_base_model_file() -> str:
-    content = model.get_local("osim_base_model")
-    if content is not None:
-        return content
-    raise MissingPathException("base OpenSim model")
-
-
 def get_raw_directory() -> str:
     content = model.get_local("raw_directory")
     if content is not None:

@@ -5,6 +5,25 @@ from tkinter.filedialog import askopenfile, askopenfilenames, askdirectory
 from tkinter.messagebox import showinfo
 import io
 
+def reformat(string: list[str] | tuple[str] | str | None) -> str:
+    """Reformat given object into a comprehensible string for gui usage.
+
+    Args:
+        string: object to reformat
+
+    Returns:
+        str: reformatted string
+    """
+    if string is None:
+        return "empty"
+    if isinstance(string, str):
+        return string
+    length = len(string)
+    s = ""
+    for i in range(length):
+        s = s + string[i] + "\n" if i != length - 1 else s + string[i]
+    return s
+
 
 def set_up_window(window: Tk, window_width: int = 500, window_height: int = 300) -> None:
     # get the screen dimension

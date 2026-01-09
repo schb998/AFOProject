@@ -16,7 +16,7 @@ def _update_labels():
         None
     """
     for lab in LABELS:
-        lab.config(text=_reformat(back.get_local(LABELS[lab])))
+        lab.config(text=tbox.reformat(back.get_local(LABELS[lab])))
 
 
 def _update_row():
@@ -44,26 +44,6 @@ def _update_button():
             BUTTON.state(['disabled'])
 
 
-def _reformat(string: list[str] | tuple[str] | str | None) -> str:
-    """Reformat given object into a comprehensible string.
-
-    Args:
-        string: object to reformat
-
-    Returns:
-        str: reformatted string
-    """
-    if string is None:
-        return "empty"
-    if isinstance(string, str):
-        return string
-    length = len(string)
-    s = ""
-    for i in range(length):
-        s = s + string[i] + "\n" if i != length - 1 else s + string[i]
-    return s
-
-
 def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     """Set up a line on given window to manage output directory.
 
@@ -79,7 +59,7 @@ def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     label = Label(root, text="Output directory:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local("output_path")), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("output_path")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "output_path"})
 
@@ -125,7 +105,7 @@ def _setup_raw_mot(root: Tk) -> (Label, Label, Button, Button):
     label = Label(root, text="Raw MOT files to process:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local("raw_mot")), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_mot")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_mot"})
 
@@ -180,7 +160,7 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     label = Label(root, text="Raw TRC files to process:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local("raw_trc")), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_trc")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_trc"})
 
@@ -235,7 +215,7 @@ def _set_up_raw_directory(root: Tk) -> (Label, Label, Button, Button):
     label = Label(root, text="Directory to process:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local("raw_directory")), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_directory")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_directory"})
 
