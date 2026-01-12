@@ -12,7 +12,7 @@ from pandas import RangeIndex
 from ptb.util.data import Yac3do
 
 # todo: double-check operations when int/float/double difference
-# todo: check indexing issue
+# todo: check c3d load-write issue
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
@@ -113,8 +113,7 @@ class MOT:
     def __init__(self, name: str,
                  filename: str,
                  header_lines: MOTMetadata,
-                 data: pd.DataFrame,
-                 first_frame: int = 0) \
+                 data: pd.DataFrame) \
             -> None:
         """Creates a MOT object.
 
@@ -123,14 +122,13 @@ class MOT:
             filename: name of the MOT file associated with the object
             header_lines: header lines of the MOT file
             data: data
-            first_frame: identifier of the first frame of the data
         """
         self.name = name
         self.filename = filename
         self.header_lines = header_lines
         self.data = data
         self.col_names = data.columns.to_list()
-        self.first_frame = first_frame
+        self.first_frame = data.index.values[0]
 
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
@@ -145,10 +143,9 @@ class MOT:
         """
         if not isinstance(other, MOT):
             return False
-        if (self.header_lines != other.header_lines) \
-                or (self.col_names != other.col_names) \
-                or (self.first_frame != other.first_frame) \
-                or not (self.data.equals(other.data)):
+        if self.header_lines != other.header_lines or self.col_names != other.col_names or self.first_frame != other.first_frame:
+            return False
+        if not self.data.equals(other.data):
             return False
         return True
 
@@ -238,10 +235,11 @@ class MOT:
             return n > on
 
     @classmethod
-    def load_from_mot(cls, filepath: str, filename: str = None, separator=r'\s+') -> Self:
+    def load_from_mot(cls, filepath: str, filename: str = None, separator=r'\s+', start_index: int = 1) -> Self:
         """Reads data from a MOT file into a MOT object.
 
         Args:
+            start_index:
             separator: character used to separate data in the mot file.
                 r'\\s' by default. OpenSim generated files require r'\\t'.
             filepath (string): path to the MOT file.
@@ -288,6 +286,7 @@ class MOT:
                 metadata = MOTMetadata.get_from_dict(header_lines)
 
                 data = pd.read_csv(file, sep=separator, engine='python')
+                data.index = [i for i in range(start_index, start_index + data.shape[0])]
                 file.close()
                 return cls(name, filename, metadata, data)
         except Exception as e:
@@ -308,13 +307,14 @@ class MOT:
         data_columns = ptb_mot['analog_channels_label']
         first_frame = ptb_mot['first_frame']
         raw_data = ptb_mot['analog_data']
-        data = pd.DataFrame(raw_data[data_columns], columns=data_columns, index=RangeIndex(int(first_frame), int(metadata.number_rows + first_frame - 1), 1))
+        data = raw_data[data_columns]
+        index = [i for i in range(first_frame, first_frame + data.shape[0] - 1)]
+        data = pd.DataFrame(data, columns=data_columns, index=index)
 
         return cls(name=c3d_name.replace(".c3d", "") if filename is None else filename.replace(".mot", ""),
                    filename = c3d_name.replace(".c3d", ".mot") if filename is None else filename,
                    header_lines=metadata,
-                   data=data,
-                   first_frame=first_frame)
+                   data=data)
 
     def rename(self, name: str = None, filename: str = None):
         """Updates the MOT object's name and/or file_name.
@@ -437,7 +437,7 @@ class MOT:
         d = {}
         for col in self.data.columns.to_list():
             d[col] = self.data[col][first_point:last_point]
-        return MOT(name, file_name, headers, pd.DataFrame(data=d), first_point)
+        return MOT(name, file_name, headers, pd.DataFrame(data=d))
 
     def segment(self, points: list[int], index: bool = False) -> list[Self]:
         """Segments the current MOT file.
@@ -472,8 +472,8 @@ class MOT:
 
         # segment the file:
         for i in range(len(points) - 1):
-            start = points[i] + 1 if i != first_frame else points[i]
-            end = points[i + 1] + 1 if i != len(points) - 1 else points[i + 1]
+            start = points[i]
+            end = points[i + 1]
 
             name = self.name + "_segmented_" + str(start) + "-" + str(end - 1) \
                 if not index else self.name + "_cycle" + str(i)
@@ -483,7 +483,7 @@ class MOT:
             for col in self.data.columns.to_list():
                 d[col] = self.data[col][start-first_frame:end-first_frame]
             headers.number_rows = len(d["time"])
-            resulting_mots.append(MOT(name, file_name, deepcopy(headers), pd.DataFrame(data=d), start))
+            resulting_mots.append(MOT(name, file_name, deepcopy(headers), pd.DataFrame(data=d)))
 
         # return:
         return resulting_mots
@@ -635,7 +635,7 @@ class _Test:
             "MOT Object from same file should be equal."
         assert MOT.load_from_mot(os.path.join(path, filename_standard)) != MOT.load_from_mot(
             os.path.join(path, filename_nan)), \
-            "MOT Object from different files should be not equal."
+            "MOT Object from different files should not be equal."
 
     @staticmethod
     def _test_nestled_loads() -> None:
@@ -726,16 +726,15 @@ class _Test:
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         mots = mot.segment(rands)
-        assert len(mots) == 3, \
-            error_message + "wrong number of segments."
+        assert len(mots) == 3, error_message + "wrong number of segments."
         assert mots[0].data.shape[1] == mot.data.shape[1] \
                and mots[1].data.shape[1] == mot.data.shape[1] \
                and mots[2].data.shape[1] == mot.data.shape[1], error_message + "wrong number of columns."
         assert mots[0].data.shape[0] + mots[1].data.shape[0] + mots[2].data.shape[0] == mot.data.shape[0], \
             error_message + "data lost in segmentation."
-        assert mots[0].data.shape[0] == mots[0].header_lines.number_rows == rand1 + 1 - ff
-        assert mots[1].data.shape[0] == mots[1].header_lines.number_rows == rand2 - rand1
-        assert mots[2].data.shape[0] == mots[2].header_lines.number_rows == lf - rand2, (
+        assert mots[0].data.shape[0] == mots[0].header_lines.number_rows == rand1 - ff \
+            and mots[1].data.shape[0] == mots[1].header_lines.number_rows == rand2 - rand1 \
+            and mots[2].data.shape[0] == mots[2].header_lines.number_rows == lf - rand2 + 1, (
                 error_message + "segmentation at wrong frames.")
         assert mot != mots[0] and mot != mots[1] and mot != mots[2], \
             error_message + "original MOT object should not equal to segmented objects."
@@ -770,7 +769,7 @@ class _Test:
         except Exception as e:
             assert False, f"MOT object loaded from C3D file couldn't be saved: + {getattr(e, 'message', repr(e))}"
         mot_copy = MOT.load_from_mot(os.path.join(output, mot.filename))
-        # assert mot == mot_copy, "MOT object loaded from the save of a C3D-loaded MOT object should equal the original"
+        assert mot == mot_copy, "MOT object loaded from the save of a C3D-loaded MOT object should equal the original"
 
 
 if __name__ == "__main__":
