@@ -1,7 +1,8 @@
 import os
 from resources.custom_exceptions import *
 import resources.paths.paths_back as model
-from resources.paths.paths_gui import main as main_gui, quick_setup
+from resources.paths.paths_gui import main as main_gui
+from resources.tkinter_toolbox import ask_question
 
 
 def call_to_gui() -> None:
@@ -9,11 +10,19 @@ def call_to_gui() -> None:
 
 
 def call_quick_setup() -> bool:
-    return quick_setup()
+    return ask_question("Run the pipeline using quick setup?", "Quick setup")
 
+def call_should_save() -> bool:
+    return ask_question("Save the optional files?", "Saving preference")
 
-def get_output_path() -> str:
+def call_should_show() -> bool:
+    return ask_question("Show the plots as the code run?", "Show preference")
+
+def get_output_path(trial_name: str = None) -> str:
     """Get the pipeline's saved output path.
+
+    Args:
+        trial_name (str, optional): Trial name. Defaults to None.
 
     Returns:
         str, stored output path
@@ -25,6 +34,9 @@ def get_output_path() -> str:
     content = model.get_local("output_path")
     if content is None:
         raise MissingPathException("Output directory")
+    if trial_name is not None:
+        content = os.path.join(content, trial_name)
+        os.makedirs(content, exist_ok=True)
     return content
 
 
@@ -50,11 +62,11 @@ def get_scaled_model_file() -> str:
     raise MissingPathException("scaled OpenSim model")
 
 
-def get_base_model_file() -> str:
-    content = model.get_local("osim_base_model")
+def get_raw_directory() -> str:
+    content = model.get_local("raw_directory")
     if content is not None:
         return content
-    raise MissingPathException("base OpenSim model")
+    raise MissingPathException("raw directory")
 
 
 def get_raw_mot_path() -> list[str]:
@@ -71,38 +83,38 @@ def get_raw_trc_path() -> list[str]:
     raise MissingPathException("list of raw trcs to process")
 
 
-def get_corrected_mot_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'corrected_mot')
+def get_corrected_mot_path(trial_name: str = None) -> str:
+    path = os.path.join(get_output_path(trial_name), 'corrected_mot')
     os.makedirs(path, exist_ok=True)
     return path
 
 
-def get_segmented_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'segmented')
+def get_segmented_path(trial_name: str = None) -> str:
+    path = os.path.join(get_output_path(trial_name), 'segmented')
     os.makedirs(path, exist_ok=True)
     return path
 
 
-def get_external_loads_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'external_loads')
+def get_external_loads_path(trial_name: str = None) -> str:
+    path = os.path.join(get_output_path(trial_name), 'external_loads')
     os.makedirs(path, exist_ok=True)
     return path
 
 
-def get_ik_results_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'ik_results')
+def get_ik_results_path(trial_name: str = None) -> str:
+    path = os.path.join(get_output_path(trial_name), 'ik_results')
     os.makedirs(path, exist_ok=True)
     return path
 
 
-def get_id_results_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'id_results')
+def get_id_results_path(trial_name: str = None) -> str:
+    path = os.path.join(get_output_path(trial_name), 'id_results')
     os.makedirs(path, exist_ok=True)
     return path
 
 
-def get_power_filtered_path() -> str:
-    path = os.path.join(model.get_local("output_path"), 'power_filtered')
+def get_power_filtered_path(trial_name: str = None) -> str:
+    path = os.path.join(get_output_path(trial_name), 'power_filtered')
     os.makedirs(path, exist_ok=True)
     return path
 

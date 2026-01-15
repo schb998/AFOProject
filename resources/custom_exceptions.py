@@ -82,7 +82,10 @@ class WrongExtensionException(InvalidPathException):
             given_ext: given extension. Optional
         """
         if given_ext is None:
-            given_ext = os.path.basename(given).split(".")[1]
+            try:
+                given_ext = os.path.basename(given).split(".")[1]
+            except IndexError:
+                given_ext = "directory (no extension)"
         super().__init__(expected, given, f"given file is of extension \"{given_ext}\", should be \"{expected_ext}\"")
 
 

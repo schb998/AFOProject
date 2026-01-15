@@ -1,3 +1,4 @@
+import bisect
 import os
 from copy import deepcopy
 import pandas as pd
@@ -10,8 +11,6 @@ import logging
 import re
 from ptb.util.io.mocap.low_lvl.c3d import Reader
 
-# todo: further testing for segmentation methods comparison
-# todo: make get_first_frame method instead of first_frame attribute ?
 # todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
@@ -259,7 +258,7 @@ class TRC(object):
 
         Args:
             c3d:  path to a c3d file.
-            filename: name of the TRC file. Optional> if not given, filename will be the same as the c3d file.
+            filename: name of the TRC file. Optional. if not given, filename will be the same as the c3d file.
 
         Returns:
             TRC object
@@ -523,38 +522,51 @@ class TRC(object):
         copy.filename = copy.filename.replace(".trc", "_copy.trc")
         return copy
 
-    def sample(self, first_frame: int, last_frame: int) -> Self:
+    def sample(self, first_point: int | float, last_point: int | float, force_time: bool = False) -> Self:
         """Samples the current TRC file between the given points.
 
+        Object will be sampled at frames if both points are integers and force_time is False, and at time if not.
+
         Args:
-            first_frame (int): index of the first frame, included.
-            last_frame  (int): index of the last frame, excluded.
+            first_point: int or float, the index or the time of the first frame, included.
+            last_point: int or float, the index or the time of the last frame, included.
+            force_time: bool, whether the previous are to be read as timestamps even if they're integers
 
         Returns:
-            TRC: A new TRC object.
+            TRC: sampled TRC object.
 
         Raises:
             IndexError: if the given points are out of bound for the data.
         """
-        frames = sorted((first_frame, last_frame))
-        first_frame = frames[0]
-        last_frame = frames[1]
+        frames = sorted((first_point, last_point))
+        first_point = frames[0]
+        last_point = frames[1]
+
         ff = self.first_frame
 
-        if (first_frame < self.first_frame) or (last_frame > self.first_frame + self.data.shape[0]):
-            raise IndexError("Cannot cut at given frames: out of bound index.")
+        if isinstance(first_point, int) and isinstance(last_point, int) and not force_time:
+            if (first_point < ff) or (last_point > ff + self.data.shape[0]):
+                raise IndexError("Cannot cut at given frames: out of bound index.")
 
-        file_name = self.filename.replace('.trc', "_segmented_" + str(first_frame) + "-" + str(last_frame - 1) + '.trc')
+        else:
+            time_scale = self.data['Time']
+            if first_point < time_scale[ff] or last_point > time_scale[ff + self.data.shape[0] - 1]:
+                raise IndexError("Cannot cut at given times: out of bound index.")
+
+            first_point = bisect.bisect_left(time_scale, first_point)
+            last_point = bisect.bisect_right(time_scale, last_point)
+
+        file_name = self.filename.replace('.trc', "_segmented_" + str(first_point) + "-" + str(last_point - 1) + '.trc')
         metadata = deepcopy(self.metadata)
-        metadata['NumFrames'] = last_frame - first_frame
+        metadata['NumFrames'] = last_point - first_point
 
         d = {}
         for col in self.data.columns.to_list():
-            d[col] = self.data[col][first_frame - ff:last_frame - ff]
+            d[col] = self.data[col][first_point - ff:last_point - ff]
         return TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names), deepcopy(self.marker_dict),
                    pd.DataFrame(data=d), self.num_coordinates, file_header=deepcopy(self.file_header))
 
-    def segment(self, points: list[int]) -> list[Self]:
+    def segment(self, points: list[int], index: bool = False) -> list[Self]:
         """Segments the data frame according to the given frames point.
 
          Each fragment contains frames from points[i-1] (included) to points[i] (excluded),
@@ -563,6 +575,8 @@ class TRC(object):
 
         Parameters:
             points: list of integer, frames to segment the object at.
+            index (bool): whether to rename the segments by their index.
+                If False, segment name will include their starting and ending frame.
 
         Returns:
             List of the segmented TRC objects.
@@ -574,9 +588,11 @@ class TRC(object):
         # sort the frames at which to segment the object:
         points = sorted(points)
         ff = self.first_frame
-        lf = self.first_frame + self.data.shape[0]
+        lf = ff + self.data.shape[0]
         if (points[0] < ff) or (points[-1] > lf):
-            raise IndexError("Cannot cut at given frames: out of bound index.")
+            message = f"Cannot cut {self.filename} at given frames: out of bound index."
+            logging.warning(message)
+            raise IndexError(message)
         points.append(lf)
         points.insert(0, ff)
 
@@ -584,46 +600,21 @@ class TRC(object):
 
         # segment the file:
         for i in range(len(points) - 1):
-            start = points[i]
-            end = points[i + 1] if i + 1 != len(points) else points[i + 1] + 1
-            metadata = deepcopy(self.metadata)
-            metadata['NumFrames'] = end - start
-            file_name = self.filename.replace(".trc", "_segmented_" + str(start) + "-" + str(end - 1) + ".trc")
+            start = points[i] + 1 if i != 0 else points[i]
+            end = points[i + 1] + 1 if i != len(points) - 1 else points[i + 1]
+
+            file_name = self.filename.replace(".trc", "_segmented_" + str(start) + "-" + str(end - 1) + ".trc") \
+                if not index else self.filename.replace(".trc", "_cycle" + str(i) + ".trc")
+
             d = {}
             for col in self.data.columns.to_list():
-                d[col] = self.data[col][start - ff:end - ff]
+                d[col] = self.data[col][start-ff:end-ff]
+            metadata = deepcopy(self.metadata)
+            metadata['NumFrames'] = len(d["Time"])
             resulting_trcs.append(TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names),
                                       deepcopy(self.marker_dict), pd.DataFrame(data=d), self.num_coordinates,
                                       file_header=deepcopy(self.file_header)))
 
-        return resulting_trcs
-
-    def segment_bis(self, points: list[int]) -> list[Self]:
-        """Segments the data frame according to the given frames point.
-
-         Each fragment contains frames from points[i-1] (included) to points[i] (excluded),
-          with added segments: first segment from first_frame_of_data (included) to points[0] (excluded)
-          and last segment from points[-1] (included) to last_frame_of_data (included).
-
-        Parameters:
-            points: list of integer, frames to segment the object at.
-
-        Returns:
-            List of the segmented TRC objects.
-
-        Raises:
-            IndexError if given points out of index.
-
-        """
-        points = sorted(points)
-        if (points[0] < self.first_frame) or (points[-1] > self.data.shape[0] + self.first_frame):
-            raise IndexError("Cannot cut at given frames: out of bound index.")
-        points.append(self.data.shape[0] + self.first_frame)
-        points.insert(0, self.first_frame)
-        resulting_trcs = []
-        for i in range(len(points) - 1):
-            resulting_trcs.append(self.sample(points[i], points[i + 1])) if i != len(points) - 1 else \
-                resulting_trcs.append(self.sample(points[i], points[i + 1] + 1))
         return resulting_trcs
 
     @classmethod
@@ -772,9 +763,9 @@ class _Test:
         _Test._test_nestled_loads()
         _Test._test_operations()
         _Test._test_copy()
-        _Test._test_sample()
-        _Test._test_segmentation()
-        _Test._test_segmentation_bis()
+        for i in range(10):
+            _Test._test_sample()
+            _Test._test_segmentation()
         _Test._test_save()
         _Test._test_load_all()
         _Test._test_save_all()
@@ -838,9 +829,11 @@ class _Test:
     def _test_sample() -> None:
         trc = TRC.load_from_trc(os.path.join(path, filename_standard))
         length = trc.data.shape[0]
+
+        # test on frame sampling:
         rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
         rand1, rand2 = rands[0], rands[1]
-        error_message = f"Sampling method is not working with values {rand1, rand2}: "
+        error_message = f"Sampling method (frame) is not working with values {rand1, rand2}: "
         sample = trc.sample(rand1, rand2)
         assert sample.data.shape[1] == trc.data.shape[1], \
             error_message + "wrong number of columns."
@@ -853,12 +846,37 @@ class _Test:
         assert sample == sample2, \
             error_message + "calls on object with same parameters should be equal."
 
+        # test on time sampling
+        time_scale = trc.data['Time']
+        time_firstframe = time_scale[trc.first_frame]
+        time_lastframe = time_scale[trc.first_frame + trc.data.shape[0] - 1]
+
+        rands = sorted([random.uniform(time_firstframe, time_lastframe-1),
+                        random.uniform(time_firstframe, time_lastframe-1)])
+        rand1, rand2 = rands[0], rands[1]
+        frame1, frame2 = bisect.bisect_left(time_scale, rand1), bisect.bisect_right(time_scale, rand2)
+
+        error_message = f"Sampling method (time) is not working with values {rand1, rand2}: "
+        sample = trc.sample(rand1, rand2)
+        assert sample.data.shape[1] == trc.data.shape[1], \
+            error_message + "wrong number of columns."
+        assert sample.data.shape[0] == frame2 - frame1 \
+               and trc.data.shape[0] == sample.data.shape[0] + frame1 + (length - frame2), (
+                error_message + "sampling at wrong frames.")
+        assert trc != sample, \
+            error_message + "original TRC object should not equal sampled objects."
+        sample2 = trc.sample(rand1, rand2)
+        assert sample == sample2, \
+            error_message + "calls on object with same parameters should be equal."
+
     @staticmethod
     def _test_segmentation() -> None:
         trc = TRC.load_from_trc(os.path.join(path, filename_standard))
-        ff = trc.first_frame
         length = trc.data.shape[0]
-        rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
+        ff = trc.first_frame
+        lf = length + ff - 1
+
+        rands = sorted((random.randint(ff, lf), random.randint(ff, lf)))
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment(rands)
@@ -869,34 +887,9 @@ class _Test:
                and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
-        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 - ff \
+        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 + 1 - ff \
                and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == (length + ff) - rand2, (
-                error_message + "segmentation at wrong frames.")
-        assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
-            error_message + "original TRC object should not equal to segmented objects."
-        assert trcs == trc.segment([rand1, rand2]), \
-            error_message + "calls on object with same parameters should be equal."
-
-    @staticmethod
-    def _test_segmentation_bis() -> None:
-        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
-        ff = trc.first_frame
-        length = trc.data.shape[0]
-        rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
-        rand1, rand2 = rands[0], rands[1]
-        error_message = f"Segmentation method is not working with values {rand1, rand2}: "
-        trcs = trc.segment_bis(rands)
-        assert len(trcs) == 3, \
-            error_message + "wrong number of segments."
-        assert trcs[0].data.shape[1] == trc.data.shape[1] \
-               and trcs[1].data.shape[1] == trc.data.shape[1] \
-               and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
-        assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
-            error_message + "data lost in segmentation."
-        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 - ff \
-               and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == (length + ff) - rand2, (
+               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == lf - rand2, (
                 error_message + "segmentation at wrong frames.")
         assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
             error_message + "original TRC object should not equal to segmented objects."

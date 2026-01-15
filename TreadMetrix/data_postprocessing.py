@@ -1,13 +1,19 @@
+from matplotlib.widgets import SpanSelector
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
-import resources.paths.paths_access as local
+from resources.custom_exceptions import MissingPathException
 import os
 from copy import deepcopy
 from scipy.signal import butter, filtfilt, find_peaks
 import matplotlib.pyplot as plt
 import numpy as np
+from resources.trial_class import Trial, GaitCycle
+
 
 # todo: check segment_at_heel_strikes function when mot_frame_rate is None // trc_rate is not in trc.metadata
+
+selected_start = -1
+selected_end = -1
 
 
 def filter_grf(mot: MOT, fs: float) -> None:
@@ -187,7 +193,7 @@ def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> di
     return heel_contacts
 
 
-def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: dict[str, list[int]], side: str)\
+def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: dict[str, list[int]], side: str) \
         -> None:
     """Sets GRF and related columns to zero between toe-off and next heel strike.
 
@@ -230,8 +236,8 @@ def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: 
     mot_df.data = df_corrected
 
 
-def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]],
-                     output: str, show: bool = False) -> None:
+def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]], output: str) \
+        -> None:
     """Saves plot of the vertical forces with toe offs and heel strikes.
 
     Args:
@@ -239,51 +245,93 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
         heel_strikes: heel strikes moment, listed in directory by side.
         toe_offs: toe offs moment, listed in directory by side
         output: output directory name.
-        show: whether to show the figure when method is called.
 
     """
-    plt.figure(figsize=(14, 6))
+    global selected_start, selected_end
+    fig, (ax1, ax2) = plt.subplots(2, figsize=(8, 6))
+
+    ax1.set_title(f"Vertical GRFs with Toe-Offs and Heel Strikes: {mot.filename}")
+    ax2.set_title('Data to process')
+    ax1.set_xlabel("Time [s]")
+    ax2.set_xlabel("Time [s]")
+    ax1.set_ylabel('Force [N]')
+    ax2.set_ylabel('Force [N]')
+    ax1.grid(True)
+    ax2.grid(True)
+
+    fig.tight_layout()
+
+    os.makedirs(output, exist_ok=True)
+
     time_scale = mot.data['time'] if 'time' in mot.data.columns.tolist() else np.arange(mot.data.shape[0])
     right_fy = mot.data['ground_force2_vy']
     left_fy = mot.data['ground_force1_vy']
 
-    plt.plot(time_scale, right_fy, label='Right Fy', alpha=0.7)
-    plt.plot(time_scale, left_fy, label='Left Fy', alpha=0.7)
+    selected_start = time_scale.iloc[0]
+    selected_end = time_scale.iloc[-1]
+
+    ax1.plot(time_scale, right_fy, label='Right Fy', alpha=0.7, color='orange')
+    ax1.plot(time_scale, left_fy, label='Left Fy', alpha=0.7, color='green')
 
     # Toe-offs
-    plt.scatter([time_scale[i] for i in toe_offs['R']], [right_fy[i] for i in toe_offs['R']],
-                color='red', marker='x', label='Right Toe-Offs')
-    plt.scatter([time_scale[i] for i in toe_offs['L']], [left_fy[i] for i in toe_offs['L']],
-                color='green', marker='x', label='Left Toe-Offs')
+    ax1.scatter([time_scale[i] for i in toe_offs['R']], [right_fy[i] for i in toe_offs['R']],
+                color='darkorange', marker='x', label='Right Toe-Offs')
+    ax1.scatter([time_scale[i] for i in toe_offs['L']], [left_fy[i] for i in toe_offs['L']],
+                color='darkgreen', marker='x', label='Left Toe-Offs')
 
     # Heel strikes
-    plt.scatter([time_scale[i] for i in heel_strikes['R']], [right_fy[i] for i in heel_strikes['R']],
-                color='blue', marker='o', label='Right Heel Strikes')
-    plt.scatter([time_scale[i] for i in heel_strikes['L']], [left_fy[i] for i in heel_strikes['L']],
-                color='purple', marker='o', label='Left Heel Strikes')
+    ax1.scatter([time_scale[i] for i in heel_strikes['R']], [right_fy[i] for i in heel_strikes['R']],
+                color='darkorange', marker='o', label='Right Heel Strikes')
+    ax1.scatter([time_scale[i] for i in heel_strikes['L']], [left_fy[i] for i in heel_strikes['L']],
+                color='darkgreen', marker='o', label='Left Heel Strikes')
 
-    plt.title(f"Vertical GRFs with Toe-Offs and Heel Strikes: {mot.filename}")
-    plt.xlabel("Time [s]")
-    plt.ylabel("Force [N]")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    os.makedirs(output, exist_ok=True)
+
+    def onselect(xmin, xmax):
+        global selected_start
+        global selected_end
+
+        indmin, indmax = np.searchsorted(time_scale, (xmin, xmax))
+        indmax = min(len(time_scale) - 1, indmax)
+
+        x_time = list(time_scale[indmin:indmax])
+        y_right = right_fy[indmin:indmax]
+        y_left = left_fy[indmin:indmax]
+
+        if len(x_time) >= 2:
+            ax2.plot(x_time, y_right, label='Right Fy', alpha=0.7, color='orange')
+            ax2.plot(x_time, y_left, label='Left Fy', alpha=0.7, color='green')
+            ax2.set_xlim(x_time[0], x_time[-1])
+            ax2.set_ylim(min(y_right.min(), y_left.min()), max(y_right.max(), y_left.max()))
+            fig.canvas.draw_idle()
+            selected_start = indmin
+            selected_end = indmax
+
+
+    span = SpanSelector(
+        ax1,
+        onselect,
+        "horizontal",
+        useblit=True,
+        props=dict(alpha=0.5, facecolor="tab:grey"),
+        interactive=True,
+        drag_from_anywhere=True
+    )
+
+    fig.legend()
     plt.savefig(os.path.join(output,
                              f"{mot.filename.replace('.mot', '')}_vertical_grfs_with_toeoffs_heelstrikes.png"),
                 bbox_inches='tight')
-    if show:
-        plt.show()
+    plt.show()
 
 
-def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]], mot_frame_rate: float = None,
-                            trc: TRC = None, save: str = None) -> dict[str, dict[str, list[MOT | TRC]]]:
+
+def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[int]], mot_frame_rate: float = None,
+                            save: str = None) -> None:
     """Segment MOT (and matching TRC) object(s) according to heel_strikes.
 
     Args:
-        mot: MOT object to process.
+        trial: Trial object, corresponds to the trial to process the data from
         heel_strike_moments: dictionary of heel strikes, listed by side ("R"/"L").
-        trc: TRC object matching the given MOT. Optional.
         mot_frame_rate: frame rate of mot_file. Optional.
             Used when trc is not None, for faster results.
         save: Where to save the segmented files. Optional. Don't save if None.
@@ -292,15 +340,23 @@ def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]],
         dict: dictionary of the segmented objects, organized in lists by type (trc/mot) and side.
 
     """
+    mot = trial.corrected_grf
+    trc = trial.trc
+
     # segment mot object:
-    right_mots = mot.segment(heel_strike_moments['R'])[1:-1]
-    left_mots = mot.segment(heel_strike_moments['L'])[1:-1]
-    res = {'mot': {"Right": right_mots, "Left": left_mots}}
+    right_mots = mot.segment(heel_strike_moments['R'], True)[1:-1]
+    left_mots = mot.segment(heel_strike_moments['L'], True)[1:-1]
 
     if save is not None:
-        path = os.path.join(save, mot.filename.replace('.mot', ''))
-        MOT.save_multiple(right_mots, os.path.join(path, "Right"))
-        MOT.save_multiple(left_mots, os.path.join(path, "Left"))
+        right_path = os.path.join(save, "Right")
+        left_path = os.path.join(save, "Left")
+        MOT.save_multiple(right_mots, right_path)
+        MOT.save_multiple(left_mots, left_path)
+        trial.gait_cycles["Right"] = GaitCycle.to_gait_cycles(side="Right", grfs=right_mots, grf_path=right_path)
+        trial.gait_cycles["Left"] = GaitCycle.to_gait_cycles(side="Left", grfs=left_mots, grf_path=left_path)
+    else:
+        trial.gait_cycles["Right"] = GaitCycle.to_gait_cycles(side="Right", grfs=right_mots)
+        trial.gait_cycles["Left"] = GaitCycle.to_gait_cycles(side="Left", grfs=left_mots)
 
     # process trc object:
     if trc is not None:
@@ -319,13 +375,78 @@ def segment_at_heel_strikes(mot: MOT, heel_strike_moments: dict[str, list[int]],
                 trc_heel_strike_moments[side].append(int(heel_strike_moments[side][i] * rate_conversion))
 
         # segment trc:
-        right_trcs = trc.segment(trc_heel_strike_moments['R'])[1:-1]
-        left_trcs = trc.segment(trc_heel_strike_moments['L'])[1:-1]
-        res['trc'] = {"Right": right_trcs,  "Left": left_trcs}
+        right_trcs = trc.segment(trc_heel_strike_moments['R'], True)[1:-1]
+        left_trcs = trc.segment(trc_heel_strike_moments['L'], True)[1:-1]
 
         if save is not None:
-            path = os.path.join(save, mot.filename.replace('.mot', ''))
-            TRC.save_multiple(right_trcs, os.path.join(path, "Right"))
-            TRC.save_multiple(left_trcs, os.path.join(path, "Left"))
+            right_path = os.path.join(save, "Right")
+            left_path = os.path.join(save, "Left")
+            TRC.save_multiple(right_trcs, right_path)
+            TRC.save_multiple(left_trcs, left_path)
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Right"], trcs=right_trcs, trc_path=right_path)
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Left"], trcs=left_trcs, trc_path=left_path)
+        else:
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Right"], trcs=right_trcs)
+            GaitCycle.add_to_gait_cycles(trial.gait_cycles["Left"], trcs=left_trcs)
 
-    return res
+
+def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, show: bool = True,
+            save_optionals=False) -> None:
+    """Pipeline to process the raw data of a trial.
+
+     This method filters, applies baseline corrections, zeros the swing phases and segments the data at heel strikes.
+     It stores the results in the given Trial object.
+
+    Args:
+        save_optionals:
+        trial: Trial object, trial to process
+        save_plot_path: str, path to save the plots and corrected Ground Force Reaction (MOT) object.
+            Does not save if None.
+        save_segmented_path: str, path to save the segmented MOT and TRC objects. Does not save if None.
+        show: bool, whether to show the plots.
+
+    Returns:
+        None.
+
+    """
+    global selected_start, selected_end
+    frame_rate = 1 / np.mean(np.diff(trial.grf.data['time']))
+    print(f"\nProcessing: {trial.grf.filename} with sampling frequency: {frame_rate:.2f} Hz.")
+
+    # apply filters and baseline correction:
+    corrected_grf = trial.grf.copy()
+    corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
+    filter_grf(corrected_grf, frame_rate)
+    baseline_correct_debug(corrected_grf, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'],
+                           output_path=save_plot_path if save_optionals else None, show=show)
+    baseline_correct_debug(corrected_grf, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'],
+                           output_path=save_plot_path if save_optionals else None, show=show)
+
+    # detect toe off and heel strikes:
+    toe_off_moments = detect_toe_offs(corrected_grf, frame_rate)
+    heel_strike_moments = detect_heel_strikes(corrected_grf, frame_rate)
+
+    # zero swing phases and correct the baseline:
+    zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'right')
+    zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'left')
+
+    # plot and save the corrected data:
+    plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path)
+
+    corrected_grf = corrected_grf.sample(int(selected_start), int(selected_end))
+    corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
+    for side in ["L", "R"]:
+        heel_strike_moments[side] = [strike for strike in heel_strike_moments[side]
+                                     if (selected_start <= strike <= selected_end)]
+
+    if save_optionals:
+        corrected_grf.save(save_plot_path)
+        trial.add_corrected_grf(corrected_grf=corrected_grf,
+                                path_to_corrected_grf=os.path.join(save_plot_path, corrected_grf.filename))
+    else:
+        trial.add_corrected_grf(corrected_grf=corrected_grf)
+
+    # segment according to heel strikes:
+    if trial.trc is None:
+        raise MissingPathException(f"Markers trajectory object (TRC) for trial {trial.name}", "No such object given.")
+    segment_at_heel_strikes(trial, heel_strike_moments, save=save_segmented_path)

@@ -1,5 +1,4 @@
 from tkinter import *
-from tkinter import messagebox
 from tkinter.filedialog import askdirectory, askopenfilenames
 from tkinter.ttk import *
 import resources.tkinter_toolbox as tbox
@@ -8,7 +7,7 @@ import resources.paths.paths_back as back
 LABELS: dict[Label, str] = {}
 BUTTON: Button
 CURRENT_ROW = 0
-title = "AFO project"
+default_title = "AFO project"
 
 def _update_labels():
     """Update content labels of the gui.
@@ -17,7 +16,7 @@ def _update_labels():
         None
     """
     for lab in LABELS:
-        lab.config(text=_reformat(back.get_local(LABELS[lab])))
+        lab.config(text=tbox.reformat(back.get_local(LABELS[lab])))
 
 
 def _update_row():
@@ -45,26 +44,6 @@ def _update_button():
             BUTTON.state(['disabled'])
 
 
-def _reformat(string: list[str] | tuple[str] | str | None) -> str:
-    """Reformat given object into a comprehensible string.
-
-    Args:
-        string: object to reformat
-
-    Returns:
-        str: reformatted string
-    """
-    if string is None:
-        return "empty"
-    if isinstance(string, str):
-        return string
-    length = len(string)
-    s = ""
-    for i in range(length):
-        s = s + string[i] + "\n" if i != length - 1 else s + string[i]
-    return s
-
-
 def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     """Set up a line on given window to manage output directory.
 
@@ -80,14 +59,14 @@ def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     label = Label(root, text="Output directory:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local("output_path")), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("output_path")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "output_path"})
 
     def select_button_click():
         message = "Select the directory in which to save the pipeline's files."
         tbox.infobox(message)
-        value = askdirectory(title=title + message, initialdir=back.get_default_searching_path())
+        value = askdirectory(title=default_title + message, initialdir=back.get_default_searching_path())
         valid = back.set_output_directory(value)
         if not valid:
             tbox.infobox("Selection does not match requirement. Issue could be existence or writeability.")
@@ -126,7 +105,7 @@ def _setup_raw_mot(root: Tk) -> (Label, Label, Button, Button):
     label = Label(root, text="Raw MOT files to process:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local("raw_mot")), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_mot")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_mot"})
 
@@ -181,7 +160,7 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     label = Label(root, text="Raw TRC files to process:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local("raw_trc")), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_trc")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     LABELS.update({selected: "raw_trc"})
 
@@ -221,32 +200,38 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     return label, selected, select_button, unselect_button
 
 
-def _setup_new_row(root: Tk, label_name: str, name_in_json: str, select_action, unselect_action):
-    """Set up a line on given window to manage a specific path. Has issues, not to use at the moment.
+def _set_up_raw_directory(root: Tk) -> (Label, Label, Button, Button):
+    """Set up a line on given window to manage raw MOT files to process.
 
-    Args:
-        root: root Tk window.
-        label_name: explanatory text of what is aked to the user.
-        name_in_json: name of the data to access in the path save.
-        select_action: method to call first when select button is clicked. Method should have no parameter.
-        unselect_action: method to call first when unselect button is clicked. Method should have no parameter.
+        Args:
+            root: root Tk window
 
-    Returns:
-        Explanatory Tkinter Label of the path asked.
-        Tkinter Label containing current content of the local save.
-        Selection Tkinter Button.
-        Deselection Tkinter Button.
-    """
-    raise NotImplemented
-    label = Label(root, text=label_name)
+        Returns:
+            Explanatory Tkinter Label of the path asked.
+            Tkinter Label containing current content of the local save.
+            Selection Tkinter Button.
+            Deselection Tkinter Button.
+        """
+    label = Label(root, text="Directory to process:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
 
-    selected = Label(root, text=_reformat(back.get_local(name_in_json)), background="darkgrey")
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_directory")), background="darkgrey")
     selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
-    LABELS.update({selected: name_in_json})
+    LABELS.update({selected: "raw_directory"})
 
     def select_button_click():
-        select_action()
+        message = "Select the directory whose files should be processed."
+        tbox.infobox(message)
+        selection = askdirectory(title=message, initialdir=back.get_default_searching_path())
+        valid, detail = back.set_raw_directory(selection)
+        if not valid:
+            message = f"Selection does not match requirement."
+            if detail is not None:
+                message = message + " " + detail
+            tbox.infobox(message)
+            return
+        if detail is not None:
+            tbox.infobox(detail)
         _update_labels()
         _update_button()
 
@@ -255,7 +240,7 @@ def _setup_new_row(root: Tk, label_name: str, name_in_json: str, select_action, 
     select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
 
     def unselect_button_click():
-        unselect_action()
+        back.delete_raw_directory()
         _update_labels()
         _update_button()
 
@@ -267,11 +252,6 @@ def _setup_new_row(root: Tk, label_name: str, name_in_json: str, select_action, 
     return label, selected, select_button, unselect_button
 
 
-def quick_setup() -> bool:
-    return messagebox.askokcancel("Quick setup", "Quick setup?")
-
-
-
 def main() -> None:
     root = Tk()
     root.title("Path management")
@@ -279,6 +259,12 @@ def main() -> None:
     root.columnconfigure(4)
 
     _setup_output_directory(root)
+    _set_up_raw_directory(root)
+
+    label = Label(root, text="OR")
+    label.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
+    _update_row()
+
     _setup_raw_mot(root)
     _setup_raw_trc(root)
 
