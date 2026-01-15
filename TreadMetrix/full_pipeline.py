@@ -1,9 +1,7 @@
 import os
 import re
 import resources.paths.paths_access as local
-from TreadMetrix.speed_categories import mot_file
 from resources.custom_exceptions import MissingPathException
-from resources.file_types.trc import filename_standard
 from resources.trial_class import Trial
 import osim_gestion as osim
 from data_postprocessing import process as post_processing
