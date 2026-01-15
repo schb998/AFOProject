@@ -172,8 +172,9 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
                 data = np.hstack((time_vec, data))
 
                 mot = MOT.load_from_mot(mot_path)
-                mot.data = pd.DataFrame(data)
-                mot.data.columns = header
+                data = pd.DataFrame(data)
+                data.columns = header
+                mot.update_data(data)
 
                 mot.save(ik_output_path)
                 cycle.add_ik(inverse_kinematic=mot_path, ik_object=mot)

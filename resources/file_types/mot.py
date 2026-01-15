@@ -7,20 +7,20 @@ import ast
 import random
 from typing import Self
 import logging
-
-from pandas import RangeIndex
 from ptb.util.data import Yac3do
+from resources.custom_exceptions import MissingPathException
 
 # todo: double-check operations when int/float/double difference
 # todo: check c3d load-write issue
+# todo: add an update_first_frame methods
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
 
 # working files:
-filename_standard = "MOT_standard.mot"
-filename_nan = "MOT_nan.mot"  # missing data should be handled
-filename_c3d = "C3D_standard.c3d"
+_filename_standard = "MOT_standard.mot"
+_filename_nan = "MOT_nan.mot"  # missing data should be handled
+_filename_c3d = "C3D_standard.c3d"
 
 class MOTMetadata:
     _string_version: str = "version"
@@ -76,26 +76,17 @@ class MOTMetadata:
             string = string + key + "=" + str(self.additional_metadata[key]) + "\n"
         return string
 
-
     @classmethod
-    def get_from_dict(cls, dictionary: dict):
-        """Creates a MOTMetadata object from a dictionary.
-        Args:
-        """
+    def from_dict(cls, dictionary):
         new = MOTMetadata()
+        new.version = dictionary.pop(MOTMetadata._string_version) if MOTMetadata._string_version in dictionary else None
+        new.number_rows = dictionary.pop(MOTMetadata._string_number_rows) if MOTMetadata._string_number_rows in dictionary else None
+        new.number_columns = dictionary.pop(MOTMetadata._string_number_columns) if MOTMetadata._string_number_columns in dictionary else None
+        new.in_degrees = dictionary.pop(MOTMetadata._string_in_degrees).strip().lower() == "yes" if MOTMetadata._string_in_degrees in dictionary else None
         for key in dictionary.keys():
-            match key:
-                case MOTMetadata._string_version:
-                    new.version = dictionary[key]
-                case MOTMetadata._string_number_rows:
-                    new.number_rows = dictionary[key]
-                case MOTMetadata._string_number_columns:
-                    new.number_columns = dictionary[key]
-                case MOTMetadata._string_in_degrees:
-                    new.in_degrees = str(dictionary[key]).strip().lower() == "yes"
-                case _:
-                    new.additional_metadata[key] = dictionary[key]
+            new.additional_metadata[key] = dictionary[key]
         return new
+
 
 
 class MOT:
@@ -108,20 +99,23 @@ class MOT:
         data:         DataFrame containing the data.
         col_names:    List of strings corresponding to the names of the data columns.
         first_frame:  Integer corresponding to the first frame of the data set. Default value = 0.
+        filepath:     String pointing to the MOT file associated with the object, if existing.
     """
 
     def __init__(self, name: str,
                  filename: str,
                  header_lines: MOTMetadata,
-                 data: pd.DataFrame) \
+                 data: pd.DataFrame,
+                 filepath: str = None) \
             -> None:
         """Creates a MOT object.
 
         Args:
-            name: name given to the data set
-            filename: name of the MOT file associated with the object
-            header_lines: header lines of the MOT file
-            data: data
+            name: str, name given to the data set
+            filename: str, name of the MOT file associated with the object
+            header_lines: MOTMetadata, header lines of the MOT file
+            data: pd.DataFrame, data
+            filepath: str, path to the corresponding MOT file if existing
         """
         self.name = name
         self.filename = filename
@@ -129,6 +123,7 @@ class MOT:
         self.data = data
         self.col_names = data.columns.to_list()
         self.first_frame = data.index.values[0]
+        self.filepath = filepath
 
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
@@ -239,7 +234,7 @@ class MOT:
         """Reads data from a MOT file into a MOT object.
 
         Args:
-            start_index:
+            start_index: int, first frame and start of the index. 1 is the default value.
             separator: character used to separate data in the mot file.
                 r'\\s' by default. OpenSim generated files require r'\\t'.
             filepath (string): path to the MOT file.
@@ -283,12 +278,12 @@ class MOT:
                             except ValueError:
                                 header_lines[temp[0].strip()] = md
                     line = next(file).strip("\n")
-                metadata = MOTMetadata.get_from_dict(header_lines)
+                metadata = MOTMetadata.from_dict(header_lines)
 
                 data = pd.read_csv(file, sep=separator, engine='python')
                 data.index = [i for i in range(start_index, start_index + data.shape[0])]
                 file.close()
-                return cls(name, filename, metadata, data)
+                return cls(name, filename, metadata, data, filepath = filepath)
         except Exception as e:
             error_message = error_message + getattr(e, 'message', repr(e))
             logging.warning(error_message)
@@ -333,7 +328,14 @@ class MOT:
             else:
                 self.filename = filename
 
-    def save(self, file_path: str, file_name: str = None):
+    def update_data(self, new_data: pd.DataFrame = None, filepath: str = None):
+        if new_data is not None:
+            self.data = new_data
+        self.first_frame = self.data.index.values[0]
+        self.col_names = list(self.data.columns)
+        self.filepath = filepath
+
+    def save(self, file_path: str = None, file_name: str = None):
         """Writes the MOT object into a MOT file.
 
         Does so at the given location, using the MOT object's filename parameter as the file's name.
@@ -350,13 +352,22 @@ class MOT:
             OSError: if the file could not be written.
         """
         # path and filename management:
-        os.makedirs(file_path, exist_ok=True)
         if file_name is None:
             file_name = self.filename
         else:
             if not file_name.endswith(".mot"):
                 file_name = file_name + ".mot"
-        full_path = os.path.join(file_path, file_name)
+
+        if file_path is None:
+            if self.filepath is None:
+                raise MissingPathException("path to directory",
+                                           f"no path provided to save MOT object {self.filename}")
+            else:
+                full_path = self.filepath
+        else:
+            full_path = os.path.join(file_path, file_name)
+
+        os.makedirs(file_path, exist_ok=True)
 
         # prepare content to be written:
         content = [self.name, "\n", str(self.header_lines), "endheader", "\n"]
@@ -389,6 +400,7 @@ class MOT:
         copy = deepcopy(self)
         copy.filename = copy.filename.replace(".mot", "_copy.mot")
         copy.name += '_copy'
+        copy.filepath = None
         return copy
 
     def sample(self, first_point: int | float, last_point: int | float, force_time: bool = False) -> Self:
@@ -624,23 +636,23 @@ class _Test:
     @staticmethod
     def _test_load() -> None:
         try:
-            m1 = MOT.load_from_mot(os.path.join(path, filename_standard))
-            m2 = MOT.load_from_mot(path, filename_nan)
+            m1 = MOT.load_from_mot(os.path.join(path, _filename_standard))
+            m2 = MOT.load_from_mot(path, _filename_nan)
             assert True
         except OSError:
             assert False, \
                 "File not read."
-        assert MOT.load_from_mot(os.path.join(path, filename_standard)) == MOT.load_from_mot(
-            os.path.join(path, filename_standard)), \
+        assert MOT.load_from_mot(os.path.join(path, _filename_standard)) == MOT.load_from_mot(
+            os.path.join(path, _filename_standard)), \
             "MOT Object from same file should be equal."
-        assert MOT.load_from_mot(os.path.join(path, filename_standard)) != MOT.load_from_mot(
-            os.path.join(path, filename_nan)), \
+        assert MOT.load_from_mot(os.path.join(path, _filename_standard)) != MOT.load_from_mot(
+            os.path.join(path, _filename_nan)), \
             "MOT Object from different files should not be equal."
 
     @staticmethod
     def _test_nestled_loads() -> None:
         try:
-            mot = MOT.load_from_mot(os.path.join(path, filename_nan))
+            mot = MOT.load_from_mot(os.path.join(path, _filename_nan))
             mot.save(output, "first_save.mot")
             mot_first_save = MOT.load_from_mot(os.path.join(output, "first_save.mot"))
             mot_first_save.save(output, "second_save.mot")
@@ -652,13 +664,13 @@ class _Test:
 
     @staticmethod
     def _test_operations() -> None:
-        mot1 = MOT.load_from_mot(os.path.join(path, filename_standard))
-        mot2 = MOT.load_from_mot(os.path.join(path, filename_nan))
+        mot1 = MOT.load_from_mot(os.path.join(path, _filename_standard))
+        mot2 = MOT.load_from_mot(os.path.join(path, _filename_nan))
         assert mot1 == mot1 and mot2 == mot2, \
             "Equality operation is not working."
         assert mot1 != mot2 and mot2 != mot1, \
             "Inequality operation is not working."
-        assert mot1 == MOT.load_from_mot(path, filename_standard) and mot2 == MOT.load_from_mot(path, filename_nan), \
+        assert mot1 == MOT.load_from_mot(path, _filename_standard) and mot2 == MOT.load_from_mot(path, _filename_nan), \
             "Objects loaded from same file should be equal."
         mot3, mot4 = mot1.copy(), mot1.copy()
         mot3.rename(name='foo', filename=mot1.filename)
@@ -668,13 +680,13 @@ class _Test:
 
     @staticmethod
     def _test_copy() -> None:
-        mot = MOT.load_from_mot(os.path.join(path, filename_standard))
+        mot = MOT.load_from_mot(os.path.join(path, _filename_standard))
         assert mot.copy() == mot, \
             "Copy method is not working."
 
     @staticmethod
     def _test_sample() -> None:
-        mot = MOT.load_from_mot(os.path.join(path, filename_standard))
+        mot = MOT.load_from_mot(os.path.join(path, _filename_standard))
         length = mot.data.shape[0]
 
         # test on frame sampling:
@@ -718,7 +730,7 @@ class _Test:
 
     @staticmethod
     def _test_segmentation() -> None:
-        mot = MOT.load_from_mot(os.path.join(path, filename_standard))
+        mot = MOT.load_from_mot(os.path.join(path, _filename_standard))
         length = mot.data.shape[0]
         ff = mot.first_frame
         lf = length + ff - 1
@@ -743,14 +755,14 @@ class _Test:
 
     @staticmethod
     def _test_save() -> None:
-        mot1 = MOT.load_from_mot(os.path.join(path, filename_standard))
+        mot1 = MOT.load_from_mot(os.path.join(path, _filename_standard))
         try:
             mot1.save(output)
             assert True
         except OSError:
             assert False, "File not written."
         try:
-            mot2 = MOT.load_from_mot(os.path.join(output, filename_standard))
+            mot2 = MOT.load_from_mot(os.path.join(output, _filename_standard))
             assert True
         except OSError:
             assert False, "Written file could not be read."
@@ -760,7 +772,7 @@ class _Test:
     @staticmethod
     def _test_c3d_load() -> None:
         try:
-            mot = MOT.load_from_c3d(os.path.join(path, filename_c3d))
+            mot = MOT.load_from_c3d(os.path.join(path, _filename_c3d))
             assert True
         except Exception as e:
             assert False, f"MOT file couldn't be loaded from C3D file: + {getattr(e, 'message', repr(e))}"
