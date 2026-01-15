@@ -15,6 +15,10 @@ from resources.trial_class import Trial, GaitCycle
 selected_start = -1
 selected_end = -1
 
+def reinitialize_inputs():
+    global selected_start, selected_end
+    selected_start = -1
+    selected_end = -1
 
 def filter_grf(mot: MOT, fs: float) -> None:
     """Filters data of a MOT object with a Butterworth filter.
@@ -450,3 +454,5 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
     if trial.trc is None:
         raise MissingPathException(f"Markers trajectory object (TRC) for trial {trial.name}", "No such object given.")
     segment_at_heel_strikes(trial, heel_strike_moments, save=save_segmented_path)
+
+    reinitialize_inputs()

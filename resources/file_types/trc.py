@@ -10,6 +10,7 @@ from typing import Self
 import logging
 import re
 from ptb.util.io.mocap.low_lvl.c3d import Reader
+from resources.custom_exceptions import *
 
 # todo: double-check operations when int/float/double difference
 
@@ -17,13 +18,41 @@ path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
 
 # working files:
-filename_standard = "TRC_standard.trc"
-filename_nan = "TRC_nan.trc"  # missing values should be handled
-filename_c3d = "C3D_standard.c3d"
+_filename_standard = "TRC_standard.trc"
+_filename_nan = "TRC_nan.trc"  # missing values should be handled
+_filename_c3d = "C3D_standard.c3d"
 # error management files:
-filename_missing_z7 = "TRC_missing_z7.trc"  # error : missing marker coordinate z7
+_filename_missing_z7 = "TRC_missing_z7.trc"  # error : missing marker coordinate z7
 
 coordinates_names = ['X', 'Y', 'Z', 'T', 'N']
+
+class TRCMetadata(object):
+    _string_data_rate: str = "FrameRate"
+    _string_camera_rate : str = "CameraRate"
+    _string_num_frames: str = 'NumFrames'
+    _string_num_markers: str = 'NumMarkers'
+    _string_units: str = 'Units'
+    _string_og_data_rate: str = 'OrigDataRate'
+    _string_og_start_frame: str = 'OrigDataStartFrame'
+    _string_og_num_frames: str = 'OrigNumFrames'
+
+
+    def __init__(self, metadata: dict[str, str | int | float]):
+        """Creates a TRCMetadata object."""
+
+        self.data_rate = metadata.pop(self._string_data_rate) if self._string_data_rate in metadata else None
+        self.camera_rate = metadata.pop(self._string_camera_rate) if self._string_camera_rate in metadata else None
+        self.num_frames = metadata.pop(self._string_num_frames) if self._string_num_frames in metadata else None
+        self.num_markers = metadata.pop(self._string_num_markers) if self._string_num_markers in metadata else None
+        self.units = metadata.pop(self._string_units) if self._string_units in metadata else None
+        self.og_data_rate = metadata.pop(self._string_og_data_rate) if self._string_og_data_rate in metadata else None
+        self.og_start_frame = metadata.pop(self._string_og_start_frame) if self._string_og_start_frame in metadata else None
+        self.og_num_frames = metadata.pop(self._string_og_num_frames) if self._string_og_num_frames in metadata else None
+        self.additional_metadata = {}
+        for key in metadata.keys():
+            self.additional_metadata[key] = metadata[key]
+
+
 
 class TRC(object):
     """TRC object.
@@ -38,12 +67,13 @@ class TRC(object):
         first_frame: Integer, first frame of the data.
         num_coordinates: Integer, number of coordinates by marker
         file_header: List of string, content of the TRC file's header line. Optional.
+        filepath: String of the path to the matching TRC file, if existing
 
     """
 
     def __init__(self, filename: str, meta_data: dict[str, str | int | float], marker_set: list[str],
                  col_names: list[str], marker_dict: dict[str, list[str]], data: pd.DataFrame, num_coordinates: int,
-                 file_header: list[str] = None) \
+                 file_header: list[str] = None, filepath : str = None) \
             -> None:
         """Creates a TRC object.
 
@@ -56,6 +86,7 @@ class TRC(object):
             data: data
             num_coordinates: number of coordinates by marker
             file_header: header line of the file
+            filepath: str, path to the matching TRC file, if existing
         """
         self.filename = filename
         self.metadata = meta_data
@@ -69,6 +100,7 @@ class TRC(object):
             self.file_header = file_header
         else:
             self.file_header = []
+        self.filepath = filepath
 
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
@@ -116,8 +148,7 @@ class TRC(object):
         Returns:
             bool
         """
-        if isinstance(other, TRC):
-            return self.filename.lower() > other.filename.lower()
+        return self.filename.lower() > other.filename.lower()
 
     def __lt__(self, other: Self) -> bool:
         """Overrides the default implementation of "strictly lower than" operation.
@@ -244,7 +275,7 @@ class TRC(object):
                     i += num_coordinates
 
                 res = cls(filename, meta_data, marker_set, sub_headers, marker_dictionary, data, num_coordinates,
-                          file_header if header else None)
+                          file_header if header else None, filepath = filepath)
                 logging.info(f'TRC object successfully loaded from file {filepath}.')
                 return res
         except Exception as e:
@@ -778,24 +809,24 @@ class _Test:
     @staticmethod
     def _test_load() -> None:
         try:
-            TRC.load_from_trc(path, filename_standard)
-            TRC.load_from_trc(path, filename_nan)
-            TRC.load_from_trc(os.path.join(path, filename_standard))
-            TRC.load_from_trc(os.path.join(path, filename_nan))
-            TRC.load_from_c3d(os.path.join(path, filename_c3d))
+            TRC.load_from_trc(path, _filename_standard)
+            TRC.load_from_trc(path, _filename_nan)
+            TRC.load_from_trc(os.path.join(path, _filename_standard))
+            TRC.load_from_trc(os.path.join(path, _filename_nan))
+            TRC.load_from_c3d(os.path.join(path, _filename_c3d))
             assert True
         except OSError:
             assert False, "File couldn't be loaded."
         try:
-            TRC.load_from_trc(os.path.join(path, filename_missing_z7))
-            assert False, f"File {filename_missing_z7} should raise an exception upon loading."
+            TRC.load_from_trc(os.path.join(path, _filename_missing_z7))
+            assert False, f"File {_filename_missing_z7} should raise an exception upon loading."
         except OSError:
             assert True
 
     @staticmethod
     def _test_nestled_loads() -> None:
         try:
-            trc = TRC.load_from_trc(os.path.join(path, filename_nan))
+            trc = TRC.load_from_trc(os.path.join(path, _filename_nan))
             trc.save(output, "first_save.trc")
             trc_first_save = TRC.load_from_trc(os.path.join(output, "first_save.trc"))
             trc_first_save.save(output, "second_save.trc")
@@ -807,13 +838,13 @@ class _Test:
 
     @staticmethod
     def _test_operations() -> None:
-        trc1 = TRC.load_from_trc(path, filename_standard)
-        trc2 = TRC.load_from_trc(path, filename_nan)
+        trc1 = TRC.load_from_trc(path, _filename_standard)
+        trc2 = TRC.load_from_trc(path, _filename_nan)
         assert trc1 == trc1 and trc2 == trc2, \
             "Equality operation is not working."
         assert trc1 != trc2 and trc2 != trc1, \
             "Inequality operation is not working."
-        assert trc1 == TRC.load_from_trc(path, filename_standard) and trc2 == TRC.load_from_trc(path, filename_nan), \
+        assert trc1 == TRC.load_from_trc(path, _filename_standard) and trc2 == TRC.load_from_trc(path, _filename_nan), \
             "Objects loaded from same file should be equal."
         trc3 = trc1.copy()
         trc3.rename('foo')
@@ -821,13 +852,13 @@ class _Test:
 
     @staticmethod
     def _test_copy() -> None:
-        trc = TRC.load_from_trc(path, filename_standard)
+        trc = TRC.load_from_trc(path, _filename_standard)
         assert trc.copy() == trc, \
             "Objects should be equal to copy."
 
     @staticmethod
     def _test_sample() -> None:
-        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
+        trc = TRC.load_from_trc(os.path.join(path, _filename_standard))
         length = trc.data.shape[0]
 
         # test on frame sampling:
@@ -871,7 +902,7 @@ class _Test:
 
     @staticmethod
     def _test_segmentation() -> None:
-        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
+        trc = TRC.load_from_trc(os.path.join(path, _filename_standard))
         length = trc.data.shape[0]
         ff = trc.first_frame
         lf = length + ff - 1
@@ -905,14 +936,14 @@ class _Test:
 
     @staticmethod
     def _test_save() -> None:
-        trc1 = TRC.load_from_trc(os.path.join(path, filename_standard))
+        trc1 = TRC.load_from_trc(os.path.join(path, _filename_standard))
         try:
             trc1.save(output)
             assert True
         except OSError:
             assert False, "File not written."
         try:
-            trc2 = TRC.load_from_trc(os.path.join(output, filename_standard))
+            trc2 = TRC.load_from_trc(os.path.join(output, _filename_standard))
             assert True
         except OSError:
             assert False, "Written file could not be read."
@@ -922,7 +953,7 @@ class _Test:
     @staticmethod
     def _test_save_all() -> None:
         _TRCCleanup.delete_all_files(output, True)
-        trc = TRC.load_from_trc(os.path.join(path, filename_standard))
+        trc = TRC.load_from_trc(os.path.join(path, _filename_standard))
         ff = trc.first_frame
         length = trc.data.shape[0]
         rands = sorted((random.randint(ff, length + ff), random.randint(ff, length + ff)))
@@ -946,7 +977,7 @@ class _Test:
 
     @staticmethod
     def _test_add_marker() -> None:
-        trc1 = TRC.load_from_trc(path, filename_standard)
+        trc1 = TRC.load_from_trc(path, _filename_standard)
         trc2 = trc1.copy()
         num_frames = trc2.data.shape[0]
         try:
@@ -962,7 +993,7 @@ class _Test:
 
     @staticmethod
     def _test_arrange() -> None:
-        trc = TRC.load_from_trc(path, filename_standard).copy()
+        trc = TRC.load_from_trc(path, _filename_standard).copy()
         trc.rename("test")
         trc.save(output)
 
