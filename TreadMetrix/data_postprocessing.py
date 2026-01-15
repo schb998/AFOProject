@@ -366,7 +366,7 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
     if trc is not None:
 
         # get the list of heel strikes:
-        trc_rate = int(trc.metadata['CameraRate']) if 'CameraRate' in trc.metadata.keys() else None
+        trc_rate = trc.metadata.camera_rate
         if mot_frame_rate is None:
             mot_frame_rate = 1 / np.mean(np.diff(mot.data['time']))
         if trc_rate is None:
@@ -402,12 +402,12 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
      It stores the results in the given Trial object.
 
     Args:
-        save_optionals:
         trial: Trial object, trial to process
         save_plot_path: str, path to save the plots and corrected Ground Force Reaction (MOT) object.
             Does not save if None.
         save_segmented_path: str, path to save the segmented MOT and TRC objects. Does not save if None.
         show: bool, whether to show the plots.
+        save_optionals: bool, whether to save the optional files (plots, corrected grf before segmentation)
 
     Returns:
         None.

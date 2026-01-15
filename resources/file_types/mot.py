@@ -55,13 +55,7 @@ class MOTMetadata:
             return False
         if self.in_degrees != other.in_degrees:
             return False
-        for key in self.additional_metadata.keys():
-            try:
-                if self.additional_metadata[key] != other.additional_metadata[key]:
-                    return False
-            except KeyError:
-                return False
-        return True
+        return self.additional_metadata == other.additional_metadata
 
 
     def __str__(self):
@@ -86,7 +80,6 @@ class MOTMetadata:
         for key in dictionary.keys():
             new.additional_metadata[key] = dictionary[key]
         return new
-
 
 
 class MOT:

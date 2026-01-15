@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import ast
 import random
-import time
 from typing import Self
 import logging
 import re
@@ -27,7 +26,7 @@ _filename_missing_z7 = "TRC_missing_z7.trc"  # error : missing marker coordinate
 coordinates_names = ['X', 'Y', 'Z', 'T', 'N']
 
 class TRCMetadata(object):
-    _string_data_rate: str = "FrameRate"
+    _string_data_rate: str = "DataRate"
     _string_camera_rate : str = "CameraRate"
     _string_num_frames: str = 'NumFrames'
     _string_num_markers: str = 'NumMarkers'
@@ -52,6 +51,60 @@ class TRCMetadata(object):
         for key in metadata.keys():
             self.additional_metadata[key] = metadata[key]
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TRCMetadata):
+            return False
+        if self.data_rate != other.data_rate:
+            return False
+        if self.camera_rate != other.camera_rate:
+            return False
+        if self.num_frames != other.num_frames:
+            return False
+        if self.num_markers != other.num_markers:
+            return False
+        if self.units != other.units:
+            return False
+        if self.og_data_rate != other.og_data_rate:
+            return False
+        if self.og_start_frame != other.og_start_frame:
+            return False
+        if self.og_num_frames != other.og_num_frames:
+            return False
+        return self.additional_metadata == other.additional_metadata
+
+    def __str__(self):
+        str_names = ""
+        str_values = ""
+
+        if self.data_rate is not None:
+            str_names = str_names + TRCMetadata._string_data_rate + "\t"
+            str_values = str_values + str(self.data_rate) + "\t"
+        if self.camera_rate is not None:
+            str_names = str_names + TRCMetadata._string_camera_rate + "\t"
+            str_values = str_values + str(self.camera_rate) + "\t"
+        if self.num_frames is not None:
+            str_names = str_names + TRCMetadata._string_num_frames + "\t"
+            str_values = str_values + str(self.num_frames) + "\t"
+        if self.num_markers is not None:
+            str_names = str_names + TRCMetadata._string_num_markers + "\t"
+            str_values = str_values + str(self.num_markers) + "\t"
+        if self.units is not None:
+            str_names = str_names + TRCMetadata._string_units + "\t"
+            str_values = str_values + str(self.units) + "\t"
+        if self.og_data_rate is not None:
+            str_names = str_names + TRCMetadata._string_og_data_rate + "\t"
+            str_values = str_values + str(self.og_data_rate) + "\t"
+        if self.og_start_frame is not None:
+            str_names = str_names + TRCMetadata._string_og_start_frame + "\t"
+            str_values = str_values + str(self.og_start_frame) + "\t"
+        if self.og_num_frames is not None:
+            str_names = str_names + TRCMetadata._string_og_num_frames + "\t"
+            str_values = str_values + str(self.og_num_frames) + "\t"
+        for key in self.additional_metadata.keys():
+            str_names = str_names + key + "\t"
+            str_values = str_values + str(key) + "\t"
+        return str_names + "\n" + str_values + "\n"
+
 
 
 class TRC(object):
@@ -71,7 +124,7 @@ class TRC(object):
 
     """
 
-    def __init__(self, filename: str, meta_data: dict[str, str | int | float], marker_set: list[str],
+    def __init__(self, filename: str, meta_data: TRCMetadata, marker_set: list[str],
                  col_names: list[str], marker_dict: dict[str, list[str]], data: pd.DataFrame, num_coordinates: int,
                  file_header: list[str] = None, filepath : str = None) \
             -> None:
@@ -249,6 +302,7 @@ class TRC(object):
                         meta_data[meta_data_keys[i]] = ast.literal_eval(md)
                     except ValueError:
                         meta_data[meta_data_keys[i]] = md
+                meta_data = TRCMetadata(meta_data)
 
                 # data headers:
                 headers = next(file).strip().split(delimiter)
@@ -331,6 +385,7 @@ class TRC(object):
             meta_data['OrigNumFrames'] = frames
             meta_data['Units'] = reader.groups['POINT'].params['UNITS'].bytes.decode("utf-8")
             meta_data['NumMarkers'] = num_markers
+            meta_data = TRCMetadata(meta_data)
 
             # organize markers and their coordinates:
             marker_set = [point.strip() for point in reader.point_labels]
@@ -397,14 +452,16 @@ class TRC(object):
                 line += f"{header}\t"
             content.append(line.strip() + "\n")
 
+        """
         c0 = ""
         c1 = ""
-
         for md in self.metadata.keys():
             c0 += f"{md}\t"
             c1 += f"{str(self.metadata[md])}\t"
         content.append(c0.strip() + "\n")
         content.append(c1.strip() + "\n")
+        """
+        content.append(str(self.metadata))
         c0 = "Frame#\tTime\t"
         c1 = "\t\t"
         for marker_data in self.marker_set:
@@ -505,7 +562,7 @@ class TRC(object):
             i = i + 1
         marker_name = name
         self.marker_set.append(marker_name)
-        self.metadata['NumMarkers'] = self.metadata['NumMarkers'] + 1
+        self.metadata.num_markers = self.metadata.num_markers + 1
 
         num = str(len(self.marker_set))
         new_x_column_name, new_y_column_name, new_z_column_name = 'X' + num, 'Y' + num, 'Z' + num
@@ -589,7 +646,7 @@ class TRC(object):
 
         file_name = self.filename.replace('.trc', "_segmented_" + str(first_point) + "-" + str(last_point - 1) + '.trc')
         metadata = deepcopy(self.metadata)
-        metadata['NumFrames'] = last_point - first_point
+        metadata.num_frames = last_point - first_point
 
         d = {}
         for col in self.data.columns.to_list():
@@ -641,7 +698,7 @@ class TRC(object):
             for col in self.data.columns.to_list():
                 d[col] = self.data[col][start-ff:end-ff]
             metadata = deepcopy(self.metadata)
-            metadata['NumFrames'] = len(d["Time"])
+            metadata.num_frames = len(d["Time"])
             resulting_trcs.append(TRC(file_name, metadata, deepcopy(self.marker_set), deepcopy(self.col_names),
                                       deepcopy(self.marker_dict), pd.DataFrame(data=d), self.num_coordinates,
                                       file_header=deepcopy(self.file_header)))
@@ -918,10 +975,19 @@ class _Test:
                and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
+
+        """
         assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 + 1 - ff \
                and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
                and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == lf - rand2, (
                 error_message + "segmentation at wrong frames.")
+        """
+
+        assert trcs[0].data.shape[0] == trcs[0].metadata.num_frames == rand1 + 1 - ff \
+               and trcs[1].data.shape[0] == trcs[1].metadata.num_frames == rand2 - rand1 \
+               and trcs[2].data.shape[0] == trcs[2].metadata.num_frames == lf - rand2, (
+                error_message + "segmentation at wrong frames.")
+
         assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
             error_message + "original TRC object should not equal to segmented objects."
         assert trcs == trc.segment([rand1, rand2]), \
@@ -987,8 +1053,14 @@ class _Test:
             assert True
         except Exception as e:
             assert False, "Adding marker method should work: " + getattr(e, 'message', repr(e))
+
+        """
         assert trc2.metadata['NumMarkers'] == trc1.metadata['NumMarkers'] + 1 == len(trc2.marker_set), \
             "Wrong number of markers."
+        """
+        assert trc2.metadata.num_markers == trc1.metadata.num_markers + 1 == len(trc2.marker_set), \
+            "Wrong number of markers."
+
         assert len(trc2.data.columns) == len(trc1.data.columns) + 3, "Wrong number of columns."
 
     @staticmethod
@@ -1013,54 +1085,6 @@ class _Test:
         trc_arranged2 = TRC.load_from_trc(output, "test.trc")
         assert trc_arranged1 == trc_arranged2, "Using arrange on already arranged TRC file should not have effect."
 
-    @staticmethod
-    def comparison_segmentation(path_to_file: str) -> (pd.DataFrame, float):
-        """This method is used to compare use of the two coded segmentation methods.
-
-        This method does 100 tests with each segmenting method on the same file, \
-            using a randomly generated number (1-10) of randomly generated values
-            (in range of the object's data's length)
-            to segment the file.
-
-        At the moment, the segment_bis method seems to be faster, but further testing is required
-            to observe impact of file size, number of segments, size of segments.
-
-        Args:
-            path_to_file (string): file to test, located in the testing folder.
-
-        Returns:
-            dataframe:  test results, with columns:
-                - list of the values used to segment the file
-                - duration of the segment method for those values
-                - duration of the segment-bis method for those values
-                - difference (duration segment - duration segment_bis)
-            float:      mean value of the difference
-        """
-        trc = TRC.load_from_trc(path, path_to_file)
-        length = trc.data.shape[0]
-        data = []
-        for i in range(100):
-            nb_segment = random.randint(1, 10)
-            rands = []
-            for j in range(nb_segment):
-                rands.append(random.randint(1, length - 1))
-            rands = sorted(rands)
-
-            # first method
-            t = time.time()
-            trc.segment(rands)
-            t1 = time.time() - t
-
-            # second method
-            t = time.time()
-            trc.segment_bis(rands)
-            t2 = time.time() - t
-
-            data.append([rands, t1, t2, t1 - t2])
-
-        data = pd.DataFrame(data)
-        mean = np.mean(data[3])
-        return data, mean
 
 
 if __name__ == "__main__":
