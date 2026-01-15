@@ -51,7 +51,7 @@ class GaitCycle:
                  inverse_kinematic: MOT | str = None,
                  external_loads: osim.ExternalLoads | str = None,
                  inverse_dynamic: MOT | str = None,
-                 joint_power: MOT | str = None) -> None:
+                 joint_power: pd.DataFrame | str = None) -> None:
         """Creates a GaitCycle object.
 
         Args:
@@ -565,7 +565,6 @@ class GaitCycle:
                                exls[i] if exls is not None else None, exl_path[i] if exl_path is not None else None,
                                ids[i] if ids is not None else None, id_path[i] if id_path is not None else None,
                                jps[i] if jps is not None else None, jp_path[i] if jp_path is not None else None)
-
 
 
 class TrialPaths:
