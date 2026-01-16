@@ -144,11 +144,9 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
 
             print(f"Processing {side}/{trc.filename}...")
 
-            if cycle.paths.trc is not None:
-                trc_full_path = cycle.paths.trc
-            else:
+            if cycle.trc.filepath is None:
                 trc.save(temp_directory)
-                trc_full_path = os.path.join(temp_directory, trc.filename)
+            trc_full_path = cycle.trc.filepath
 
             # Setup IK Tool
             ik_tool = set_up_ik_tool(scaled_model_file_path, trc_full_path, float(trc.data['Time'].iloc[0]),
@@ -177,7 +175,7 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
                 mot.update_data(data)
 
                 mot.save(ik_output_path)
-                cycle.add_ik(inverse_kinematic=mot_path, ik_object=mot)
+                cycle.add_ik(inverse_kinematic_path=mot_path, ik_object=mot)
 
                 # plt.plot(cycle.ik.data['time'], cycle.ik.data['ankle_angle_r'])
                 # plt.show()

@@ -94,6 +94,8 @@ class MOT:
         filepath:     String pointing to the MOT file associated with the object, if existing.
     """
 
+    extension = ".mot"
+
     def __init__(self, name: str,
                  filename: str,
                  header_lines: MOTMetadata,
@@ -380,6 +382,7 @@ class MOT:
                 print(f"File {file_name} written in directory {file_path}.")
         except Exception as e:
             raise OSError(f"Unable to write file {file_name}: {getattr(e, 'message', repr(e))}")
+        self.filepath = full_path
 
     def copy(self) -> Self:
         """Copies and returns a new MOT object.
@@ -415,33 +418,26 @@ class MOT:
         first_point = frames[0]
         last_point = frames[1]
 
-        ff = self.first_frame
+        message = f"Cannot cut {self.name} at given frames: out of bound index."
 
-        if isinstance(first_point, int) and isinstance(last_point, int) and not force_time:
-            if (first_point < ff) or (last_point > ff + self.data.shape[0]):
-                raise IndexError("Cannot cut at given frames: out of bound index.")
+        try:
+            if force_time or isinstance(first_point, float) or isinstance(last_point, float):
+                time_scale = self.data['time']
+                first_point = bisect.bisect_left(time_scale, first_point)
+                last_point = bisect.bisect_right(time_scale, last_point)
 
-        else:
-            time_scale = self.data['time']
-            if first_point < time_scale[ff] or last_point > time_scale[ff + self.data.shape[0] - 1]:
-                raise IndexError("Cannot cut at given times: out of bound index.")
-
-            first_point = bisect.bisect_left(time_scale, first_point)
-            last_point = bisect.bisect_right(time_scale, last_point)
-
-        if (first_point < 0) or (last_point > self.data.shape[0]):
-            message = f"Cannot cut {self.name} at given frames: out of bound index."
+            headers = deepcopy(self.header_lines)
+            headers.number_rows = last_point - first_point
+            name = self.name + "_segmented_" + str(first_point) + "-" + str(last_point - 1)
+            file_name = name + ".mot"
+            d = {}
+            for col in self.data.columns.to_list():
+                d[col] = self.data[col][first_point:last_point]
+            return MOT(name, file_name, headers, pd.DataFrame(data=d))
+        except IndexError:
             logging.warning(message)
             raise IndexError(message)
 
-        headers = deepcopy(self.header_lines)
-        headers.number_rows = last_point - first_point
-        name = self.name + "_segmented_" + str(first_point) + "-" + str(last_point - 1)
-        file_name = name + ".mot"
-        d = {}
-        for col in self.data.columns.to_list():
-            d[col] = self.data[col][first_point:last_point]
-        return MOT(name, file_name, headers, pd.DataFrame(data=d))
 
     def segment(self, points: list[int], index: bool = False) -> list[Self]:
         """Segments the current MOT file.

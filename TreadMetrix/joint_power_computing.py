@@ -144,23 +144,19 @@ def process(trial: Trial, power_output_path: str):
         os.makedirs(temp_directory, exist_ok=True)
 
         for cycle in trial.gait_cycles[side]:
-            if cycle.paths.ik_results is not None:
-                ik_path = cycle.paths.ik_results
-            else:
+            if cycle.ik.filepath is None:
                 cycle.ik.save(temp_directory)
-                ik_path = os.path.join(temp_directory, cycle.ik.filename)
+            ik_path = cycle.ik.filepath
 
-            if cycle.paths.id_results is not None:
-                id_path = cycle.paths.id_results
-            else:
+            if cycle.id.filepath is None:
                 cycle.id.save(temp_directory)
-                id_path = os.path.join(temp_directory, cycle.id.filename)
+            id_path = cycle.id.filepath
 
             ik_data = read_mot_files(ik_path)
             id_data = read_mot_files(id_path)
 
-            angular_velocity = compute_angular_velocity(ik_data['rawData'], trial.name)
-            joint_power = compute_joint_power(angular_velocity, id_data['rawData'], side)
+            angular_velocity = compute_angular_velocity(cycle.ik.data, trial.name)
+            joint_power = compute_joint_power(angular_velocity, cycle.id.data, side)
 
             output_filename = f"{trial.name}_{side}_{cycle.num}.csv"
             output_file_path = os.path.join(output_path, output_filename)

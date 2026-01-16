@@ -7,36 +7,25 @@ from typing import Self
 from resources.custom_exceptions import *
 
 class CustomExternalLoads:
+    extension = ".xml"
+
     def __init__(self, external_loads: osim.ExternalLoads, path: str = None):
         self.external_loads = external_loads
-        self.path = path
+        path = path if path is not None else external_loads.getAbsolutePathString()
+        self.filepath = path
+        self.filename = os.path.basename(path) if path is not None else None
+
 
 class CustomJointPower:
+    extension = ".csv"
+
     def __init__(self, joint_power: pd.DataFrame, path: str = None):
         self.joint_power = joint_power
-        self.path = path
+        self.filepath = path
+        self.filename = os.path.basename(path) if path is not None else None
 
-
-class CyclePaths:
-    """
-    Structure regrouping the different paths to a GaitCycle's files.
-
-    Attributes:
-        grf: str, path to the ground reaction forces file (MOT)
-        trc: str, path to the raw marker data file (TRC)
-        ik_results: str, path to the Internal Dynamics file (MOT)
-        external_loads: str, path to the External Loads file (XML)
-        id_results: str, path to the Internal Dynamics file (MOT)
-        joint_power_results: str, path to the Joint Power file (CSV)
-    """
-
-    def __init__(self):
-        self.grf: str | None = None
-        self.trc: str | None = None
-        self.ik_results: str | None = None
-        self.external_loads: str | None = None
-        self.id_results: str | None = None
-        self.joint_power_results: str | None = None
+    def save(self, path: str = None):
+        self.joint_power.to_csv(path if path is not None else self.filepath, index=False)
 
 
 class GaitCycle:
@@ -46,11 +35,10 @@ class GaitCycle:
     Attributes:
         side: str, side of the gait cycle.
         num: int, id number of the gait cycle
-        paths: CyclePaths object, paths of the data files
         grf: MOT object, ground force reaction data
         trc: TRC object, marker data
         ik: MOT object, inverse kinematic data
-        exl: osim.ExternalLoads, external loads data
+        external_loads: osim.ExternalLoads, external loads data
         id: MOT object, inverse dynamic data
         jp: Pd.DataFrame, joint power data
     """
@@ -59,9 +47,9 @@ class GaitCycle:
                  ground_reaction_forces: MOT | str = None,
                  markers_trajectory: TRC | str = None,
                  inverse_kinematic: MOT | str = None,
-                 external_loads: osim.ExternalLoads | str = None,
+                 external_loads: osim.ExternalLoads | CustomExternalLoads | str = None,
                  inverse_dynamic: MOT | str = None,
-                 joint_power: pd.DataFrame | str = None) -> None:
+                 joint_power: pd.DataFrame | CustomJointPower | str = None) -> None:
         """Creates a GaitCycle object.
 
         Args:
@@ -72,7 +60,7 @@ class GaitCycle:
             inverse_kinematic: MOT object, inverse kinematic data
             external_loads: OpenSim.ExternalLoads object, external forces data
             inverse_dynamic: MOT object, inverse dynamic data
-            joint_power: MOT object (to check), joint power data
+            joint_power: pd.Dataframe, joint power data
         """
 
         if side.lower() in ["right", "r"]:
@@ -89,7 +77,6 @@ class GaitCycle:
         self.external_loads = None
         self.id = None
         self.jp = None
-        self.paths = CyclePaths()
 
         if ground_reaction_forces is not None:
             self.add_grf(
@@ -99,12 +86,12 @@ class GaitCycle:
             self.add_trc(markers_trajectory_path=markers_trajectory if isinstance(markers_trajectory, str) else None,
                          trc_object=markers_trajectory if isinstance(markers_trajectory, TRC) else None)
         if inverse_kinematic is not None:
-            self.add_ik(inverse_kinematic=inverse_kinematic if isinstance(inverse_kinematic, str) else None,
+            self.add_ik(inverse_kinematic_path=inverse_kinematic if isinstance(inverse_kinematic, str) else None,
                         ik_object=inverse_kinematic if isinstance(inverse_kinematic, MOT) else None)
         if external_loads is not None:
             self.add_external_loads(
                 external_loads_path=external_loads if isinstance(external_loads, str) else None,
-                exl_object=external_loads if isinstance(external_loads, osim.ExternalLoads) else None)
+                exl_object=external_loads if isinstance(external_loads, osim.ExternalLoads) or isinstance(external_loads, CustomExternalLoads) else None)
         if inverse_dynamic is not None:
             self.add_id(
                 inverse_dynamic_path=inverse_dynamic if isinstance(inverse_dynamic, str) else None,
@@ -112,43 +99,7 @@ class GaitCycle:
         if joint_power is not None:
             self.add_joint_power(
                 joint_power_path=joint_power if isinstance(joint_power, str) else None,
-                jp_object=joint_power if isinstance(joint_power, pd.DataFrame) else None)
-
-        if markers_trajectory is not None:
-            if isinstance(markers_trajectory, tuple):
-                self.add_trc(markers_trajectory_path=markers_trajectory[0], trc_object=markers_trajectory[1])
-            else:
-                self.add_trc(
-                    markers_trajectory_path=markers_trajectory if isinstance(markers_trajectory, str) else None,
-                    trc_object=markers_trajectory if isinstance(markers_trajectory, TRC) else None)
-        if inverse_kinematic is not None:
-            if isinstance(inverse_kinematic, tuple):
-                self.add_trc(inverse_kinematic=inverse_kinematic[0], ik_object=inverse_kinematic[1])
-            else:
-                self.add_ik(inverse_kinematic=inverse_kinematic if isinstance(inverse_kinematic, str) else None,
-                             ik_object=inverse_kinematic if isinstance(inverse_kinematic, MOT) else None)
-        if external_loads is not None:
-            if isinstance(external_loads, tuple):
-                self.add_trc(external_loads_path=external_loads[0], exl_object=external_loads[1])
-            else:
-                self.add_external_loads(
-                    external_loads_path=external_loads if isinstance(external_loads, str) else None,
-                    exl_object=external_loads if isinstance(external_loads, osim.ExternalLoads) else None)
-        if inverse_dynamic is not None:
-            if isinstance(inverse_dynamic, tuple):
-                self.add_trc(inverse_dynamic_path=inverse_dynamic[0], id_object=inverse_dynamic[1])
-            else:
-                self.add_id(
-                    inverse_dynamic_path=inverse_dynamic if isinstance(inverse_dynamic, str) else None,
-                    id_object=inverse_dynamic if isinstance(inverse_dynamic, MOT) else None)
-        if joint_power is not None:
-            if isinstance(joint_power, tuple):
-                self.add_trc(joint_power_path=joint_power[0], jp_object=joint_power[1])
-            else:
-                self.add_joint_power(
-                    joint_power_path=joint_power if isinstance(joint_power, str) else None,
-                    jp_object=joint_power if isinstance(joint_power, pd.DataFrame) else None)
-
+                jp_object=joint_power if isinstance(joint_power, pd.DataFrame) or isinstance(joint_power, CustomJointPower) else None)
 
     def add_grf(self, ground_reaction_forces_path: str = None, grf_object: MOT = None, **kwargs) -> None:
         """Add the ground reaction forces data to the object. If both arguments are None, does nothing.
@@ -163,14 +114,13 @@ class GaitCycle:
         Returns:
             None
         """
-        if ground_reaction_forces_path is not None:
-            self.paths.grf = ground_reaction_forces_path
-            self.grf = MOT.load_from_mot(ground_reaction_forces_path,
-                                         separator=kwargs["separator"] if "separator" in kwargs else None) \
-                if grf_object is None else grf_object
-        elif grf_object is not None:
+        if grf_object is not None:
             self.grf = grf_object
-            self.paths.grf = None
+            self.grf.filepath = ground_reaction_forces_path if self.grf.filepath is None else None
+
+        elif ground_reaction_forces_path is not None:
+            self.grf = MOT.load_from_mot(ground_reaction_forces_path,
+                                         separator=kwargs["separator"] if "separator" in kwargs else None)
 
     def add_trc(self, markers_trajectory_path: str = None, trc_object: TRC = None, **kwargs) -> None:
         """Add the ground reaction forces data to the object.
@@ -187,51 +137,49 @@ class GaitCycle:
         Returns:
             None
         """
-        if markers_trajectory_path is not None:
-            self.paths.trc = markers_trajectory_path
+        if trc_object is not None:
+            self.trc = trc_object
+            self.trc.filepath = markers_trajectory_path if self.trc.filepath is None else None
+
+        elif markers_trajectory_path is not None:
             self.trc = (
                 TRC.load_from_trc(markers_trajectory_path,
                                   header=kwargs["header"] if "header" in kwargs else None,
                                   delimiter=kwargs["delimiter"] if "delimiter" in kwargs else None,
-                                  num_coordinates=kwargs["num_coordinates"] if "num_coordinates" in kwargs else None)) \
-                if trc_object is None else trc_object
-        elif trc_object is not None:
-            self.trc = trc_object
-            self.paths.trc = None
+                                  num_coordinates=kwargs["num_coordinates"] if "num_coordinates" in kwargs else None))
 
-    def add_ik(self, inverse_kinematic: str = None, ik_object: MOT = None) -> None:
+    def add_ik(self, inverse_kinematic_path: str = None, ik_object: MOT = None) -> None:
         """Add the inverse kinematics data to the object.
 
         Args:
-            inverse_kinematic: MOT object, or path (str) to a loadable MOT file.
+            inverse_kinematic_path: MOT object, or path (str) to a loadable MOT file.
             ik_object: MOT object, Inverse Kinematics object if previously loaded
 
         Returns:
             None
         """
-        if inverse_kinematic is not None:
-            self.paths.ik_results = inverse_kinematic
-            self.ik = MOT.load_from_mot(inverse_kinematic, separator=r"\t") if ik_object is None else ik_object
-        elif ik_object is not None:
+        if ik_object is not None:
             self.ik = ik_object
-            self.paths.ik_results = None
+            self.ik.filepath = inverse_kinematic_path if self.ik.filepath is None else None
 
-    def add_external_loads(self, external_loads_path: str = None, exl_object: osim.ExternalLoads = None) -> None:
+        elif inverse_kinematic_path is not None:
+            self.ik = MOT.load_from_mot(inverse_kinematic_path, separator=r"\t")
+
+    def add_external_loads(self, external_loads_path: str = None, exl_object: osim.ExternalLoads | CustomExternalLoads = None) -> None:
         """Add the external loads data to the object.
 
         Args:
             external_loads_path: str, path to the External Load file
-            exl_object: osim.ExternalLoads, external loads if previously loaded
+            exl_object: osim.ExternalLoads or CustomExternalLoads, external loads if previously loaded
 
         Returns:
             None
         """
-        if external_loads_path is not None:
-            self.paths.external_loads = external_loads_path
-            self.external_loads = osim.ExternalLoads(external_loads_path) if exl_object is None else exl_object
-        elif exl_object is not None:
-            self.external_loads = exl_object
-            self.paths.external_loads = None
+        if exl_object is not None:
+            self.external_loads = exl_object if isinstance(exl_object, CustomExternalLoads) else CustomExternalLoads(exl_object, external_loads_path)
+
+        elif external_loads_path is not None:
+            self.external_loads = CustomExternalLoads(osim.ExternalLoads(external_loads_path), external_loads_path)
 
     def add_id(self, inverse_dynamic_path: str = None, id_object: MOT = None) -> None:
         """Add the inverse dynamic data to the object.
@@ -243,14 +191,14 @@ class GaitCycle:
         Returns:
             None
         """
-        if inverse_dynamic_path is not None:
-            self.paths.id_results = inverse_dynamic_path
-            self.id = MOT.load_from_mot(inverse_dynamic_path) if id_object is None else id_object
-        elif id_object is not None:
+        if id_object is not None:
             self.id = id_object
-            self.paths.id_results = None
+            self.id.filepath = inverse_dynamic_path if self.id.filepath is None else None
 
-    def add_joint_power(self, joint_power_path: str = None, jp_object: pd.DataFrame = None) -> None:
+        elif inverse_dynamic_path is not None:
+            self.id = MOT.load_from_mot(inverse_dynamic_path)
+
+    def add_joint_power(self, joint_power_path: str = None, jp_object: pd.DataFrame | CustomJointPower = None) -> None:
         """Add the joint power data to the object.
 
         Args:
@@ -260,22 +208,21 @@ class GaitCycle:
         Returns:
             None
         """
-        if joint_power_path is not None:
-            self.paths.joint_power_results = joint_power_path
-            self.jp = MOT.load_from_mot(joint_power_path) if jp_object is None else jp_object
-        elif jp_object is not None:
-            self.jp = jp_object
-            self.paths.joint_power_results = None
+        if jp_object is not None:
+            self.jp = jp_object if isinstance(jp_object, CustomJointPower) else CustomJointPower(jp_object, joint_power_path)
+
+        elif joint_power_path is not None:
+            self.jp = CustomJointPower(pd.read_csv(joint_power_path), joint_power_path)
 
     def add_to_cycle(self, grfs: MOT | None = None, grf_path: str | None = None,
                      trcs: TRC | None = None, trc_path: str | None = None,
                      iks: MOT | None = None, ik_path: str | None = None,
-                     exls: osim.ExternalLoads | None = None, exl_path: str | None = None,
+                     exls: CustomExternalLoads | osim.ExternalLoads | None = None, exl_path: str | None = None,
                      ids: MOT | None = None, id_path: str | None = None,
-                     jps: pd.DataFrame | None = None, jp_path: str | None = None):
+                     jps: CustomJointPower | pd.DataFrame | None = None, jp_path: str | None = None):
             self.add_grf(ground_reaction_forces_path=grf_path, grf_object=grfs)
             self.add_trc(markers_trajectory_path=trc_path, trc_object=trcs)
-            self.add_ik(inverse_kinematic=ik_path, ik_object=iks)
+            self.add_ik(inverse_kinematic_path=ik_path, ik_object=iks)
             self.add_external_loads(external_loads_path=exl_path, exl_object=exls)
             self.add_id(inverse_dynamic_path=id_path, id_object=ids)
             self.add_joint_power(joint_power_path=jp_path, jp_object=jps)
@@ -313,7 +260,7 @@ class GaitCycle:
         if self.id is not None:
             return get_start_and_end(self.id)
         if self.jp is not None:
-            return self.jp['time'].iloc[0], self.jp['time'].iloc[-1]
+            return self.jp.joint_power['time'].iloc[0], self.jp.joint_power['time'].iloc[-1]
         return None
 
     def is_included(self, starting_time: float, ending_time: float) -> bool:
@@ -346,20 +293,18 @@ class GaitCycle:
         """
         path = os.path.join(path, self.side, "cycle_" + str(self.num)) if categorize else path
         os.makedirs(path, exist_ok=True)
-        for obj in [self.grf, self.trc, self.ik, self.id]:
+        for obj in [self.grf, self.trc, self.ik, self.id, self.jp]:
             if obj is not None:
                 obj.save(path)
-        if self.jp is not None:
-            self.jp.to_csv(os.path.join(path, "joint_power.csv"), index=False)
 
 
     @staticmethod
     def _objects_and_paths(grfs: list[MOT] = None, grf_path: str | list[str] = None,
                            trcs: list[TRC] = None, trc_path: str | list[str] = None,
                            iks: list[MOT] = None, ik_path: str | list[str] = None,
-                           exls: list[osim.ExternalLoads] = None, exl_path: str | list[str] = None,
+                           exls: list[osim.ExternalLoads | CustomExternalLoads] = None, exl_path: str | list[str] = None,
                            ids: list[MOT] = None, id_path: str | list[str] = None,
-                           jps: list[pd.DataFrame] = None, jp_path: str | list[str] = None):
+                           jps: list[pd.DataFrame | CustomJointPower] = None, jp_path: str | list[str] = None):
         """Organize the objects and the paths to the matching files.
 
         Args:
@@ -381,7 +326,7 @@ class GaitCycle:
 
         """
 
-        def management_call(objects: list | None, path: None | str | list[str]):
+        def management_call(extension: str, objects: list | None, path: None | str | list[str]) :
             """Manage the paths and input whether objects should be loaded
 
             Args:
@@ -396,37 +341,37 @@ class GaitCycle:
             if objects is not None:
                 if path is not None and isinstance(path, str):
                     temp = []
-                    for grf in objects:
-                        file = os.path.join(path, grf.filename)
+                    for o in objects:
+                        file = os.path.join(path, o.filename)
                         temp.append(file) if os.path.isfile(file) else temp.append(None)
                     path = temp
             else:
                 if path is not None:
                     if isinstance(path, str):
-                        path = [os.path.join(path, file) for file in os.listdir(path) if file.endswith(".mot")]
+                        path = [os.path.join(path, file) for file in os.listdir(path) if file.endswith(extension)]
             return path, objects is None and path is not None
 
-        grf_path, load = management_call(grfs, grf_path)
+        grf_path, load = management_call(MOT.extension, grfs, grf_path)
         if load:
             grfs = [MOT.load_from_mot(file) for file in grf_path]
 
-        trc_path, load = management_call(trcs, trc_path)
+        trc_path, load = management_call(TRC.extension, trcs, trc_path)
         if load:
             trcs = [TRC.load_from_trc(file) for file in trc_path]
 
-        ik_path, load = management_call(iks, ik_path)
+        ik_path, load = management_call(MOT.extension, iks, ik_path)
         if load:
             iks = [MOT.load_from_mot(file) for file in ik_path]
 
-        exl_path, load = management_call(exls, exl_path)
+        exl_path, load = management_call(CustomExternalLoads.extension, exls, exl_path)
         if load:
             exls = [osim.ExternalLoads(file) for file in exl_path]
 
-        id_path, load = management_call(ids, id_path)
+        id_path, load = management_call(MOT.extension, ids, id_path)
         if load:
             ids = [MOT.load_from_mot(file) for file in id_path]
 
-        jp_path, load = management_call(jps, jp_path)
+        jp_path, load = management_call(CustomJointPower.extension, jps, jp_path)
         if load:
             jps = [pd.read_csv(file) for file in jp_path]
 
@@ -457,9 +402,9 @@ class GaitCycle:
                        grfs: list[MOT] = None, grf_path: str | list[str] = None,
                        trcs: list[TRC] = None, trc_path: str | list[str] = None,
                        iks: list[MOT] = None, ik_path: str | list[str] = None,
-                       exls: list[osim.ExternalLoads] = None, exl_path: str | list[str] = None,
+                       exls: list[osim.ExternalLoads | CustomExternalLoads] = None, exl_path: str | list[str] = None,
                        ids: list[MOT] = None, id_path: str | list[str] = None,
-                       jps: list[pd.DataFrame] = None, jp_path: str | list[str] = None) -> list[Self]:
+                       jps: list[pd.DataFrame | CustomJointPower] = None, jp_path: str | list[str] = None) -> list[Self]:
         """Create GaitCycles objects from the given data.
 
         Args:
@@ -525,9 +470,9 @@ class GaitCycle:
                            grfs: list[MOT] = None, grf_path: str | list[str] = None,
                            trcs: list[TRC] = None, trc_path: str | list[str] = None,
                            iks: list[MOT] = None, ik_path: str | list[str] = None,
-                           exls: list[osim.ExternalLoads] = None, exl_path: str | list[str] = None,
+                           exls: list[osim.ExternalLoads | CustomExternalLoads] = None, exl_path: str | list[str] = None,
                            ids: list[MOT] = None, id_path: str | list[str] = None,
-                           jps: list[pd.DataFrame] = None, jp_path: str | list[str] = None):
+                           jps: list[pd.DataFrame | CustomJointPower] = None, jp_path: str | list[str] = None):
         """Add data to given GaitCycles.
 
         Args:
@@ -577,21 +522,6 @@ class GaitCycle:
                                jps[i] if jps is not None else None, jp_path[i] if jp_path is not None else None)
 
 
-class TrialPaths:
-    """
-    Structure regrouping the different paths to a Trial's files.
-
-    Attributes:
-        grf: str, path to the ground reaction forces file (MOT)
-        trc: str, path to the raw marker data file (TRC)
-        corrected_grf: str, path to the corrected ground reaction forces file (MOT)
-    """
-
-    def __init__(self, grf: str, trc: str = None, corrected_grf: str = None):
-        self.grf = grf
-        self.trc = trc
-        self.corrected_grf = corrected_grf
-
 
 class Trial:
     """
@@ -604,7 +534,6 @@ class Trial:
         corrected_grf: MOT object, corrected grf
         notes: str, notes on the trial.
         gait_cycles: directory of GaitCycles objects, by side.
-        paths: a TrialPath object storing the paths to saved files of the Trial data
     """
 
     def __init__(self, mot: str | MOT, trc: str | TRC = None, name: str = None, notes: str = None) -> None:
@@ -623,6 +552,7 @@ class Trial:
 
         self.name = self.grf.name.replace(".mot", "") if name is None else name
 
+        trc = None
         if trc is not None:
             try:
                 self.trc = TRC.load_from_trc(trc) if not isinstance(trc, TRC) else trc
@@ -632,9 +562,8 @@ class Trial:
         self.corrected_grf = None
         self.notes = notes
         self.gait_cycles: dict[str, list[GaitCycle]] = {"Right": [], "Left": []}
-        self.paths = TrialPaths(mot, trc=trc)
 
-    def add_trc(self, path_to_trc: str, trc: TRC = None):
+    def add_trc(self, path_to_trc: str = None, trc: TRC = None):
         """Add the Marker Motion data (TRC) to a trial.
 
         Args:
@@ -646,25 +575,25 @@ class Trial:
         """
         if trc is not None:
             self.trc = trc
+            self.trc.filepath = path_to_trc if self.trc.filepath is None else None
 
-        if trc is None:
+        elif path_to_trc is not None:
             try:
                 self.trc = TRC.load_from_trc(path_to_trc)
             except OSError as e:
                 raise MissingPathException("Corrected Ground Reaction Forces (MOT) file", detail=e.strerror)
-        self.paths.trc = path_to_trc
 
     def add_corrected_grf(self, path_to_corrected_grf: str = None, corrected_grf: MOT = None) -> None:
         if corrected_grf is not None:
             self.corrected_grf = corrected_grf
+            self.corrected_grf.filepath = path_to_corrected_grf if self.corrected_grf.filepath is None else None
 
-        if path_to_corrected_grf is not None:
+        elif path_to_corrected_grf is not None:
             if corrected_grf is None:
                 try:
                     self.corrected_grf = MOT.load_from_mot(path_to_corrected_grf)
                 except OSError as e:
                     raise MissingPathException("Corrected Ground Reaction Forces (MOT) file", detail=e.strerror)
-            self.paths.corrected_grf = path_to_corrected_grf
 
     def add_cycles(self, right_cycles: list[GaitCycle], left_cycles: list[GaitCycle]) -> None:
         """Adding the given GaitCycles to the trial data, at the end of their respective sides.

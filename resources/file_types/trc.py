@@ -124,6 +124,8 @@ class TRC(object):
 
     """
 
+    extension = ".trc"
+
     def __init__(self, filename: str, meta_data: TRCMetadata, marker_set: list[str],
                  col_names: list[str], marker_dict: dict[str, list[str]], data: pd.DataFrame, num_coordinates: int,
                  file_header: list[str] = None, filepath : str = None) \
@@ -1069,7 +1071,6 @@ class _Test:
             assert False, "Arrange method should not raise error: " + getattr(e, 'message', repr(e))
         trc_arranged2 = TRC.load_from_trc(output, "test.trc")
         assert trc_arranged1 == trc_arranged2, "Using arrange on already arranged TRC file should not have effect."
-
 
 
 if __name__ == "__main__":
