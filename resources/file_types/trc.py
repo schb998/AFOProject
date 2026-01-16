@@ -149,10 +149,7 @@ class TRC(object):
         self.data = data
         self.num_coordinates = num_coordinates
         self.first_frame = data.index[0]
-        if file_header is not None:
-            self.file_header = file_header
-        else:
-            self.file_header = []
+        self.file_header = file_header if file_header is not None else []
         self.filepath = filepath
 
     def __eq__(self, other: object) -> bool:
@@ -421,7 +418,7 @@ class TRC(object):
 
             return res
 
-    def save(self, filepath: str, filename: str = None) -> None:
+    def save(self, filepath: str = None, filename: str = None) -> None:
         """Saves data into a TRC file.
 
         Args:
@@ -433,6 +430,13 @@ class TRC(object):
         """
         if filename is None:
             filename = self.filename
+
+        if filepath is None :
+            if self.filepath is not None:
+                filepath = os.path.dirname(self.filepath)
+            else:
+                raise MissingPathException("path to directory",
+                                           f"no path provided to save TRC object {self.filename}")
 
         error_message = f"TRC object {filename} couldn't be saved in {filepath}: "
 
@@ -451,16 +455,6 @@ class TRC(object):
             for header in self.file_header:
                 line += f"{header}\t"
             content.append(line.strip() + "\n")
-
-        """
-        c0 = ""
-        c1 = ""
-        for md in self.metadata.keys():
-            c0 += f"{md}\t"
-            c1 += f"{str(self.metadata[md])}\t"
-        content.append(c0.strip() + "\n")
-        content.append(c1.strip() + "\n")
-        """
         content.append(str(self.metadata))
         c0 = "Frame#\tTime\t"
         c1 = "\t\t"
@@ -483,9 +477,11 @@ class TRC(object):
             c0 += '\n'
             content.append(c0)
 
-        with open(os.path.join(filepath, filename), 'w') as writer:
+        full_path = os.path.join(filepath, filename)
+        with open(full_path, 'w') as writer:
             writer.writelines(content)
         logging.info(f"File {filename} saved in directory {filepath}.")
+        self.filepath = full_path
 
     @classmethod
     def adapt_to_opensim_use(cls, filepath: str, filename: str = None, header: bool = True,
@@ -976,13 +972,6 @@ class _Test:
         assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
             error_message + "data lost in segmentation."
 
-        """
-        assert trcs[0].data.shape[0] == trcs[0].metadata['NumFrames'] == rand1 + 1 - ff \
-               and trcs[1].data.shape[0] == trcs[1].metadata['NumFrames'] == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata['NumFrames'] == lf - rand2, (
-                error_message + "segmentation at wrong frames.")
-        """
-
         assert trcs[0].data.shape[0] == trcs[0].metadata.num_frames == rand1 + 1 - ff \
                and trcs[1].data.shape[0] == trcs[1].metadata.num_frames == rand2 - rand1 \
                and trcs[2].data.shape[0] == trcs[2].metadata.num_frames == lf - rand2, (
@@ -1054,10 +1043,6 @@ class _Test:
         except Exception as e:
             assert False, "Adding marker method should work: " + getattr(e, 'message', repr(e))
 
-        """
-        assert trc2.metadata['NumMarkers'] == trc1.metadata['NumMarkers'] + 1 == len(trc2.marker_set), \
-            "Wrong number of markers."
-        """
         assert trc2.metadata.num_markers == trc1.metadata.num_markers + 1 == len(trc2.marker_set), \
             "Wrong number of markers."
 

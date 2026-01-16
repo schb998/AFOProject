@@ -6,6 +6,16 @@ from resources.file_types.trc import TRC
 from typing import Self
 from resources.custom_exceptions import *
 
+class CustomExternalLoads:
+    def __init__(self, external_loads: osim.ExternalLoads, path: str = None):
+        self.external_loads = external_loads
+        self.path = path
+
+class CustomJointPower:
+    def __init__(self, joint_power: pd.DataFrame, path: str = None):
+        self.joint_power = joint_power
+        self.path = path
+
 
 class CyclePaths:
     """
@@ -40,7 +50,7 @@ class GaitCycle:
         grf: MOT object, ground force reaction data
         trc: TRC object, marker data
         ik: MOT object, inverse kinematic data
-        exl: XML, external loads data
+        exl: osim.ExternalLoads, external loads data
         id: MOT object, inverse dynamic data
         jp: Pd.DataFrame, joint power data
     """

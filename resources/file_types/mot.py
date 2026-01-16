@@ -12,7 +12,6 @@ from resources.custom_exceptions import MissingPathException
 
 # todo: double-check operations when int/float/double difference
 # todo: check c3d load-write issue
-# todo: add an update_first_frame methods
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
