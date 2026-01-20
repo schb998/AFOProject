@@ -1,5 +1,6 @@
 import bisect
 import os
+import unittest
 from copy import deepcopy
 import pandas as pd
 import numpy as np
@@ -10,6 +11,7 @@ import logging
 import re
 from ptb.util.io.mocap.low_lvl.c3d import Reader
 from resources.custom_exceptions import *
+from resources.file_types.fileobject import FileObject
 
 # todo: double-check operations when int/float/double difference
 
@@ -107,7 +109,7 @@ class TRCMetadata(object):
 
 
 
-class TRC(object):
+class TRC(FileObject):
     """TRC object.
 
     Attributes:
@@ -126,9 +128,9 @@ class TRC(object):
 
     extension = ".trc"
 
-    def __init__(self, filename: str, meta_data: TRCMetadata, marker_set: list[str],
-                 col_names: list[str], marker_dict: dict[str, list[str]], data: pd.DataFrame, num_coordinates: int,
-                 file_header: list[str] = None, filepath : str = None) \
+    def __init__(self, filename: str, meta_data: TRCMetadata, marker_set: list[str], col_names: list[str],
+                 marker_dict: dict[str, list[str]], data: pd.DataFrame, num_coordinates: int,
+                 file_header: list[str] = None, filepath: str = None) \
             -> None:
         """Creates a TRC object.
 
@@ -143,16 +145,14 @@ class TRC(object):
             file_header: header line of the file
             filepath: str, path to the matching TRC file, if existing
         """
-        self.filename = filename
+        super().__init__(filename, data, filepath)
         self.metadata = meta_data
         self.marker_set = marker_set
         self.col_names = col_names
         self.marker_dict = marker_dict
-        self.data = data
         self.num_coordinates = num_coordinates
         self.first_frame = data.index[0]
         self.file_header = file_header if file_header is not None else []
-        self.filepath = filepath
 
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
@@ -837,126 +837,101 @@ class _TRCCleanup:
                 logging.info(f"Files in {path_to_directory} have not been deleted.")
 
 
-class _Test:
+class _Test(unittest.TestCase):
     """Regression tests for the TRC class methods.
 
     Those tests are used to ensure working methods are not compromised by new code.
     """
 
-    @staticmethod
-    def main() -> None:
-        _Test._test_load()
-        _Test._test_nestled_loads()
-        _Test._test_operations()
-        _Test._test_copy()
-        for i in range(10):
-            _Test._test_sample()
-            _Test._test_segmentation()
-        _Test._test_save()
-        _Test._test_load_all()
-        _Test._test_save_all()
-        _Test._test_add_marker()
-        _Test._test_arrange()
-        print("All tests passed. Deleting testing files...")
-        _TRCCleanup.delete_all_files(output, True)
-        logging.info('All tests passed.')
-
-    @staticmethod
-    def _test_load() -> None:
+    def test_load(self) -> None:
         try:
             TRC.load_from_trc(path, _filename_standard)
             TRC.load_from_trc(path, _filename_nan)
             TRC.load_from_trc(os.path.join(path, _filename_standard))
             TRC.load_from_trc(os.path.join(path, _filename_nan))
             TRC.load_from_c3d(os.path.join(path, _filename_c3d))
-            assert True
         except OSError:
-            assert False, "File couldn't be loaded."
-        try:
-            TRC.load_from_trc(os.path.join(path, _filename_missing_z7))
-            assert False, f"File {_filename_missing_z7} should raise an exception upon loading."
-        except OSError:
-            assert True
+            self.fail(f"Could not load TRC file {path}.")
+        self.assertRaises(OSError, TRC.load_from_trc,os.path.join(path, _filename_missing_z7))
 
-    @staticmethod
-    def _test_nestled_loads() -> None:
+
+    def test_nestled_loads(self) -> None:
         try:
             trc = TRC.load_from_trc(os.path.join(path, _filename_nan))
             trc.save(output, "first_save.trc")
             trc_first_save = TRC.load_from_trc(os.path.join(output, "first_save.trc"))
             trc_first_save.save(output, "second_save.trc")
             trc_second_save = TRC.load_from_trc(os.path.join(output, "second_save.trc"))
-            assert True
         except OSError:
-            assert False, "Couldn't load and save files in a loop."
-        assert trc == trc_first_save == trc_second_save, "Nestled loaded files should be equal."
+            self.fail("Couldn't load and save files in a loop.")
+        self.assertEqual(trc, trc_first_save, "Nestled loaded files should be equal.")
+        self.assertEqual(trc, trc_second_save, "Nestled loaded files should be equal.")
+        _TRCCleanup.delete_all_files(output, True)
 
-    @staticmethod
-    def _test_operations() -> None:
+
+    def test_operations(self) -> None:
         trc1 = TRC.load_from_trc(path, _filename_standard)
         trc2 = TRC.load_from_trc(path, _filename_nan)
-        assert trc1 == trc1 and trc2 == trc2, \
-            "Equality operation is not working."
-        assert trc1 != trc2 and trc2 != trc1, \
-            "Inequality operation is not working."
-        assert trc1 == TRC.load_from_trc(path, _filename_standard) and trc2 == TRC.load_from_trc(path, _filename_nan), \
-            "Objects loaded from same file should be equal."
+        self.assertEqual(trc1, trc1,  "Equality operation is not working.")
+        self.assertEqual(trc2, trc2, "Equality operation is not working.")
+        self.assertNotEqual(trc1, trc2, "Inequality operation is not working.")
+        self.assertNotEqual(trc2, trc1, "Inequality operation is not working.")
+        self.assertEqual(trc1, TRC.load_from_trc(path, _filename_standard), "Objects loaded from same file should be equal.")
+        self.assertEqual(trc2, TRC.load_from_trc(path, _filename_nan),"Objects loaded from same file should be equal.")
         trc3 = trc1.copy()
         trc3.rename('foo')
-        assert trc1 > trc3 and trc1 >= trc3 and trc3 < trc1 and trc3 <= trc1, "Comparison operations are not working."
+        self.assertGreater(trc1, trc3, "Comparison operation > is not working.")
+        self.assertGreaterEqual(trc1, trc3, "Comparison operation >= is not working.")
+        self.assertLess(trc3, trc1, "Comparison operation < is not working.")
+        self.assertLessEqual(trc3, trc1, "Comparison operation <= is not working.")
 
-    @staticmethod
-    def _test_copy() -> None:
+
+    def test_copy(self) -> None:
         trc = TRC.load_from_trc(path, _filename_standard)
-        assert trc.copy() == trc, \
-            "Objects should be equal to copy."
+        self.assertEqual(trc.copy(), trc, "Objects should be equal to copy.")
 
-    @staticmethod
-    def _test_sample() -> None:
+
+    def test_sample(self) -> None:
         trc = TRC.load_from_trc(os.path.join(path, _filename_standard))
         length = trc.data.shape[0]
+        ff = trc.data.index[0]
+        lf = trc.data.index[-1]
 
         # test on frame sampling:
-        rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
-        rand1, rand2 = rands[0], rands[1]
-        error_message = f"Sampling method (frame) is not working with values {rand1, rand2}: "
-        sample = trc.sample(rand1, rand2)
-        assert sample.data.shape[1] == trc.data.shape[1], \
-            error_message + "wrong number of columns."
-        assert sample.data.shape[0] == rand2 - rand1 \
-               and trc.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), (
-                error_message + "sampling at wrong frames.")
-        assert trc != sample, \
-            error_message + "original TRC object should not equal sampled objects."
-        sample2 = trc.sample(rand1, rand2)
-        assert sample == sample2, \
-            error_message + "calls on object with same parameters should be equal."
+        for i in range(5):
+            rands = sorted((random.randint(ff, lf), random.randint(ff, lf)))
+            rand1, rand2 = rands[0], rands[1]
+            error_message = f"Sampling method (frame) is not working with values {rand1, rand2}: "
+            sample = trc.sample(rand1, rand2)
+            self.assertEqual(sample.data.shape[1], trc.data.shape[1], error_message + "wrong number of columns.")
+            self.assertEqual(sample.data.shape[0], rand2 - rand1, error_message + "sampling at wrong frames.")
+            self.assertEqual(trc.data.shape[0], sample.data.shape[0] + rand1 + (length - rand2), error_message + "sampling at wrong frames.")
+            self.assertNotEqual(trc, sample, error_message + "original TRC object should not equal sampled objects.")
+            sample2 = trc.sample(rand1, rand2)
+            self.assertEqual(sample, sample2, error_message + "calls on object with same parameters should be equal.")
 
         # test on time sampling
         time_scale = trc.data['Time']
         time_firstframe = time_scale[trc.first_frame]
         time_lastframe = time_scale[trc.first_frame + trc.data.shape[0] - 1]
 
-        rands = sorted([random.uniform(time_firstframe, time_lastframe-1),
-                        random.uniform(time_firstframe, time_lastframe-1)])
-        rand1, rand2 = rands[0], rands[1]
-        frame1, frame2 = bisect.bisect_left(time_scale, rand1), bisect.bisect_right(time_scale, rand2)
+        for i in range(5):
+            rands = sorted([random.uniform(time_firstframe, time_lastframe-1),
+                            random.uniform(time_firstframe, time_lastframe-1)])
+            rand1, rand2 = rands[0], rands[1]
+            frame1, frame2 = bisect.bisect_left(time_scale, rand1), bisect.bisect_right(time_scale, rand2)
+            error_message = f"Sampling method (time) is not working with values {rand1, rand2}: "
+            sample = trc.sample(frame1, frame2)
+            self.assertEqual(sample.data.shape[1], trc.data.shape[1], error_message + "wrong number of columns.")
+            self.assertEqual(sample.data.shape[0], frame2 - frame1, error_message + "sampling at wrong frames.")
+            self.assertEqual(trc.data.shape[0], sample.data.shape[0] + frame1 + (length - frame2),
+                             error_message + "sampling at wrong frames.")
+            self.assertNotEqual(trc, sample, error_message + "original TRC object should not equal sampled objects.")
+            sample2 = trc.sample(frame1, frame2)
+            self.assertEqual(sample, sample2, error_message + "calls on object with same parameters should be equal.")
 
-        error_message = f"Sampling method (time) is not working with values {rand1, rand2}: "
-        sample = trc.sample(rand1, rand2)
-        assert sample.data.shape[1] == trc.data.shape[1], \
-            error_message + "wrong number of columns."
-        assert sample.data.shape[0] == frame2 - frame1 \
-               and trc.data.shape[0] == sample.data.shape[0] + frame1 + (length - frame2), (
-                error_message + "sampling at wrong frames.")
-        assert trc != sample, \
-            error_message + "original TRC object should not equal sampled objects."
-        sample2 = trc.sample(rand1, rand2)
-        assert sample == sample2, \
-            error_message + "calls on object with same parameters should be equal."
 
-    @staticmethod
-    def _test_segmentation() -> None:
+    def test_segmentation(self) -> None:
         trc = TRC.load_from_trc(os.path.join(path, _filename_standard))
         length = trc.data.shape[0]
         ff = trc.first_frame
@@ -966,49 +941,51 @@ class _Test:
         rand1, rand2 = rands[0], rands[1]
         error_message = f"Segmentation method is not working with values {rand1, rand2}: "
         trcs = trc.segment(rands)
-        assert len(trcs) == 3, \
-            error_message + "wrong number of segments."
-        assert trcs[0].data.shape[1] == trc.data.shape[1] \
-               and trcs[1].data.shape[1] == trc.data.shape[1] \
-               and trcs[2].data.shape[1] == trc.data.shape[1], error_message + "wrong number of columns."
-        assert trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0] == trc.data.shape[0], \
-            error_message + "data lost in segmentation."
 
-        assert trcs[0].data.shape[0] == trcs[0].metadata.num_frames == rand1 + 1 - ff \
-               and trcs[1].data.shape[0] == trcs[1].metadata.num_frames == rand2 - rand1 \
-               and trcs[2].data.shape[0] == trcs[2].metadata.num_frames == lf - rand2, (
-                error_message + "segmentation at wrong frames.")
+        self.assertEqual(len(trcs), 3, error_message + "wrong number of segments.")
+        self.assertEqual(trcs[0].data.shape[1], trc.data.shape[1], error_message + "wrong number of columns.")
+        self.assertEqual(trcs[1].data.shape[1], trc.data.shape[1], error_message + "wrong number of columns.")
+        self.assertEqual(trcs[2].data.shape[1], trc.data.shape[1], error_message + "wrong number of columns.")
+        self.assertEqual(trcs[0].data.shape[0] + trcs[1].data.shape[0] + trcs[2].data.shape[0], trc.data.shape[0],
+            error_message + "data lost in segmentation.")
+        self.assertEqual(trcs[0].data.shape[0],trcs[0].metadata.num_frames,
+                         error_message + "segmentation at wrong frames.")
+        self.assertEqual(trcs[0].data.shape[0], rand1 + 1 - ff, error_message + "segmentation at wrong frames.")
+        self.assertEqual(trcs[1].data.shape[0], trcs[1].metadata.num_frames,
+                         error_message + "segmentation at wrong frames.")
+        self.assertEqual(trcs[1].data.shape[0], rand2 - rand1, error_message + "segmentation at wrong frames.")
+        self.assertEqual(trcs[2].data.shape[0], trcs[2].metadata.num_frames,
+                         error_message + "segmentation at wrong frames.")
+        self.assertEqual(trcs[2].data.shape[0], lf - rand2, error_message + "segmentation at wrong frames.")
+        self.assertNotEqual(trc, trcs[0], error_message + "original TRC object should not equal to segmented objects.")
+        self.assertNotEqual(trc, trcs[1], error_message + "original TRC object should not equal to segmented objects.")
+        self.assertNotEqual(trc, trcs[2], error_message + "original TRC object should not equal to segmented objects.")
+        self.assertEqual(trcs, trc.segment([rand1, rand2]),
+                         error_message + "calls on object with same parameters should be equal.")
 
-        assert trc != trcs[0] and trc != trcs[1] and trc != trcs[2], \
-            error_message + "original TRC object should not equal to segmented objects."
-        assert trcs == trc.segment([rand1, rand2]), \
-            error_message + "calls on object with same parameters should be equal."
 
-    @staticmethod
-    def _test_load_all() -> None:
+    def test_load_all(self) -> None:
         trcs = TRC.load_all(path)
         for f in trcs:
-            assert f == TRC.load_from_trc(
-                os.path.join(path, f.filename)), "Mass loaded objects should match object loaded from the same file."
+            self.assertEqual(f, TRC.load_from_trc(os.path.join(path, f.filename)),
+                             "Mass loaded objects should match object loaded from the same file.")
 
-    @staticmethod
-    def _test_save() -> None:
+
+    def test_save(self) -> None:
         trc1 = TRC.load_from_trc(os.path.join(path, _filename_standard))
         try:
             trc1.save(output)
-            assert True
         except OSError:
-            assert False, "File not written."
+            self.fail("File not written.")
         try:
             trc2 = TRC.load_from_trc(os.path.join(output, _filename_standard))
-            assert True
         except OSError:
-            assert False, "Written file could not be read."
-        assert trc1 == trc2, \
-            "Write method is not working."
+            self.fail("Written file could not be read.")
+        self.assertEqual(trc1, trc2, "Write method is not working.")
+        _TRCCleanup.delete_all_files(output, True)
 
-    @staticmethod
-    def _test_save_all() -> None:
+
+    def test_save_all(self) -> None:
         _TRCCleanup.delete_all_files(output, True)
         trc = TRC.load_from_trc(os.path.join(path, _filename_standard))
         ff = trc.first_frame
@@ -1020,20 +997,21 @@ class _Test:
         try:
             TRC.save_multiple(trcs, output)
         except Exception as e:
-            assert False, error_message + f"Segmented files couldn't be saved: {getattr(e, 'message', repr(e))}"
+            self.fail(error_message + f"Segmented files couldn't be saved: {getattr(e, 'message', repr(e))}")
         try:
             trcs_copied = TRC.load_all(output)
         except Exception as e:
-            assert False, error_message + f"Segmented files couldn't be reloaded: {getattr(e, 'message', repr(e))}"
-        assert len(trcs) == len(trcs_copied), error_message + "Some file have not been saved"
+            self.fail(error_message + f"Segmented files couldn't be reloaded: {getattr(e, 'message', repr(e))}")
+        self.assertEqual(len(trcs), len(trcs_copied), error_message + "Some file have not been saved")
         trcs_copied.sort()
         trcs.sort()
         for i in range(len(trcs)):
-            assert trcs[i] == trcs_copied[i], (error_message + f"File {trcs[i].filename} should be equal to its saved "
-                                                               f"and loaded version.")
+            self.assertEqual(trcs[i], trcs_copied[i],
+                             error_message + f"File {trcs[i].filename} should be equal to its saved-loaded version.")
+        _TRCCleanup.delete_all_files(output, True)
 
-    @staticmethod
-    def _test_add_marker() -> None:
+
+    def test_add_marker(self) -> None:
         trc1 = TRC.load_from_trc(path, _filename_standard)
         trc2 = trc1.copy()
         num_frames = trc2.data.shape[0]
@@ -1041,38 +1019,36 @@ class _Test:
             trc2.add_marker('TEST', {'X': np.zeros(num_frames),
                                      'Y': np.zeros(num_frames),
                                      'Z': np.zeros(num_frames)})
-            assert True
         except Exception as e:
-            assert False, "Adding marker method should work: " + getattr(e, 'message', repr(e))
+            self.fail("Adding marker method should work: " + getattr(e, 'message', repr(e)))
 
-        assert trc2.metadata.num_markers == trc1.metadata.num_markers + 1 == len(trc2.marker_set), \
-            "Wrong number of markers."
+        self.assertEqual(trc2.metadata.num_markers, trc1.metadata.num_markers + 1, "Wrong number of markers.")
+        self.assertEqual(trc2.metadata.num_markers, len(trc2.marker_set), "Wrong number of markers.")
+        self.assertEqual(len(trc2.data.columns), len(trc1.data.columns) + 3, "Wrong number of columns.")
 
-        assert len(trc2.data.columns) == len(trc1.data.columns) + 3, "Wrong number of columns."
 
-    @staticmethod
-    def _test_arrange() -> None:
+    def test_arrange(self) -> None:
         trc = TRC.load_from_trc(path, _filename_standard).copy()
         trc.rename("test")
         trc.save(output)
 
         try:
             TRC.adapt_to_opensim_use(output, "test.trc")
-            assert True
         except Exception as e:
-            assert False, "Arrange method should not raise error: " + getattr(e, 'message', repr(e))
+            self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
         trc_arranged1 = TRC.load_from_trc(output, "test.trc")
-        assert trc != trc_arranged1, "Raw file and arrange file should be different."
+        self.assertNotEqual(trc, trc_arranged1, "Raw file and arrange file should be different.")
 
         try:
             TRC.adapt_to_opensim_use(output, "test.trc")
-            assert True
         except Exception as e:
-            assert False, "Arrange method should not raise error: " + getattr(e, 'message', repr(e))
+            self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
         trc_arranged2 = TRC.load_from_trc(output, "test.trc")
-        assert trc_arranged1 == trc_arranged2, "Using arrange on already arranged TRC file should not have effect."
+        self.assertEqual(trc_arranged1, trc_arranged2,
+                         "Using arrange on already arranged TRC file should not have effect.")
+        _TRCCleanup.delete_all_files(output, True)
 
 
 if __name__ == "__main__":
     logging.basicConfig(filename='test.log', level=logging.INFO)
-    _Test.main()
+    unittest.main()

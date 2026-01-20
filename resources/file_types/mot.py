@@ -1,5 +1,6 @@
 import bisect
 import os
+import unittest
 from copy import deepcopy
 import pandas as pd
 import numpy as np
@@ -9,6 +10,7 @@ from typing import Self
 import logging
 from ptb.util.data import Yac3do
 from resources.custom_exceptions import MissingPathException
+from resources.file_types.fileobject import FileObject
 
 # todo: double-check operations when int/float/double difference
 # todo: check c3d load-write issue
@@ -81,7 +83,7 @@ class MOTMetadata:
         return new
 
 
-class MOT:
+class MOT(FileObject):
     """MOT object.
 
     Attributes:
@@ -96,11 +98,7 @@ class MOT:
 
     extension = ".mot"
 
-    def __init__(self, name: str,
-                 filename: str,
-                 header_lines: MOTMetadata,
-                 data: pd.DataFrame,
-                 filepath: str = None) \
+    def __init__(self, name: str, filename: str, header_lines: MOTMetadata, data: pd.DataFrame, filepath: str = None) \
             -> None:
         """Creates a MOT object.
 
@@ -111,13 +109,11 @@ class MOT:
             data: pd.DataFrame, data
             filepath: str, path to the corresponding MOT file if existing
         """
+        super().__init__(filename, data, filepath)
         self.name = name
-        self.filename = filename
         self.header_lines = header_lines
-        self.data = data
         self.col_names = data.columns.to_list()
         self.first_frame = data.index.values[0]
-        self.filepath = filepath
 
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
@@ -601,177 +597,177 @@ class _MOTCleanup:
                 logging.info(f"Files in {path_to_directory} have not been deleted.")
 
 
-class _Test:
+class _Test(unittest.TestCase):
     """Regression tests for the MOT class methods.
 
     Those tests are used to ensure working methods are not compromised by new code.
     """
 
-    @staticmethod
-    def main() -> None:
-        _Test._test_load()
-        _Test._test_operations()
-        _Test._test_copy()
-        for i in range(10):
-            _Test._test_sample()
-            _Test._test_segmentation()
-        _Test._test_save()
-        _Test._test_c3d_load()
-        print("All tests passed, deleting testing files...")
-        _MOTCleanup.delete_all_files(output, True)
-        logging.info('All tests passed.')
-
-    @staticmethod
-    def _test_load() -> None:
+    def test_load(self) -> None:
         try:
-            m1 = MOT.load_from_mot(os.path.join(path, _filename_standard))
-            m2 = MOT.load_from_mot(path, _filename_nan)
-            assert True
+            MOT.load_from_mot(os.path.join(path, _filename_standard))
+            MOT.load_from_mot(path, _filename_nan)
         except OSError:
-            assert False, \
-                "File not read."
-        assert MOT.load_from_mot(os.path.join(path, _filename_standard)) == MOT.load_from_mot(
-            os.path.join(path, _filename_standard)), \
-            "MOT Object from same file should be equal."
-        assert MOT.load_from_mot(os.path.join(path, _filename_standard)) != MOT.load_from_mot(
-            os.path.join(path, _filename_nan)), \
-            "MOT Object from different files should not be equal."
+            self.fail("File not read.")
+        self.assertEqual(MOT.load_from_mot(os.path.join(path, _filename_standard)), MOT.load_from_mot(os.path.join(path, _filename_standard)),
+            "MOT Object from same file should be equal.")
+        self.assertNotEqual(MOT.load_from_mot(os.path.join(path, _filename_standard)),
+                            MOT.load_from_mot( os.path.join(path, _filename_nan)),
+            "MOT Object from different files should not be equal.")
 
-    @staticmethod
-    def _test_nestled_loads() -> None:
+
+    def test_nestled_loads(self) -> None:
         try:
             mot = MOT.load_from_mot(os.path.join(path, _filename_nan))
             mot.save(output, "first_save.mot")
             mot_first_save = MOT.load_from_mot(os.path.join(output, "first_save.mot"))
             mot_first_save.save(output, "second_save.mot")
             mot_second_save = MOT.load_from_mot(os.path.join(output, "second_save.mot"))
-            assert True
         except OSError:
-            assert False, "Couldn't load and save files in a loop."
-        assert mot == mot_first_save == mot_second_save, "Nestled loaded files should be equal."
+            self.fail("Couldn't load and save files in a loop.")
+        self.assertEqual(mot, mot_first_save, "Nestled loaded files should be equal.")
+        self.assertEqual(mot, mot_second_save, "Nestled loaded files should be equal.")
+        _MOTCleanup.delete_all_files(output, True)
 
-    @staticmethod
-    def _test_operations() -> None:
+
+    def test_operations(self) -> None:
         mot1 = MOT.load_from_mot(os.path.join(path, _filename_standard))
         mot2 = MOT.load_from_mot(os.path.join(path, _filename_nan))
-        assert mot1 == mot1 and mot2 == mot2, \
-            "Equality operation is not working."
-        assert mot1 != mot2 and mot2 != mot1, \
-            "Inequality operation is not working."
-        assert mot1 == MOT.load_from_mot(path, _filename_standard) and mot2 == MOT.load_from_mot(path, _filename_nan), \
-            "Objects loaded from same file should be equal."
+        self.assertEqual(mot1, mot1, "Equality operation is not working.")
+        self.assertEqual(mot2, mot2, "Equality operation is not working.")
+        self.assertNotEqual(mot1, mot2, "Equality operation is not working.")
+        self.assertNotEqual(mot2, mot1, "Equality operation is not working.")
+        self.assertEqual(mot1, MOT.load_from_mot(path, _filename_standard), "Objects loaded from same file should be equal.")
+        self.assertEqual(mot2, MOT.load_from_mot(path, _filename_nan),
+                         "Objects loaded from same file should be equal.")
+
         mot3, mot4 = mot1.copy(), mot1.copy()
         mot3.rename(name='foo', filename=mot1.filename)
         mot4.rename(name=mot1.name, filename='foo')
-        assert mot1 > mot3 and mot1 >= mot3 and mot3 < mot1 and mot3 <= mot1 and \
-               mot1 > mot4 and mot1 >= mot4 and mot4 < mot1 and mot4 <= mot1, "Comparison operations are not working."
+        self.assertGreater(mot1, mot3, "Comparison operation > is not working.")
+        self.assertGreaterEqual(mot1, mot3, "Comparison operation >= is not working.")
+        self.assertLess(mot3, mot1, "Comparison operation < is not working.")
+        self.assertLessEqual(mot3, mot1, "Comparison operation <= is not working.")
+        self.assertGreater(mot1, mot4, "Comparison operation > is not working.")
+        self.assertGreaterEqual(mot1, mot4, "Comparison operation >= is not working.")
+        self.assertLess(mot4, mot1, "Comparison operation < is not working.")
+        self.assertLessEqual(mot4, mot1, "Comparison operation <= is not working.")
 
-    @staticmethod
-    def _test_copy() -> None:
+
+    def test_copy(self) -> None:
         mot = MOT.load_from_mot(os.path.join(path, _filename_standard))
-        assert mot.copy() == mot, \
-            "Copy method is not working."
+        self.assertEqual(mot.copy(), mot, "Copy method is not working.")
 
-    @staticmethod
-    def _test_sample() -> None:
+
+    def test_sample(self) -> None:
         mot = MOT.load_from_mot(os.path.join(path, _filename_standard))
         length = mot.data.shape[0]
 
         # test on frame sampling:
-        rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
-        rand1, rand2 = rands[0], rands[1]
-        error_message = f"Sampling method (frame) is not working with values {rand1, rand2}: "
-        sample = mot.sample(rand1, rand2)
-        assert sample.data.shape[1] == mot.data.shape[1], \
-            error_message + "wrong number of columns."
-        assert sample.data.shape[0] == rand2 - rand1 \
-               and mot.data.shape[0] == sample.data.shape[0] + rand1 + (length - rand2), (
-                error_message + "sampling at wrong frames.")
-        assert mot != sample, \
-            error_message + "original MOT object should not equal sampled objects."
-        sample2 = mot.sample(rand1, rand2)
-        assert sample == sample2, \
-            error_message + "calls on object with same parameters should be equal."
+        for i in range(5):
+            rands = sorted((random.randint(0, length - 1), random.randint(0, length - 1)))
+            rand1, rand2 = rands[0], rands[1]
+            error_message = f"Sampling method (frame) is not working with values {rand1, rand2}: "
+            sample = mot.sample(rand1, rand2)
+            self.assertEqual(sample.data.shape[1], mot.data.shape[1], error_message + "wrong number of columns.")
+            self.assertEqual(sample.data.shape[0], rand2 - rand1, error_message + "sampling at wrong frames.")
+            self.assertEqual(mot.data.shape[0], sample.data.shape[0] + rand1 + (length - rand2), error_message + "sampling at wrong frames.")
+            self.assertNotEqual(mot, sample, "original MOT object should not equal sampled objects.")
+            sample2 = mot.sample(rand1, rand2)
+            self.assertEqual(sample, sample2, error_message + "calls on object with same parameters should be equal.")
 
         # test on time sampling:
         time_scale = mot.data['time']
         time_firstframe = time_scale[mot.first_frame]
         time_lastframe = time_scale[mot.first_frame + mot.data.shape[0] - 1]
 
-        rands = sorted([random.uniform(time_firstframe, time_lastframe - 1),
-                        random.uniform(time_firstframe, time_lastframe - 1)])
-        rand1, rand2 = rands[0], rands[1]
-        frame1, frame2 = bisect.bisect_left(time_scale, rand1), bisect.bisect_right(time_scale, rand2)
+        for i in range(5):
+            rands = sorted([random.uniform(time_firstframe, time_lastframe - 1),
+                            random.uniform(time_firstframe, time_lastframe - 1)])
+            rand1, rand2 = rands[0], rands[1]
+            frame1, frame2 = bisect.bisect_left(time_scale, rand1), bisect.bisect_right(time_scale, rand2)
 
-        error_message = f"Sampling method (time) is not working with values {rand1, rand2}: "
-        sample = mot.sample(rand1, rand2)
-        assert sample.data.shape[1] == mot.data.shape[1], \
-            error_message + "wrong number of columns."
-        assert sample.data.shape[0] == frame2 - frame1 \
-               and mot.data.shape[0] == sample.data.shape[0] + frame1 + (length - frame2), (
-                error_message + "sampling at wrong frames.")
-        assert mot != sample, \
-            error_message + "original MOT object should not equal sampled objects."
-        sample2 = mot.sample(rand1, rand2)
-        assert sample == sample2, \
-            error_message + "calls on object with same parameters should be equal."
+            error_message = f"Sampling method (time) is not working with values {rand1, rand2}: "
+            sample = mot.sample(rand1, rand2)
 
-    @staticmethod
-    def _test_segmentation() -> None:
+            self.assertEqual(sample.data.shape[1], mot.data.shape[1], error_message + "wrong number of columns.")
+            self.assertEqual(sample.data.shape[0], frame2 - frame1, error_message + "sampling at wrong frames.")
+            self.assertEqual(mot.data.shape[0], sample.data.shape[0] + frame1 + (length - frame2),
+                             error_message + "sampling at wrong frames.")
+            self.assertNotEqual(mot, sample, "original MOT object should not equal sampled objects.")
+            sample2 = mot.sample(rand1, rand2)
+            self.assertEqual(sample, sample2, error_message + "calls on object with same parameters should be equal.")
+
+
+    def test_segmentation(self) -> None:
         mot = MOT.load_from_mot(os.path.join(path, _filename_standard))
         length = mot.data.shape[0]
         ff = mot.first_frame
         lf = length + ff - 1
-        rands = sorted((random.randint(ff, lf), random.randint(ff, lf)))
-        rand1, rand2 = rands[0], rands[1]
-        error_message = f"Segmentation method is not working with values {rand1, rand2}: "
-        mots = mot.segment(rands)
-        assert len(mots) == 3, error_message + "wrong number of segments."
-        assert mots[0].data.shape[1] == mot.data.shape[1] \
-               and mots[1].data.shape[1] == mot.data.shape[1] \
-               and mots[2].data.shape[1] == mot.data.shape[1], error_message + "wrong number of columns."
-        assert mots[0].data.shape[0] + mots[1].data.shape[0] + mots[2].data.shape[0] == mot.data.shape[0], \
-            error_message + "data lost in segmentation."
-        assert mots[0].data.shape[0] == mots[0].header_lines.number_rows == rand1 - ff \
-            and mots[1].data.shape[0] == mots[1].header_lines.number_rows == rand2 - rand1 \
-            and mots[2].data.shape[0] == mots[2].header_lines.number_rows == lf - rand2 + 1, (
-                error_message + "segmentation at wrong frames.")
-        assert mot != mots[0] and mot != mots[1] and mot != mots[2], \
-            error_message + "original MOT object should not equal to segmented objects."
-        assert mots == mot.segment([rand1, rand2]), \
-            error_message + "calls on object with same parameters should be equal."
+        for i in range(5):
+            rands = sorted((random.randint(ff, lf), random.randint(ff, lf)))
+            rand1, rand2 = rands[0], rands[1]
+            error_message = f"Segmentation method is not working with values {rand1, rand2}: "
+            mots = mot.segment(rands)
+            self.assertEqual(len(mots), 3, error_message + "wrong number of segments.")
+            self.assertEqual(mots[0].data.shape[1], mot.data.shape[1], error_message + "wrong number of columns.")
+            self.assertEqual(mots[1].data.shape[1], mot.data.shape[1], error_message + "wrong number of columns.")
+            self.assertEqual(mots[2].data.shape[1], mot.data.shape[1], error_message + "wrong number of columns.")
+            self.assertEqual(mots[0].data.shape[0] + mots[1].data.shape[0] + mots[2].data.shape[0], mot.data.shape[0],
+                error_message + "data lost in segmentation.")
 
-    @staticmethod
-    def _test_save() -> None:
+            self.assertEqual(mots[0].data.shape[0], mots[0].header_lines.number_rows,
+                             error_message + "segmentation at wrong frames.")
+            self.assertEqual(mots[0].data.shape[0], rand1 - ff,
+                             error_message + "segmentation at wrong frames.")
+            self.assertEqual(mots[1].data.shape[0], mots[1].header_lines.number_rows,
+                             error_message + "segmentation at wrong frames.")
+            self.assertEqual(mots[1].data.shape[0], rand2 - rand1,
+                             error_message + "segmentation at wrong frames.")
+            self.assertEqual(mots[2].data.shape[0], mots[2].header_lines.number_rows,
+                             error_message + "segmentation at wrong frames.")
+            self.assertEqual(mots[2].data.shape[0], lf - rand2 + 1,
+                             error_message + "segmentation at wrong frames.")
+
+            self.assertNotEqual(mot, mots[0], error_message + "original MOT object should not equal to segmented objects.")
+            self.assertNotEqual(mot, mots[1],
+                                error_message + "original MOT object should not equal to segmented objects.")
+            self.assertNotEqual(mot, mots[2],
+                                error_message + "original MOT object should not equal to segmented objects.")
+
+            self.assertEqual(mots, mot.segment([rand1, rand2]),
+                             error_message + "calls on object with same parameters should be equal.")
+
+
+    def test_save(self) -> None:
         mot1 = MOT.load_from_mot(os.path.join(path, _filename_standard))
         try:
             mot1.save(output)
-            assert True
         except OSError:
-            assert False, "File not written."
+            self.fail("File not written.")
         try:
             mot2 = MOT.load_from_mot(os.path.join(output, _filename_standard))
-            assert True
         except OSError:
-            assert False, "Written file could not be read."
-        assert mot1 == mot2, \
-            "Write method is not working."
+            self.fail("Written file could not be read.")
+        self.assertEqual(mot1, mot2, "Write method is not working.")
+        _MOTCleanup.delete_all_files(output, True)
 
-    @staticmethod
-    def _test_c3d_load() -> None:
+
+    def test_c3d_load(self) -> None:
         try:
             mot = MOT.load_from_c3d(os.path.join(path, _filename_c3d))
-            assert True
         except Exception as e:
-            assert False, f"MOT file couldn't be loaded from C3D file: + {getattr(e, 'message', repr(e))}"
+            self.fail(f"MOT file couldn't be loaded from C3D file: + {getattr(e, 'message', repr(e))}")
         try:
             mot.save(output)
         except Exception as e:
-            assert False, f"MOT object loaded from C3D file couldn't be saved: + {getattr(e, 'message', repr(e))}"
+            self.fail(f"MOT object loaded from C3D file couldn't be saved: + {getattr(e, 'message', repr(e))}")
         mot_copy = MOT.load_from_mot(os.path.join(output, mot.filename))
-        assert mot == mot_copy, "MOT object loaded from the save of a C3D-loaded MOT object should equal the original"
+        self.assertEqual(mot, mot_copy, "MOT object loaded from the save of a C3D-loaded MOT object should equal the original")
+        _MOTCleanup.delete_all_files(output, True)
 
 
 if __name__ == "__main__":
     logging.basicConfig(filename='test.log', level=logging.INFO)
-    _Test.main()
+    unittest.main()
+    _MOTCleanup.delete_all_files(output)

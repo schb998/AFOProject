@@ -144,6 +144,8 @@ def process(trial: Trial, power_output_path: str):
         os.makedirs(temp_directory, exist_ok=True)
 
         for cycle in trial.gait_cycles[side]:
+
+            """
             if cycle.ik.filepath is None:
                 cycle.ik.save(temp_directory)
             ik_path = cycle.ik.filepath
@@ -151,9 +153,7 @@ def process(trial: Trial, power_output_path: str):
             if cycle.id.filepath is None:
                 cycle.id.save(temp_directory)
             id_path = cycle.id.filepath
-
-            ik_data = read_mot_files(ik_path)
-            id_data = read_mot_files(id_path)
+            """
 
             angular_velocity = compute_angular_velocity(cycle.ik.data, trial.name)
             joint_power = compute_joint_power(angular_velocity, cycle.id.data, side)
@@ -163,7 +163,7 @@ def process(trial: Trial, power_output_path: str):
             joint_power.to_csv(output_file_path, index=False)
             cycle.add_joint_power(output_file_path, joint_power)
 
-            # plt.plot(joint_power['time'], joint_power['ankle_angle_r_power'])
-            # plt.show()
+            plt.plot(joint_power['time'], joint_power['ankle_angle_r_power'] if side == "Right" else joint_power['ankle_angle_l_power'])
+            plt.show()
 
             print(f"Successfully processed: {cycle.ik.filename} -> {output_filename}")

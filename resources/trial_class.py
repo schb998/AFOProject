@@ -5,27 +5,7 @@ from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 from typing import Self
 from resources.custom_exceptions import *
-
-class CustomExternalLoads:
-    extension = ".xml"
-
-    def __init__(self, external_loads: osim.ExternalLoads, path: str = None):
-        self.external_loads = external_loads
-        path = path if path is not None else external_loads.getAbsolutePathString()
-        self.filepath = path
-        self.filename = os.path.basename(path) if path is not None else None
-
-
-class CustomJointPower:
-    extension = ".csv"
-
-    def __init__(self, joint_power: pd.DataFrame, path: str = None):
-        self.joint_power = joint_power
-        self.filepath = path
-        self.filename = os.path.basename(path) if path is not None else None
-
-    def save(self, path: str = None):
-        self.joint_power.to_csv(path if path is not None else self.filepath, index=False)
+from resources.file_types.fileobject import CustomExternalLoads, CustomJointPower
 
 
 class GaitCycle:
@@ -552,7 +532,6 @@ class Trial:
 
         self.name = self.grf.name.replace(".mot", "") if name is None else name
 
-        trc = None
         if trc is not None:
             try:
                 self.trc = TRC.load_from_trc(trc) if not isinstance(trc, TRC) else trc
