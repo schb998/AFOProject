@@ -206,7 +206,7 @@ def write_mot_file(df, column_labels, output_file, header_lines=None):
 
 # MAIN
 if __name__ == "__main__":
-    data_path = r"D:\MyData\Testingworkflow\Test\mot_corrected"
+    data_path = r"D:\MyData\Pilots\Pilot_Ella\Speed_Trials\org_data\P01\mot"
     mot_data = read_mot_files(data_path)
 
     for file in mot_data:
