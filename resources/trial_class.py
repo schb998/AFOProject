@@ -156,7 +156,8 @@ class GaitCycle:
             None
         """
         if exl_object is not None:
-            self.external_loads = exl_object if isinstance(exl_object, CustomExternalLoads) else CustomExternalLoads(exl_object, external_loads_path)
+            self.external_loads = exl_object if isinstance(exl_object, CustomExternalLoads) else CustomExternalLoads(
+                exl_object, external_loads_path)
 
         elif external_loads_path is not None:
             self.external_loads = CustomExternalLoads(osim.ExternalLoads(external_loads_path), external_loads_path)
@@ -189,7 +190,8 @@ class GaitCycle:
             None
         """
         if jp_object is not None:
-            self.jp = jp_object if isinstance(jp_object, CustomJointPower) else CustomJointPower(jp_object, joint_power_path)
+            self.jp = jp_object if isinstance(jp_object, CustomJointPower) else CustomJointPower(jp_object,
+                                                                                                 joint_power_path)
 
         elif joint_power_path is not None:
             self.jp = CustomJointPower(pd.read_csv(joint_power_path), joint_power_path)
@@ -240,7 +242,7 @@ class GaitCycle:
         if self.id is not None:
             return get_start_and_end(self.id)
         if self.jp is not None:
-            return self.jp.joint_power['time'].iloc[0], self.jp.joint_power['time'].iloc[-1]
+            return self.jp.data['time'].iloc[0], self.jp.data['time'].iloc[-1]
         return None
 
     def is_included(self, starting_time: float, ending_time: float) -> bool:
@@ -541,6 +543,15 @@ class Trial:
         self.corrected_grf = None
         self.notes = notes
         self.gait_cycles: dict[str, list[GaitCycle]] = {"Right": [], "Left": []}
+
+
+    @classmethod
+    def from_c3d(cls, c3d: str, notes: str = None):
+        mot = MOT.load_from_c3d(c3d)
+        trc = TRC.load_from_c3d(c3d)
+        name = os.path.basename(c3d).replace(".c3d", "")
+        return Trial(mot, trc, name, notes)
+
 
     def add_trc(self, path_to_trc: str = None, trc: TRC = None):
         """Add the Marker Motion data (TRC) to a trial.

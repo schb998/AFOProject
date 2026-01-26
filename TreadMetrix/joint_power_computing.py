@@ -158,12 +158,12 @@ def process(trial: Trial, power_output_path: str):
             angular_velocity = compute_angular_velocity(cycle.ik.data, trial.name)
             joint_power = compute_joint_power(angular_velocity, cycle.id.data, side)
 
-            output_filename = f"{trial.name}_{side}_{cycle.num}.csv"
+            output_filename = f"{trial.name}_JP_{side.lower()}_{cycle.num}.csv"
             output_file_path = os.path.join(output_path, output_filename)
             joint_power.to_csv(output_file_path, index=False)
             cycle.add_joint_power(output_file_path, joint_power)
 
-            plt.plot(joint_power['time'], joint_power['ankle_angle_r_power'] if side == "Right" else joint_power['ankle_angle_l_power'])
-            plt.show()
+            # plt.plot(data['time'], data['ankle_angle_r_power'] if side == "Right" else data['ankle_angle_l_power'])
+            # plt.show()
 
             print(f"Successfully processed: {cycle.ik.filename} -> {output_filename}")

@@ -153,9 +153,7 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
                                      float(trc.data['Time'].iloc[-1]))
 
             # Name format
-            cycle_name = f"{trial.name}_{side.lower()}_cycle{cycle.num}"
-            mot_name = f"{cycle_name}.mot"
-            mot_path = os.path.join(ik_output_path, mot_name)
+            mot_path = os.path.join(ik_output_path, f"{trial.name}_IK_{side.lower()}_{cycle.num}.mot")
             ik_tool.setOutputMotionFileName(mot_path)
 
             # Add marker tasks

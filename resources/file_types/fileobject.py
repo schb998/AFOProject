@@ -13,23 +13,18 @@ class FileObject:
         self.filename = filename
         self.filepath = filepath
 
-class CustomExternalLoads:
+class CustomExternalLoads(FileObject):
     extension = ".xml"
 
-    def __init__(self, external_loads: osim.ExternalLoads, path: str = None):
-        self.external_loads = external_loads
-        path = path if path is not None else external_loads.getAbsolutePathString()
-        self.filepath = path
-        self.filename = os.path.basename(path) if path is not None else None
+    def __init__(self, data: osim.ExternalLoads, filename: str, path: str = None):
+        super().__init__(filename, data, os.path.basename(path) if path is not None else None)
 
 
-class CustomJointPower:
+class CustomJointPower(FileObject):
     extension = ".csv"
 
-    def __init__(self, joint_power: pd.DataFrame, path: str = None):
-        self.joint_power = joint_power
-        self.filepath = path
-        self.filename = os.path.basename(path) if path is not None else None
+    def __init__(self, data: pd.DataFrame, filename: str, path: str = None):
+        super().__init__(filename, data, os.path.basename(path) if path is not None else None)
 
     def save(self, path: str = None):
-        self.joint_power.to_csv(path if path is not None else self.filepath, index=False)
+        self.data.to_csv(path if path is not None else self.filepath, index=False)

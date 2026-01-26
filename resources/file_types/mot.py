@@ -115,6 +115,7 @@ class MOT(FileObject):
         self.col_names = data.columns.to_list()
         self.first_frame = data.index.values[0]
 
+
     def __eq__(self, other: object) -> bool:
         """Overrides the default implementation of equality operation.
 
@@ -134,6 +135,7 @@ class MOT(FileObject):
             return False
         return True
 
+
     def __ne__(self, other: object) -> bool:
         """Overrides the default implementation of inequality operation.
 
@@ -146,6 +148,7 @@ class MOT(FileObject):
             bool
         """
         return not self.__eq__(other)
+
 
     def __gt__(self, other: Self) -> bool:
         """Overrides the default implementation of "strictly greater than" operation.
@@ -165,6 +168,7 @@ class MOT(FileObject):
         else:
             return n > on
 
+
     def __lt__(self, other: Self) -> bool:
         """Overrides the default implementation of "strictly lower than" operation.
 
@@ -182,6 +186,7 @@ class MOT(FileObject):
             return self.filename.lower() < other.filename.lower()
         else:
             return n < on
+
 
     def __le__(self, other: Self) -> bool:
         """Overrides the default implementation of "equal or lower than" operation.
@@ -201,6 +206,7 @@ class MOT(FileObject):
         else:
             return n < on
 
+
     def __ge__(self, other: Self) -> bool:
         """Overrides the default implementation of "equal or greater than" operation.
 
@@ -218,6 +224,7 @@ class MOT(FileObject):
             return self.filename.lower() >= other.filename.lower()
         else:
             return n > on
+
 
     @classmethod
     def load_from_mot(cls, filepath: str, filename: str = None, separator=r'\s+', start_index: int = 1) -> Self:
@@ -279,6 +286,7 @@ class MOT(FileObject):
             logging.warning(error_message)
             raise OSError(error_message)
 
+
     @classmethod
     def load_from_c3d(cls, filepath: str, filename: str = None) -> Self:
         c3d = Yac3do(filepath)
@@ -292,14 +300,24 @@ class MOT(FileObject):
         data_columns = ptb_mot['analog_channels_label']
         first_frame = ptb_mot['first_frame']
         raw_data = ptb_mot['analog_data']
+
         data = raw_data[data_columns]
         index = [i for i in range(first_frame, first_frame + data.shape[0] - 1)]
         data = pd.DataFrame(data, columns=data_columns, index=index)
 
-        return cls(name=c3d_name.replace(".c3d", "") if filename is None else filename.replace(".mot", ""),
+        frame_rate = ptb_mot['analog_rate']
+        time = [i*(1/frame_rate) for i in range(ptb_mot['num_analog_frames'] - 1)]
+        time = pd.DataFrame(time, columns=['time'], index = index)
+
+        data = time.join(data)
+
+        result = cls(name=c3d_name.replace(".c3d", "") if filename is None else filename.replace(".mot", ""),
                    filename = c3d_name.replace(".c3d", ".mot") if filename is None else filename,
                    header_lines=metadata,
                    data=data)
+        result.update_data()
+        return result
+
 
     def rename(self, name: str = None, filename: str = None):
         """Updates the MOT object's name and/or file_name.
@@ -318,12 +336,16 @@ class MOT(FileObject):
             else:
                 self.filename = filename
 
+
     def update_data(self, new_data: pd.DataFrame = None, filepath: str = None):
         if new_data is not None:
             self.data = new_data
         self.first_frame = self.data.index.values[0]
         self.col_names = list(self.data.columns)
+        self.header_lines.number_columns = len(self.col_names)
+        self.header_lines.number_rows = self.data.shape[0]
         self.filepath = filepath
+
 
     def save(self, file_path: str = None, file_name: str = None):
         """Writes the MOT object into a MOT file.
@@ -380,6 +402,7 @@ class MOT(FileObject):
             raise OSError(f"Unable to write file {file_name}: {getattr(e, 'message', repr(e))}")
         self.filepath = full_path
 
+
     def copy(self) -> Self:
         """Copies and returns a new MOT object.
 
@@ -393,6 +416,7 @@ class MOT(FileObject):
         copy.name += '_copy'
         copy.filepath = None
         return copy
+
 
     def sample(self, first_point: int | float, last_point: int | float, force_time: bool = False) -> Self:
         """Samples the current MOT file between the given points.
@@ -566,7 +590,7 @@ class _MOTCleanup:
 
         Args:
             path_to_directory: path to the directory where all MOT files are to be deleted.
-            force_delete: whever to skip asking for confirmation before deletion.
+            force_delete: whether to skip asking for confirmation before deletion.
         """
 
         def delete(files: list[str]) -> None:

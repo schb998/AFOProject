@@ -90,116 +90,6 @@ def _setup_output_directory(root: Tk) -> (Label, Label, Button, Button):
     return label, selected, select_button, unselect_button
 
 
-def _setup_raw_mot(root: Tk) -> (Label, Label, Button, Button):
-    """Set up a line on given window to manage raw MOT files to process.
-
-    Args:
-        root: root Tk window
-
-    Returns:
-        Explanatory Tkinter Label of the path asked.
-        Tkinter Label containing current content of the local save.
-        Selection Tkinter Button.
-        Deselection Tkinter Button.
-    """
-    label = Label(root, text="Raw MOT files to process:")
-    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
-
-    selected = Label(root, text=tbox.reformat(back.get_local("raw_mot")), background="darkgrey")
-    selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
-    LABELS.update({selected: "raw_mot"})
-
-    def select_button_click():
-        message = "Select the raw MOT files to process."
-        tbox.infobox(message)
-        selection = list(askopenfilenames(title=message,
-                                          initialdir=back.get_default_searching_path(),
-                                          filetypes=[("OpenSim Motion files", "*.mot")]))
-        selection.sort()
-        valid, detail = back.set_raw_mots(selection)
-        if not valid:
-            message = f"Selection does not match requirement."
-            if detail is not None:
-                message = message + " " + detail
-            tbox.infobox(message)
-            return
-        if detail is not None:
-            tbox.infobox(detail)
-        _update_labels()
-        _update_button()
-
-    select_button = Button(root, text="Select",
-                           command=lambda: {select_button_click()})
-    select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
-
-    def unselect_button_click():
-        back.delete_raw_mot()
-        _update_labels()
-        _update_button()
-
-    unselect_button = Button(root, text="Unselect",
-                             command=lambda: {unselect_button_click()})
-    unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
-
-    _update_row()
-    return label, selected, select_button, unselect_button
-
-
-def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
-    """Set up a line on given window to manage raw TRC files to process.
-
-    Args:
-        root: root Tk window
-
-    Returns:
-        Explanatory Tkinter Label of the path asked.
-        Tkinter Label containing current content of the local save.
-        Selection Tkinter Button.
-        Deselection Tkinter Button.
-    """
-    label = Label(root, text="Raw TRC files to process:")
-    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
-
-    selected = Label(root, text=tbox.reformat(back.get_local("raw_trc")), background="darkgrey")
-    selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
-    LABELS.update({selected: "raw_trc"})
-
-    def select_button_click():
-        message = "Select the raw TRC files to process."
-        tbox.infobox(message)
-        selection = list(askopenfilenames(title=message,
-                                          initialdir=back.get_default_searching_path(),
-                                          filetypes=[("OpenSim Marker files", "*.trc")]))
-        selection.sort()
-        valid, detail = back.set_raw_trcs(selection)
-        if not valid:
-            message = f"Selection does not match requirement."
-            if detail is not None:
-                message = message + " " + detail
-            tbox.infobox(message)
-            return
-        if detail is not None:
-            tbox.infobox(detail)
-        _update_labels()
-        _update_button()
-
-    select_button = Button(root, text="Select",
-                           command=lambda: {select_button_click()})
-    select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
-
-    def unselect_button_click():
-        back.delete_raw_trc()
-        _update_labels()
-        _update_button()
-
-    unselect_button = Button(root, text="Unselect",
-                             command=lambda: {unselect_button_click()})
-    unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
-
-    _update_row()
-    return label, selected, select_button, unselect_button
-
-
 def _set_up_raw_directory(root: Tk) -> (Label, Label, Button, Button):
     """Set up a line on given window to manage raw MOT files to process.
 
@@ -252,23 +142,187 @@ def _set_up_raw_directory(root: Tk) -> (Label, Label, Button, Button):
     return label, selected, select_button, unselect_button
 
 
+def _setup_raw_c3d(root: Tk) -> (Label, Label, Button, Button):
+    """Set up a line on given window to manage raw C3D files to process.
+
+    Args:
+        root: root Tk window
+
+    Returns:
+        Explanatory Tkinter Label of the path asked.
+        Tkinter Label containing current content of the local save.
+        Selection Tkinter Button.
+        Deselection Tkinter Button.
+    """
+    label = Label(root, text="Raw C3D files to process:")
+    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
+
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_c3d")), background="darkgrey")
+    selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
+    LABELS.update({selected: "raw_c3d"})
+
+    def select_button_click():
+        message = "Select the raw C3D files to process."
+        tbox.infobox(message)
+        selection = tbox.get_c3d_files(message, back.get_default_searching_path())
+        selection.sort()
+        valid, detail = back.set_raw_c3ds(selection)
+        if not valid:
+            message = f"Selection does not match requirement."
+            if detail is not None:
+                message = message + " " + detail
+            tbox.infobox(message)
+            return
+        if detail is not None:
+            tbox.infobox(detail)
+        _update_labels()
+        _update_button()
+
+    select_button = Button(root, text="Select",
+                           command=lambda: {select_button_click()})
+    select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
+
+    def unselect_button_click():
+        back.delete_raw_c3d()
+        _update_labels()
+        _update_button()
+
+    unselect_button = Button(root, text="Unselect",
+                             command=lambda: {unselect_button_click()})
+    unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
+
+    _update_row()
+    return label, selected, select_button, unselect_button
+
+
+def _setup_raw_mot(root: Tk) -> (Label, Label, Button, Button):
+    """Set up a line on given window to manage raw MOT files to process.
+
+    Args:
+        root: root Tk window
+
+    Returns:
+        Explanatory Tkinter Label of the path asked.
+        Tkinter Label containing current content of the local save.
+        Selection Tkinter Button.
+        Deselection Tkinter Button.
+    """
+    label = Label(root, text="Raw MOT files to process:")
+    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
+
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_mot")), background="darkgrey")
+    selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
+    LABELS.update({selected: "raw_mot"})
+
+    def select_button_click():
+        message = "Select the raw MOT files to process."
+        tbox.infobox(message)
+        selection = tbox.get_mot_files(message, back.get_default_searching_path())
+        selection.sort()
+        valid, detail = back.set_raw_mots(selection)
+        if not valid:
+            message = f"Selection does not match requirement."
+            if detail is not None:
+                message = message + " " + detail
+            tbox.infobox(message)
+            return
+        if detail is not None:
+            tbox.infobox(detail)
+        _update_labels()
+        _update_button()
+
+    select_button = Button(root, text="Select",
+                           command=lambda: {select_button_click()})
+    select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
+
+    def unselect_button_click():
+        back.delete_raw_mot()
+        _update_labels()
+        _update_button()
+
+    unselect_button = Button(root, text="Unselect",
+                             command=lambda: {unselect_button_click()})
+    unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
+
+    _update_row()
+    return label, selected, select_button, unselect_button
+
+
+def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
+    """Set up a line on given window to manage raw TRC files to process.
+
+    Args:
+        root: root Tk window
+
+    Returns:
+        Explanatory Tkinter Label of the path asked.
+        Tkinter Label containing current content of the local save.
+        Selection Tkinter Button.
+        Deselection Tkinter Button.
+    """
+    label = Label(root, text="Raw TRC files to process:")
+    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=10)
+
+    selected = Label(root, text=tbox.reformat(back.get_local("raw_trc")), background="darkgrey")
+    selected.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
+    LABELS.update({selected: "raw_trc"})
+
+    def select_button_click():
+        message = "Select the raw TRC files to process."
+        tbox.infobox(message)
+        selection = tbox.get_trc_files(message, back.get_default_searching_path())
+        selection.sort()
+        valid, detail = back.set_raw_trcs(selection)
+        if not valid:
+            message = f"Selection does not match requirement."
+            if detail is not None:
+                message = message + " " + detail
+            tbox.infobox(message)
+            return
+        if detail is not None:
+            tbox.infobox(detail)
+        _update_labels()
+        _update_button()
+
+    select_button = Button(root, text="Select",
+                           command=lambda: {select_button_click()})
+    select_button.grid(row=CURRENT_ROW, column=2, sticky=NW, pady=10)
+
+    def unselect_button_click():
+        back.delete_raw_trc()
+        _update_labels()
+        _update_button()
+
+    unselect_button = Button(root, text="Unselect",
+                             command=lambda: {unselect_button_click()})
+    unselect_button.grid(row=CURRENT_ROW, column=3, sticky=NW, pady=10)
+
+    _update_row()
+    return label, selected, select_button, unselect_button
+
+
+def _setup_or_label(root: Tk) -> (Label, Label):
+    or_label = Label(root, text="OR")
+    or_label.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
+    _update_row()
+    return or_label
+
+
 def main() -> None:
     root = Tk()
     root.title("Path management")
-    tbox.set_up_window(root, window_width=800)
+    tbox.set_up_window(root, window_width=600, window_height=400)
     root.columnconfigure(4)
 
     _setup_output_directory(root)
+
     _set_up_raw_directory(root)
-
-    label = Label(root, text="OR")
-    label.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
-    _update_row()
-
+    _setup_or_label(root)
+    _setup_raw_c3d(root)
+    _setup_or_label(root)
     _setup_raw_mot(root)
     _setup_raw_trc(root)
 
-    _update_row()
     save_button = Button(root, text="Save to file", default='active',
                          command=lambda: {back.save_to_json()})
     save_button.grid(row=CURRENT_ROW, column=0)

@@ -12,11 +12,14 @@ def call_to_gui() -> None:
 def call_quick_setup() -> bool:
     return ask_question("Run the pipeline using quick setup?", "Quick setup")
 
+
 def call_should_save() -> bool:
     return ask_question("Save the optional files?", "Saving preference")
 
+
 def call_should_show() -> bool:
     return ask_question("Show the plots as the code run?", "Show preference")
+
 
 def get_output_path(trial_name: str = None) -> str:
     """Get the pipeline's saved output path.
@@ -81,6 +84,13 @@ def get_raw_trc_path() -> list[str]:
     if path is not None:
         return path
     raise MissingPathException("list of raw trcs to process")
+
+
+def get_raw_c3d_path() -> list[str]:
+    path = model.get_local("raw_c3d")
+    if path is not None:
+        return path
+    raise MissingPathException("list of raw c3ds to process")
 
 
 def get_corrected_mot_path(trial_name: str = None) -> str:
