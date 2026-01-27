@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
@@ -86,6 +88,8 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     Returns:
         TRC: Updated TRC object with added RHJC and LHJC markers.
     """
+    old_name = trc.filename
+
     rasi = [m for m in trc.marker_set if re.search("^RASI", m) is not None][0]
     lasi = [m for m in trc.marker_set if re.search("^LASI", m) is not None][0]
     rpsi = [m for m in trc.marker_set if re.search("^RPSI", m) is not None][0]
@@ -104,10 +108,9 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     rhjc, lhjc = hjc_harrington(markers)
 
     new = trc.copy()
-    new.filename = deepcopy(trc.filename).replace(".trc", "_addedHJ.trc")
-
     new.add_marker("RHJC", rhjc)
     new.add_marker("LHJC", lhjc)
+    new.rename(filename=old_name)
 
     return new
 
@@ -127,9 +130,10 @@ def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
     try:
         trc = TRC.load_from_trc(input_path)
         updated_trc = add_virtual_markers_to_trc(trc)
+        TRC.adapt_to_opensim_use(trc=updated_trc, filepath=output_path)
         if output_path is not None:
-            updated_trc.save(output_path)
-            logging.info(f"Updated TRC file saved to: {output_path}")
+            updated_trc.update_data(filepath=output_path)
+        logging.info(f"Updated TRC file saved to: {updated_trc.filepath}")
         return updated_trc
     except Exception as e:
         message = f"Error while processing TRC file: {getattr(e, 'message', repr(e))}"

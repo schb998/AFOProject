@@ -12,7 +12,7 @@
 		
 		<GenericModelMaker>
 			
-			<model_file>Unassigned</model_file>
+			<model_file>C:/Users/lgre690/PycharmProjects/AFOProject/resources/osim_files/markerset.osim</model_file>
 			
 			<marker_set_file>Unassigned</marker_set_file>
 		</GenericModelMaker>
@@ -33,15 +33,15 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> RShoulder LShoulder</markers>
+									<markers> RACR1 LACR1</markers>
 								</MarkerPair>
 								<MarkerPair>
 									
-									<markers> LShoulder Sternum</markers>
+									<markers> LACR1 T10</markers>
 								</MarkerPair>
 								<MarkerPair>
 									
-									<markers> RShoulder Sternum</markers>
+									<markers> RACR1 T10</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -65,11 +65,11 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> RASIS LASIS</markers>
+									<markers> RASI LASI</markers>
 								</MarkerPair>
 								<MarkerPair>
 									
-									<markers> RPSIS LPSIS</markers>
+									<markers> RPSI LPSI</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -93,11 +93,11 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> RToe RHeel</markers>
+									<markers> RToe RCAL</markers>
 								</MarkerPair>
 								<MarkerPair>
 									
-									<markers> RMT2 RMT5</markers>
+									<markers> RMT1 RMT5</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -129,7 +129,7 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> RHJC RKneeMedial</markers>
+									<markers> RHJC RMFC</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -153,11 +153,11 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> RAnkleLateral RKneeLateral</markers>
+									<markers> RLMAL RLFC</markers>
 								</MarkerPair>
 								<MarkerPair>
 									
-									<markers> RAnkleMedial RKneeMedial</markers>
+									<markers> RMMAL RMFC</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -181,11 +181,11 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> LToe LHeel</markers>
+									<markers> LToe LCAL</markers>
 								</MarkerPair>
 								<MarkerPair>
 									
-									<markers> LMT5 LMT2</markers>
+									<markers> LMT5 LMT1</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -217,7 +217,7 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> LHJC LKneeMedial</markers>
+									<markers> LHJC LMFC</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -241,11 +241,11 @@
 							<objects>
 								<MarkerPair>
 									
-									<markers> LAnkleLateral LKneeLateral</markers>
+									<markers> LLMAL LLFC</markers>
 								</MarkerPair>
 								<MarkerPair>
 									
-									<markers> LAnkleMedial LKneeMedial</markers>
+									<markers> LMMAL LMFC</markers>
 								</MarkerPair>
 							</objects>
 							<groups />
@@ -305,19 +305,19 @@
 						
 						<weight>0</weight>
 					</IKMarkerTask>
-					<IKMarkerTask name="RASIS">
+					<IKMarkerTask name="RASI">
 						
 						<apply>true</apply>
 						
 						<weight>0</weight>
 					</IKMarkerTask>
-					<IKMarkerTask name="LASIS">
+					<IKMarkerTask name="LASI">
 						
 						<apply>true</apply>
 						
 						<weight>0</weight>
 					</IKMarkerTask>
-					<IKMarkerTask name="RPSIS">
+					<IKMarkerTask name="RPSI">
 						
 						<apply>true</apply>
 						
@@ -353,7 +353,7 @@
 						
 						<weight>0</weight>
 					</IKMarkerTask>
-					<IKMarkerTask name="RMT2">
+					<IKMarkerTask name="RMT1">
 						
 						<apply>true</apply>
 						
@@ -401,7 +401,7 @@
 						
 						<weight>0</weight>
 					</IKMarkerTask>
-					<IKMarkerTask name="LMT2">
+					<IKMarkerTask name="LMT1">
 						
 						<apply>true</apply>
 						
@@ -419,7 +419,7 @@
 						
 						<weight>10</weight>
 					</IKMarkerTask>
-					<IKMarkerTask name="LPSIS">
+					<IKMarkerTask name="LPSI">
 						
 						<apply>true</apply>
 						

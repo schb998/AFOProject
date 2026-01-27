@@ -8,7 +8,9 @@ import ast
 import random
 from typing import Self
 import logging
-from ptb.util.data import Yac3do
+from ptb.util.data import Yac3do, MocapDO
+from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels, OSIMForcePlate
+
 from resources.custom_exceptions import MissingPathException
 from resources.file_types.fileobject import FileObject
 
@@ -24,63 +26,83 @@ _filename_nan = "MOT_nan.mot"  # missing data should be handled
 _filename_c3d = "C3D_standard.c3d"
 
 class MOTMetadata:
+    _string_trial: str = "type"
     _string_version: str = "version"
     _string_number_rows: str = "nRows"
     _string_number_columns: str = "nColumns"
     _string_in_degrees: str = "inDegrees"
+    _string_name: str = "name"
+    _string_notes: str = "notes"
 
-    def __init__(self, version: int = None, n_rows: int = None, n_columns: int = None, in_degrees: bool = None,
-                 additional_metadata: dict = None) -> None:
+    def __init__(self, trial: str = None, version: int = None, n_rows: int = None, n_columns: int = None,
+                 in_degrees: bool = None, name: str = None, notes: str = None, additional_metadata: dict = None) -> None:
         """Creates a MOT object.
 
         Args:
+            name:
+            notes:
             version: int, version number of the MOT object
             n_rows: int, number of rows of the MOT object's data
             n_columns: int, number of columns of the MOT object's data
             in_degrees: bool, whether the MOT object data is in degrees
         """
+        self.trial = trial
         self.version = version
         self.number_rows = n_rows
         self.number_columns = n_columns
         self.in_degrees = in_degrees
+        self.name = name
+        self.notes = notes
         self.additional_metadata = additional_metadata if additional_metadata is not None else {}
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, MOTMetadata):
             return False
-        if self.version != other.version:
-            return False
-        if self.number_rows != other.number_rows:
-            return False
-        if self.number_columns != other.number_columns:
-            return False
-        if self.in_degrees != other.in_degrees:
-            return False
-        return self.additional_metadata == other.additional_metadata
+        return (self.version == other.version
+                and self.number_rows == other.number_rows
+                and self.number_columns == other.number_columns
+                and self.in_degrees == other.in_degrees
+                and self.additional_metadata == other.additional_metadata)
 
 
     def __str__(self):
         string = ""
+        string = string if self.trial is None else string + MOTMetadata._string_trial + "=" + str(self.trial) + "\n"
         string = string if self.version is None else string + MOTMetadata._string_version + "=" + str(self.version) + "\n"
         string = string if self.number_rows is None else string + MOTMetadata._string_number_rows + "=" + str(self.number_rows) + "\n"
         string = string if self.number_columns is None else string + MOTMetadata._string_number_columns + "=" + str(self.number_columns) + "\n"
+        string = string if self.name is None else string + MOTMetadata._string_name + "=" + str(self.name) + "\n"
+        string = string if self.notes is None else string + MOTMetadata._string_notes + "=" + str(self.notes) + "\n"
         if self.in_degrees is not None:
             addition = "yes" if self.in_degrees else "no"
-            string = string + "=" + addition + "\n"
+            string = string + MOTMetadata._string_in_degrees + "=" + addition + "\n"
         for key in self.additional_metadata.keys():
             string = string + key + "=" + str(self.additional_metadata[key]) + "\n"
         return string
 
     @classmethod
-    def from_dict(cls, dictionary):
+    def from_dict(cls, dictionary: dict, from_ptb: bool = False) -> 'MOTMetadata':
         new = MOTMetadata()
-        new.version = dictionary.pop(MOTMetadata._string_version) if MOTMetadata._string_version in dictionary else None
-        new.number_rows = dictionary.pop(MOTMetadata._string_number_rows) if MOTMetadata._string_number_rows in dictionary else None
-        new.number_columns = dictionary.pop(MOTMetadata._string_number_columns) if MOTMetadata._string_number_columns in dictionary else None
-        new.in_degrees = dictionary.pop(MOTMetadata._string_in_degrees).strip().lower() == "yes" if MOTMetadata._string_in_degrees in dictionary else None
-        for key in dictionary.keys():
-            new.additional_metadata[key] = dictionary[key]
-        return new
+        if from_ptb:
+            new.trial = dictionary.pop(HeadersLabels.trial) if HeadersLabels.trial in dictionary else None
+            new.version = dictionary.pop(HeadersLabels.version) if HeadersLabels.version in dictionary else None
+            new.number_rows = dictionary.pop(HeadersLabels.nRows) if HeadersLabels.nRows in dictionary else None
+            new.number_columns = dictionary.pop(HeadersLabels.nColumns) if HeadersLabels.nColumns in dictionary else None
+            new.in_degrees = dictionary.pop(HeadersLabels.inDegrees) if HeadersLabels.inDegrees in dictionary else None
+            new.name = dictionary.pop(HeadersLabels.data_namme) if HeadersLabels.data_namme in dictionary else None
+            new.notes = dictionary.pop(HeadersLabels.notes) if HeadersLabels.notes in dictionary else None
+            dictionary.pop(HeadersLabels.endheader)
+            for key, value in dictionary.items():
+                new.additional_metadata[key] = value
+            return new
+        else:
+            new.version = dictionary.pop(MOTMetadata._string_version) if MOTMetadata._string_version in dictionary else None
+            new.number_rows = dictionary.pop(MOTMetadata._string_number_rows) if MOTMetadata._string_number_rows in dictionary else None
+            new.number_columns = dictionary.pop(MOTMetadata._string_number_columns) if MOTMetadata._string_number_columns in dictionary else None
+            new.in_degrees = dictionary.pop(MOTMetadata._string_in_degrees).strip().lower() == "yes" if MOTMetadata._string_in_degrees in dictionary else None
+            for key in dictionary.keys():
+                new.additional_metadata[key] = dictionary[key]
+            return new
 
 
 class MOT(FileObject):
@@ -289,32 +311,48 @@ class MOT(FileObject):
 
     @classmethod
     def load_from_c3d(cls, filepath: str, filename: str = None) -> Self:
-        c3d = Yac3do(filepath)
-        c3d_name = os.path.basename(c3d.filename)
-        ptb_mot = c3d.c3d_dict
+        filename = filename if filename is not None else os.path.basename(filepath)
+        m = MocapDO.create_from_c3d(filepath)
 
-        metadata = MOTMetadata()
-        metadata.number_rows = ptb_mot['num_analog_frames']
-        metadata.number_columns = ptb_mot['num_analog_channels']
+        header = OSIMStorage.simple_header_template()
+        header[HeadersLabels.trial] = filename[:filename.rindex('.')]
+        header[HeadersLabels.nRows] = m.force_plates.data.shape[0]
+        header[HeadersLabels.nColumns] = m.force_plates.num_of_plates * 9 + 1
+        header[HeadersLabels.inDegrees] = True
+        data = np.zeros([header[HeadersLabels.nRows], header[HeadersLabels.nColumns]])
+        data[:, 0] = m.force_plates.x
+        plates = []
+        unit = 1
+        if m.force_plates.units["COP"]["COP.Px1"] == 'mm':
+            unit = 1000
+        for p in m.force_plates.plate:
+            xf = m.force_plates.plate[p][1]
+            idx = m.force_plates.plate[p][0]
+            plate = [OSIMForcePlate.ground_force, OSIMForcePlate.ground_torque]
+            info_plate = []
+            for d in plate:
+                k = d.generate_label(m.force_plates.plate[p][0])
+                l = OSIMForcePlate.map_from_c3d(d, idx)
+                if d == OSIMForcePlate.ground_force:
+                    v_df = pd.DataFrame(data=xf[l["v"]].to_numpy(), columns=k["v"])
+                    p_df = pd.DataFrame(data=xf[l["p"]].to_numpy() / unit, columns=k["p"])
+                    f = pd.concat([v_df, p_df], axis=1)
+                    info_plate.append(f)
+                else:
+                    info_plate.append(pd.DataFrame(data=xf[l].to_numpy(), columns=k['d']))
+                pass
+            g = pd.concat(info_plate, axis=1)
+            plates.append(g)
+        h = pd.concat(plates, axis=1)
+        data[:, 1:] = h.to_numpy()
+        osimcols = [c for c in h.columns]
+        osimcols.insert(0, 'time')
+        data_df = pd.DataFrame(data=data, columns=osimcols)
 
-        data_columns = ptb_mot['analog_channels_label']
-        first_frame = ptb_mot['first_frame']
-        raw_data = ptb_mot['analog_data']
-
-        data = raw_data[data_columns]
-        index = [i for i in range(first_frame, first_frame + data.shape[0] - 1)]
-        data = pd.DataFrame(data, columns=data_columns, index=index)
-
-        frame_rate = ptb_mot['analog_rate']
-        time = [i*(1/frame_rate) for i in range(ptb_mot['num_analog_frames'] - 1)]
-        time = pd.DataFrame(time, columns=['time'], index = index)
-
-        data = time.join(data)
-
-        result = cls(name=c3d_name.replace(".c3d", "") if filename is None else filename.replace(".mot", ""),
-                   filename = c3d_name.replace(".c3d", ".mot") if filename is None else filename,
-                   header_lines=metadata,
-                   data=data)
+        result = cls(name = filename.replace(".c3d", "") if filename is not None else None,
+                     filename = filename.replace(".c3d", ".mot") if filename is not None else None,
+                     header_lines = MOTMetadata.from_dict(header, True),
+                     data = data_df)
         result.update_data()
         return result
 
@@ -344,7 +382,7 @@ class MOT(FileObject):
         self.col_names = list(self.data.columns)
         self.header_lines.number_columns = len(self.col_names)
         self.header_lines.number_rows = self.data.shape[0]
-        self.filepath = filepath
+        self.filepath = filepath if filepath is not None else self.filepath
 
 
     def save(self, file_path: str = None, file_name: str = None):
@@ -786,7 +824,7 @@ class _Test(unittest.TestCase):
             mot.save(output)
         except Exception as e:
             self.fail(f"MOT object loaded from C3D file couldn't be saved: + {getattr(e, 'message', repr(e))}")
-        mot_copy = MOT.load_from_mot(os.path.join(output, mot.filename))
+        mot_copy = MOT.load_from_mot(os.path.join(output, mot.filename), start_index=0)
         self.assertEqual(mot, mot_copy, "MOT object loaded from the save of a C3D-loaded MOT object should equal the original")
         _MOTCleanup.delete_all_files(output, True)
 

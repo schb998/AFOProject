@@ -486,17 +486,15 @@ class TRC(FileObject):
         self.filepath = full_path
 
     @classmethod
-    def adapt_to_opensim_use(cls, filepath: str, filename: str = None, header: bool = True,
-                             delimiter: str = "\t") -> None:
+    def adapt_to_opensim_use(cls, trc: 'TRC' = None, filepath: str = None, header: bool = True, delimiter: str = "\t") -> 'TRC':
         """Overwrites a TRC file with a copy of data with added marker ZERO located at position (0,0,0) at all
         frames, as last marker column.
 
         Used to arrange TRC files to use in OpenSim.
 
         Args:
-            filepath: path to the TRC file.
-            filename:  name of the TRC file. \
-                Should be filled if path does not include filename, optional otherwise.
+            filepath:
+            trc: path to the TRC file.
             header: whether the TRC file includes a header. Default value is True.
             delimiter: delimiter of the TRC file. Default value is "\t".
 
@@ -507,20 +505,21 @@ class TRC(FileObject):
             OSError: if the file cannot be read.
 
         """
-        if filename is None:
-            temp = os.path.split(filepath)
-            filename = temp[1]
-            filepath = temp[0]
-        trc = cls.load_from_trc(filepath, filename, header, delimiter)
+        if trc is None:
+            if filepath is None:
+                raise FileNotFoundError("TRC file to arrange for OpenSim use not found.")
+            filename = os.path.basename(filepath)
+            trc = cls.load_from_trc(filepath, filename, header, delimiter)
         old_name = deepcopy(trc.filename)
         num_frames = trc.data.shape[0]
         if 'ZERO' in trc.marker_set and trc.col_names[-1] == trc.marker_dict['ZERO'][-1]:
-            return
+            return trc
         trc.add_marker('ZERO', {'X': np.zeros(num_frames),
                                 'Y': np.zeros(num_frames),
                                 'Z': np.zeros(num_frames)})
-        trc.rename(old_name)
-        trc.save(filepath)
+        trc.rename(old_name.replace(".trc", "_adapted.trc"))
+        trc.save()
+        return trc
 
     def rename(self, filename: str):
         """This method updates the TRC object's name and/or file_name.
@@ -532,6 +531,16 @@ class TRC(FileObject):
             self.filename = filename + ".trc"
         else:
             self.filename = filename
+
+    def update_data(self, new_data: pd.DataFrame = None, filepath: str = None):
+        if new_data is not None:
+            self.data = new_data
+        self.first_frame = self.data.index.values[0]
+        self.col_names = self.data.columns.tolist()
+        self.metadata.num_frames = self.data.shape[0]
+        self.metadata.num_markers = (len(self.col_names) - 1) / 3
+        self.filepath = filepath if filepath is not None else self.filepath
+
 
     def add_marker(self, marker_name: str, data: np.ndarray | dict[str, np.ndarray]) -> None:
         """Adds a marker to the data.
@@ -757,9 +766,9 @@ class TRC(FileObject):
         """
         if not os.path.isdir(dir_path):
             raise OSError("Given path is not a directory.")
-        file_list = [f for f in os.listdir(dir_path) if f.endswith('.trc')]
+        file_list = [os.path.join(dir_path, f) for f in os.listdir(dir_path) if f.endswith('.trc')]
         for file in file_list:
-            TRC.adapt_to_opensim_use(file)
+            TRC.adapt_to_opensim_use(filepath=file)
 
 
 class _TRCCleanup:
@@ -1033,14 +1042,14 @@ class _Test(unittest.TestCase):
         trc.save(output)
 
         try:
-            TRC.adapt_to_opensim_use(output, "test.trc")
+            TRC.adapt_to_opensim_use(filepath=trc.filepath)
         except Exception as e:
             self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
         trc_arranged1 = TRC.load_from_trc(output, "test.trc")
         self.assertNotEqual(trc, trc_arranged1, "Raw file and arrange file should be different.")
 
         try:
-            TRC.adapt_to_opensim_use(output, "test.trc")
+            TRC.adapt_to_opensim_use(filepath=trc_arranged1.filepath)
         except Exception as e:
             self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
         trc_arranged2 = TRC.load_from_trc(output, "test.trc")
