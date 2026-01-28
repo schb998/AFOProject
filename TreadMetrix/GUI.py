@@ -1,9 +1,12 @@
 import threading
 from tkinter import *
 from typing import Literal
-
+import resources.tkinter_toolbox as tbox
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+from TreadMetrix.full_pipeline import trials_selection
+from resources.tkinter_toolbox import infobox
 from resources.trial_class import Trial
 from data_postprocessing import process as post_processing
 from ik_computing import process as compute_ik
@@ -20,16 +23,24 @@ BUTTONS = {}
 PLOTS = {}
 TRIALS = {}
 CURRENT_TRIAL: str
-CURRENT_TRIAL_LABEL: Label
+CANVAS: FigureCanvasTkAgg
+
 
 def _default_plot():
     fig = Figure(figsize=(5, 5), dpi=100)
     plot1 = fig.add_subplot(111)
-    plot1.text(0.5, 0.5, f"No data at the moment", ha='center', va='center', alpha=0.5)
+    plot1.text(0.5, 0.5, f"Nothing to show at the moment", ha='center', va='center', alpha=0.5)
     return fig
 
 
 DEFAULT_PLOT = _default_plot()
+
+
+def _blank_plot():
+    return Figure(figsize=(5, 5), dpi=100)
+
+
+BLANK_PLOT = _blank_plot()
 
 
 def manually_update_buttons(grf: bool = None, ik: bool = None, inverse_d: bool = None, jp: bool = None):
@@ -42,11 +53,6 @@ def manually_update_buttons(grf: bool = None, ik: bool = None, inverse_d: bool =
         BUTTONS["id"]["state"] = NORMAL if inverse_d else DISABLED
     if jp is not None:
         BUTTONS["jp"]["state"] = NORMAL if jp else DISABLED
-
-
-def update_current_trial_label():
-    global CURRENT_TRIAL_LABEL
-    CURRENT_TRIAL_LABEL.setvar(CURRENT_TRIAL)
 
 
 def update_buttons_for_step(step: Literal["jp", "id", "ik", "grf"] | None = None):
@@ -84,19 +90,23 @@ def update_buttons_for_step(step: Literal["jp", "id", "ik", "grf"] | None = None
             BUTTONS["jp"]["state"] = DISABLED
 
 
-def switch_current_trial(new_trial: str):
+def switch_current_trial(new_trial: StringVar):
     global CURRENT_TRIAL
     CURRENT_TRIAL = new_trial
     trial = TRIALS[CURRENT_TRIAL]
-    update_current_trial_label()
     if len(trial.gait_cycles["Right"]) == 0 and len(trial.gait_cycles["Left"]) == 0:
         update_buttons_for_step()
+        show_plot(DEFAULT_PLOT)
     else:
-        last_gc = trial.gait_cycles["Left"].iloc[-1]
-        update_buttons_for_step("jp" if last_gc.jp is not None \
-                                    else "id" if last_gc.id is not None \
+        last_gc = trial.gait_cycles["Left"][-1]
+        step = "jp" if last_gc.jp is not None \
+            else "id" if last_gc.id is not None \
             else "ik" if last_gc.ik is not None \
-            else "grf" if last_gc.grf is not None else None)
+            else "grf" if last_gc.grf is not None \
+            else None
+        update_buttons_for_step(step)
+        show_plot(PLOTS[CURRENT_TRIAL]["grf"] if step is not None else DEFAULT_PLOT)
+
 
 
 def update_grf():
@@ -301,61 +311,53 @@ def plot_JP(trial: Trial = None):
     return fig
 
 
-def show_plot(canvas: FigureCanvasTkAgg, fig: Figure):
-    canvas.figure = fig
-    canvas.draw()
-    # canvas.get_tk_widget().grid(column=0, row=2, columnspan=4)
+def show_plot(fig: Figure):
+    CANVAS.figure = fig
+    CANVAS.draw()
 
 
 def gui(output, osim_scaled_model):
-    global BUTTONS, PLOTS, TRIALS, CURRENT_TRIAL, CURRENT_TRIAL_LABEL
+    global BUTTONS, PLOTS, TRIALS, CURRENT_TRIAL, CANVAS
 
     window = Tk()
     window.title('AFO')
     window.geometry("500x800")
-    fig = Figure(figsize=(5, 5), dpi=100)
-    canvas = FigureCanvasTkAgg(fig, master=window)
+    canvas = FigureCanvasTkAgg(DEFAULT_PLOT, master=window)
     canvas.draw()
+    CANVAS = canvas
 
-    value_inside = StringVar(window)
-
-    value_inside.set("Select a trial")
     trial_list = list(TRIALS.keys())
     CURRENT_TRIAL = trial_list[0]
+    value_inside = StringVar(window)
+    value_inside.set(CURRENT_TRIAL)
 
     for trial_name in trial_list:
         PLOTS[trial_name] = {"grf": DEFAULT_PLOT, "ik": DEFAULT_PLOT, "id": DEFAULT_PLOT, "jp": DEFAULT_PLOT}
-    question_menu = OptionMenu(window, value_inside, *trial_list)
+    question_menu = OptionMenu(window, value_inside, *trial_list,
+                               command = switch_current_trial)
 
     # button that displays the plot
     grf_button = Button(master=window,
-                        command=lambda: {show_plot(canvas, PLOTS[CURRENT_TRIAL]["grf"])},
+                        command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["grf"])},
                         height=2, width=10, text="GRF")
     ik_button = Button(master=window,
-                       command=lambda: {show_plot(canvas, PLOTS[CURRENT_TRIAL]["ik"])},
+                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["ik"])},
                        height=2, width=10, text="IK")
     id_button = Button(master=window,
-                       command=lambda: {show_plot(canvas, PLOTS[CURRENT_TRIAL]["id"])},
+                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["id"])},
                        height=2, width=10, text="ID")
     jp_button = Button(master=window,
-                       command=lambda: {show_plot(canvas, PLOTS[CURRENT_TRIAL]["jp"])},
+                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["jp"])},
                        height=2, width=10, text="JP")
     BUTTONS = {"grf": grf_button, "ik": ik_button, "id": id_button, "jp": jp_button}
     manually_update_buttons(grf=False, ik=False, inverse_d=False, jp=False)
 
-    current_trial_label = Label(master=window, text=CURRENT_TRIAL)
-    CURRENT_TRIAL_LABEL = current_trial_label
     current_trial_button = Button(master=window, text="Process",
                                   command=lambda:{pipeline(output, osim_scaled_model)})
-    change_trial_button = Button(master=window, text="Change trial",  command=lambda: {switch_current_trial(value_inside.get())})
-    # todo: previous instruction does not change current trial name in label
-
 
     row = 0
-    current_trial_label.grid(column=0, row=row, sticky="EW")
-    current_trial_button.grid(column=1, row=row)
-    question_menu.grid(column=2, row=row, sticky="EW")
-    change_trial_button.grid(column=3, row=row)
+    question_menu.grid(column=0, row=row, columnspan=2, sticky="EW")
+    current_trial_button.grid(column=2, row=row)
     row += 1
     grf_button.grid(column=0, row=row)
     ik_button.grid(column=1, row=row)
@@ -399,8 +401,8 @@ def pipeline(output, osim_scaled_model):
         update_jp()
 
 
-def main(output, osim_scaled_model, trials):
+def main(output, osim_scaled_model):
     global TRIALS
-    TRIALS = trials
+    TRIALS, _, _ = trials_selection()
     gui(output, osim_scaled_model)
 

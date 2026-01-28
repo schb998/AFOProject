@@ -13,8 +13,7 @@ from joint_power_computing import process as compute_jp
 
 _static_regex = r"([sS][tT][aA][tT][iI][cC])|([cC][aA][lL])"
 
-if __name__ == "__main__":
-
+def trials_selection():
     # quick setup for debug
     if local.call_quick_setup():
         save = False
@@ -72,6 +71,13 @@ if __name__ == "__main__":
     for file in c3d_files:
         trial = Trial.from_c3d(file)
         trials[trial.name] = trial
+
+    return trials, save, show
+
+
+if __name__ == "__main__":
+
+    trials, save, show = trials_selection()
 
     # process the trials:
     for name in trials:

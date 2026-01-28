@@ -45,8 +45,6 @@ if __name__ == '__main__':
 
     # trial1 = Trial(mot=r"C:\Users\lgre690\Documents\MyData\ttest\raw\walking_Incline.mot", trc=r"C:\Users\lgre690\Documents\MyData\ttest\raw\walking_Incline.trc")
     # trial2 = Trial(mot=r"C:\Users\lgre690\Documents\MyData\ttest\raw\walking_incline_NoAFO.mot", trc=r"C:\Users\lgre690\Documents\MyData\ttest\raw\walking_incline_NoAFO.trc")
-    # GUI.main(output, osim_scaled_model, {trial1.name: trial1, trial2.name: trial2})
-
-
+    GUI.main(output, osim_scaled_model)
 
 print("All done.")
