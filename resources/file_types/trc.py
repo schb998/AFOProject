@@ -171,8 +171,9 @@ class TRC(FileObject):
                 or (self.marker_set != other.marker_set) \
                 or (self.col_names != other.col_names) \
                 or (self.marker_dict != other.marker_dict) \
-                or (self.first_frame != other.first_frame) \
-                or not (self.data.equals(other.data)):
+                or (self.first_frame != other.first_frame) :
+            return False
+        if not (self.data.equals(other.data)):
             return False
         return True
 
@@ -252,7 +253,7 @@ class TRC(FileObject):
             filename:  name of the TRC file. \
                 Should be filled if path does not include filename, optional otherwise.
             header: whether the TRC file includes a header. Default value is True.
-            delimiter: delimiter of the TRC file. Default value is "\t".
+            delimiter: delimiter of the TRC file. Default value is r"\t".
             num_coordinates: number of coordinates by marker
 
         Returns:
@@ -350,7 +351,6 @@ class TRC(FileObject):
         Raises:
             OSError: if the file cannot be read.
         """
-
         error_message = f"TRC object could not be loaded from file {c3d}: "
 
         # test that given path is valid :
@@ -486,17 +486,17 @@ class TRC(FileObject):
         self.filepath = full_path
 
     @classmethod
-    def adapt_to_opensim_use(cls, trc: 'TRC' = None, filepath: str = None, header: bool = True, delimiter: str = "\t") -> 'TRC':
+    def adapt_to_opensim_use(cls, trc: 'TRC' = None, input_path: str = None, output_path: str = None, override: bool = False) -> 'TRC':
         """Overwrites a TRC file with a copy of data with added marker ZERO located at position (0,0,0) at all
         frames, as last marker column.
 
         Used to arrange TRC files to use in OpenSim.
 
         Args:
-            filepath:
+            override:
+            output_path:
+            input_path:
             trc: path to the TRC file.
-            header: whether the TRC file includes a header. Default value is True.
-            delimiter: delimiter of the TRC file. Default value is "\t".
 
         Returns:
             None
@@ -506,19 +506,30 @@ class TRC(FileObject):
 
         """
         if trc is None:
-            if filepath is None:
+            if input_path is None:
                 raise FileNotFoundError("TRC file to arrange for OpenSim use not found.")
-            filename = os.path.basename(filepath)
-            trc = cls.load_from_trc(filepath, filename, header, delimiter)
-        old_name = deepcopy(trc.filename)
+            trc = cls.load_from_trc(input_path)
+            old_name = deepcopy(trc.filename)
+        else:
+            old_name = deepcopy(trc.filename)
+            trc = trc.copy()
         num_frames = trc.data.shape[0]
         if 'ZERO' in trc.marker_set and trc.col_names[-1] == trc.marker_dict['ZERO'][-1]:
             return trc
+
         trc.add_marker('ZERO', {'X': np.zeros(num_frames),
                                 'Y': np.zeros(num_frames),
                                 'Z': np.zeros(num_frames)})
-        trc.rename(old_name.replace(".trc", "_adapted.trc"))
-        trc.save()
+        if override:
+            trc.rename(old_name)
+            trc.save(os.path.dirname(input_path))
+        else:
+            trc.rename(old_name.replace(".trc", "_adapted.trc"))
+            try:
+                trc.save(output_path)
+            except Exception as e:
+                message = f"Couldn't save file {trc.filename} in {output_path}: {e}"
+                logging.error(message)
         return trc
 
     def rename(self, filename: str):
@@ -540,7 +551,6 @@ class TRC(FileObject):
         self.metadata.num_frames = self.data.shape[0]
         self.metadata.num_markers = (len(self.col_names) - 1) / 3
         self.filepath = filepath if filepath is not None else self.filepath
-
 
     def add_marker(self, marker_name: str, data: np.ndarray | dict[str, np.ndarray]) -> None:
         """Adds a marker to the data.
@@ -768,7 +778,7 @@ class TRC(FileObject):
             raise OSError("Given path is not a directory.")
         file_list = [os.path.join(dir_path, f) for f in os.listdir(dir_path) if f.endswith('.trc')]
         for file in file_list:
-            TRC.adapt_to_opensim_use(filepath=file)
+            TRC.adapt_to_opensim_use(input_path=file)
 
 
 class _TRCCleanup:
@@ -1039,22 +1049,30 @@ class _Test(unittest.TestCase):
     def test_arrange(self) -> None:
         trc = TRC.load_from_trc(path, _filename_standard).copy()
         trc.rename("test")
-        trc.save(output)
 
         try:
-            TRC.adapt_to_opensim_use(filepath=trc.filepath)
+            trc_arranged1 = TRC.adapt_to_opensim_use(input_path=trc.filepath, output_path=output)
         except Exception as e:
             self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
-        trc_arranged1 = TRC.load_from_trc(output, "test.trc")
         self.assertNotEqual(trc, trc_arranged1, "Raw file and arrange file should be different.")
-
         try:
-            TRC.adapt_to_opensim_use(filepath=trc_arranged1.filepath)
+            trc_arranged1_save = TRC.load_from_trc(output, trc_arranged1.filename)
         except Exception as e:
             self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
-        trc_arranged2 = TRC.load_from_trc(output, "test.trc")
+        self.assertEqual(trc_arranged1_save, trc_arranged1, "An arranged file and its save should be equal.")
+
+        try:
+            trc_arranged2 = TRC.adapt_to_opensim_use(input_path=trc_arranged1.filepath, output_path=output)
+        except Exception as e:
+            self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
         self.assertEqual(trc_arranged1, trc_arranged2,
                          "Using arrange on already arranged TRC file should not have effect.")
+        try:
+            trc_arranged2_save = TRC.load_from_trc(output, trc_arranged1.filename)
+        except Exception as e:
+            self.fail("Arrange method should not raise error: " + getattr(e, 'message', repr(e)))
+        self.assertEqual(trc_arranged1_save, trc_arranged2_save, "An arranged file and its save should be equal.")
+
         _TRCCleanup.delete_all_files(output, True)
 
 

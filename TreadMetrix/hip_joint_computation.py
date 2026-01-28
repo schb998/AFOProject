@@ -23,10 +23,10 @@ def hjc_harrington(marker_data: dict[str, npt.ArrayLike]) -> (np.typing.ArrayLik
         Left hip joint center positions [n_frames, 3].
     """
     marker_names = list(marker_data.keys())
-    lasis = np.array(marker_data[marker_names[0]])
-    lpsis = np.array(marker_data[marker_names[1]])
-    rasis = np.array(marker_data[marker_names[2]])
-    rpsis = np.array(marker_data[marker_names[3]])
+    lasis = np.array(marker_data[marker_names[0]]).astype(float)
+    lpsis = np.array(marker_data[marker_names[1]]).astype(float)
+    rasis = np.array(marker_data[marker_names[2]]).astype(float)
+    rpsis = np.array(marker_data[marker_names[3]]).astype(float)
 
     n_frames = lasis.shape[0]
 
@@ -41,7 +41,7 @@ def hjc_harrington(marker_data: dict[str, npt.ArrayLike]) -> (np.typing.ArrayLik
 
         provv = (rasis[t] - sacrum) / np.linalg.norm(rasis[t] - sacrum)
         ib = (rasis[t] - lasis[t]) / np.linalg.norm(rasis[t] - lasis[t])
-        kb = np.cross(ib, provv)
+        kb = np.cross(ib, provv) # todo: issue here for data from C3D!!
         kb = kb / np.linalg.norm(kb)
         jb = np.cross(kb, ib)
         jb = jb / np.linalg.norm(jb)
@@ -115,11 +115,12 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     return new
 
 
-def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
+def compute_hip_joints(input_path: str = None, input_object: TRC = None, output_path: str = None) -> TRC:
     """
     Full workflow to read, update, and save a TRC file with new virtual markers.
 
     Parameters:
+        input_object:
         input_path (str): Path to the input TRC file.
         output_path (str): Path to save the updated TRC file. Optional. Object is not saved if not indicated.
 
@@ -128,9 +129,9 @@ def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
 
     """
     try:
-        trc = TRC.load_from_trc(input_path)
+        trc = TRC.load_from_trc(input_path) if input_object is None else input_object
         updated_trc = add_virtual_markers_to_trc(trc)
-        TRC.adapt_to_opensim_use(trc=updated_trc, filepath=output_path)
+        TRC.adapt_to_opensim_use(trc=updated_trc, output_path=output_path)
         if output_path is not None:
             updated_trc.update_data(filepath=output_path)
         logging.info(f"Updated TRC file saved to: {updated_trc.filepath}")

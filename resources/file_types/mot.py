@@ -825,6 +825,7 @@ class _Test(unittest.TestCase):
         except Exception as e:
             self.fail(f"MOT object loaded from C3D file couldn't be saved: + {getattr(e, 'message', repr(e))}")
         mot_copy = MOT.load_from_mot(os.path.join(output, mot.filename), start_index=0)
+        _MOTCleanup.delete_all_files(output, True)
         self.assertEqual(mot, mot_copy, "MOT object loaded from the save of a C3D-loaded MOT object should equal the original")
         _MOTCleanup.delete_all_files(output, True)
 
