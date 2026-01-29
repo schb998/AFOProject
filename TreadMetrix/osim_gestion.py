@@ -16,10 +16,11 @@ from resources.file_types.trc import TRC
 
 # todo: update configure_opensim so paths_back manage configuration instead
 # todo: continue separation osim_gestion // paths_back for model selection
+# todo: fix scaling for c3d static file input
 
 LABEL: Label
 BUTTON: Button
-CURRENT_ROW = 0
+CURRENT_ROW: int = 0
 
 _osim_files_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), r"resources/osim_files")
 _setup = os.path.join(_osim_files_path, "scaling_setup.xml").replace("\\", "/")
@@ -204,28 +205,26 @@ def scale_model(static_filepath: str = None, output_filepath: str = None, scalin
     while static_filepath is None:
         message = 'Select the static file.'
         tbox.infobox(message)
-        static_filepath = tbox.get_file([tbox.FileTypes.TRC, tbox.FileTypes.C3D], instruction=message).name
+        static_filepath = tbox.get_file([tbox.FileTypes.C3D, tbox.FileTypes.TRC], instruction=message).name
 
     dirname = os.path.dirname(static_filepath)
     if static_filepath.endswith(TRC.extension):
         added_hj_filename = compute_hip_joints(static_filepath, output_path=dirname).filename
     else:
-        trc = TRC.load_from_c3d(static_filepath)
+        trc = TRC.load_from_c3d(static_filepath, force_3d=True)
         trc.save(dirname)
         static_filepath = trc.filepath
-        added_hj_filename = compute_hip_joints(static_filepath, trc, output_path=dirname).filename
-
+        added_hj = compute_hip_joints(static_filepath, trc, output_path=dirname)
+        added_hj_filename = added_hj.filename
 
     output_file = output_filepath if output_filepath is not None else static_filepath.replace(".trc", "_scaled_model.osim")
     base_model_file = base_model_file if base_model_file is not None else _base_model
 
     if scaling_setup_file is None:
-        scaling_directory = os.path.dirname(static_filepath)
-        _prepare_scaling_setup(scaling_directory, base_model_file)
-        scaling_setup_file = os.path.join(scaling_directory, "scaling_setup.xml").replace("\\", "/")
+        _prepare_scaling_setup(dirname, base_model_file)
+        scaling_setup_file = os.path.join(dirname, "scaling_setup.xml").replace("\\", "/")
 
     scale_tool = osim.ScaleTool(scaling_setup_file)
-
     scale_tool.getModelScaler().setMarkerFileName(added_hj_filename)
     scale_tool.setPrintResultFiles(True)
     scale_tool.getModelScaler().setOutputModelFileName(output_file)

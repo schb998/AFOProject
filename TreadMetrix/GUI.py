@@ -4,9 +4,7 @@ from typing import Literal
 import resources.tkinter_toolbox as tbox
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
 from TreadMetrix.full_pipeline import trials_selection
-from resources.tkinter_toolbox import infobox
 from resources.trial_class import Trial
 from data_postprocessing import process as post_processing
 from ik_computing import process as compute_ik
@@ -15,9 +13,7 @@ from joint_power_computing import process as compute_jp
 from tkinter.constants import DISABLED, NORMAL
 
 # todo: fix plot size
-# todo: threading
-# todo: update plots when data is computed - event handling ??
-# todo: file selection
+# todo: threading - update plots when data is computed - event handling ??
 
 BUTTONS = {}
 PLOTS = {}

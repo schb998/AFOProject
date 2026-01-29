@@ -314,7 +314,7 @@ class TRC(FileObject):
                 sub_headers.insert(1, headers[1])
 
                 # data:
-                data = pd.read_csv(file, sep=r'\s', names=sub_headers, engine='python', index_col=headers[0])
+                data = pd.read_csv(file, sep=r'\s', names=sub_headers, engine='python', index_col=headers[0], dtype=float)
 
                 # close the file:
                 file.close()
@@ -338,10 +338,11 @@ class TRC(FileObject):
             raise OSError(error_message)
 
     @classmethod
-    def load_from_c3d(cls, c3d: str, filename: str = None) -> Self:
+    def load_from_c3d(cls, c3d: str, filename: str = None, force_3d: bool = False) -> Self:
         """Reads data from a C3D file.
 
         Args:
+            force_3d:
             c3d:  path to a c3d file.
             filename: name of the TRC file. Optional. if not given, filename will be the same as the c3d file.
 
@@ -403,7 +404,7 @@ class TRC(FileObject):
                 marker_dictionary[label] = coo_list
 
             # data:
-            data = pd.DataFrame(columns=np.array(columns), index=range(first_frame, reader.last_frame()))
+            data = pd.DataFrame(columns=np.array(columns), dtype=float, index=range(first_frame, reader.last_frame()))
             for frame_no, points, analog in reader.read_frames():
                 temp = []
                 for marker in points:
@@ -411,8 +412,20 @@ class TRC(FileObject):
                 data.loc[frame_no] = temp
             num_coordinates = len(points[0])
 
+            if force_3d:
+                for marker in marker_set:
+                    for i in range(num_coordinates-3):
+                        additional_coo = marker_dictionary[marker].pop(3)
+                        columns.remove(additional_coo)
+                        data.drop(additional_coo, axis="columns", inplace=True)
+                num_coordinates = 3
+
+            formats = ["(X / Y / Z)", "(X / Y / Z / T)", "(X / Y / Z / T / N)"]
+
+            file_header = ["PathFileType", "4", formats[3-num_coordinates], path]
+
             res = cls(filename, meta_data, marker_set, columns, marker_dictionary, data, num_coordinates,
-                      file_header=None)
+                      file_header=file_header)
             logging.info(f'TRC object successfully loaded from C3D.')
 
             # close the file:
@@ -434,11 +447,11 @@ class TRC(FileObject):
             filename = self.filename
 
         if filepath is None :
-            if self.filepath is not None:
-                filepath = os.path.dirname(self.filepath)
-            else:
+            if self.filepath is None:
                 raise MissingPathException("path to directory",
                                            f"no path provided to save TRC object {self.filename}")
+            else:
+                filepath = os.path.dirname(self.filepath)
 
         error_message = f"TRC object {filename} couldn't be saved in {filepath}: "
 
@@ -461,10 +474,10 @@ class TRC(FileObject):
         c0 = "Frame#\tTime\t"
         c1 = "\t\t"
         for marker_data in self.marker_set:
-            c0 += f"{marker_data}\t\t\t"
-            c1 += (f"{self.marker_dict[marker_data][0]}\t"
-                   + f"{self.marker_dict[marker_data][1]}\t"
-                   + f"{self.marker_dict[marker_data][2]}\t")
+            c0 += f"{marker_data}"
+            for i in range(self.num_coordinates):
+                c0 += "\t"
+                c1 += f"{self.marker_dict[marker_data][i]}\t"
         content.append(c0.strip() + "\t\t\n")
         content.append("\t\t" + c1.strip() + "\n")
 
@@ -484,6 +497,7 @@ class TRC(FileObject):
             writer.writelines(content)
         logging.info(f"File {filename} saved in directory {filepath}.")
         self.filepath = full_path
+        self.filename = filename
 
     @classmethod
     def adapt_to_opensim_use(cls, trc: 'TRC' = None, input_path: str = None, output_path: str = None, override: bool = False) -> 'TRC':
@@ -514,15 +528,15 @@ class TRC(FileObject):
             old_name = deepcopy(trc.filename)
             trc = trc.copy()
         num_frames = trc.data.shape[0]
+
         if 'ZERO' in trc.marker_set and trc.col_names[-1] == trc.marker_dict['ZERO'][-1]:
             return trc
 
-        trc.add_marker('ZERO', {'X': np.zeros(num_frames),
-                                'Y': np.zeros(num_frames),
-                                'Z': np.zeros(num_frames)})
+        trc.add_marker('ZERO', np.zeros((num_frames, trc.num_coordinates)))
+
         if override:
             trc.rename(old_name)
-            trc.save(os.path.dirname(input_path))
+            trc.save(os.path.dirname(os.path.dirname(input_path)))
         else:
             trc.rename(old_name.replace(".trc", "_adapted.trc"))
             try:
@@ -551,6 +565,7 @@ class TRC(FileObject):
         self.metadata.num_frames = self.data.shape[0]
         self.metadata.num_markers = (len(self.col_names) - 1) / 3
         self.filepath = filepath if filepath is not None else self.filepath
+        self.filename = os.path.basename(self.filepath) if self.filepath is not None else self.filename
 
     def add_marker(self, marker_name: str, data: np.ndarray | dict[str, np.ndarray]) -> None:
         """Adds a marker to the data.
@@ -566,9 +581,13 @@ class TRC(FileObject):
         Raises:
             Exception if given data does not contain exactly 3 coordinates.
         """
-        if ((isinstance(data, dict) and len(data) != 3)
-                or (isinstance(data, np.ndarray) and data.shape[1] != 3)):
-            raise Exception("Markers require three coordinates in order to be added.")
+        nb_coo = self.num_coordinates
+        if isinstance(data, dict) and len(data) != nb_coo:
+            raise Exception(f"Markers require the same number of coordinates as the previous data to be added: "
+                            f"required {nb_coo}, given {len(data)}.")
+        if isinstance(data, np.ndarray) and data.shape[1] != nb_coo:
+            raise Exception(f"Markers require the same number of coordinates as the previous data to be added: "
+                            f"required {nb_coo}, given {data.shape[1]}.")
 
         # manage marker name
         name = marker_name
@@ -582,33 +601,36 @@ class TRC(FileObject):
         self.metadata.num_markers = self.metadata.num_markers + 1
 
         num = str(len(self.marker_set))
-        new_x_column_name, new_y_column_name, new_z_column_name = 'X' + num, 'Y' + num, 'Z' + num
+        new_column_names = ['X' + num, 'Y' + num, 'Z' + num,  'T' + num, 'N' + num]
 
         if isinstance(data, np.ndarray):
-            result = {new_x_column_name: data[:, 0:1],
-                      new_y_column_name: data[:, 1:2],
-                      new_z_column_name: data[:, 2:3]}
+            result = {}
+            for i in range(nb_coo):
+                result[new_column_names[i]] = data[:, i:i+1]
 
         else:
             # manage marker coordinates:
             content = deepcopy(data)
             columns = list(content.keys())
+            result = {}
             try:
-                x_column_name = [x for x in columns if re.search("^([Xx])|([Xx])$", x) is not None][0]
-                y_column_name = [y for y in columns if re.search("^([Yy])|([Yy])$", y) is not None][0]
-                z_column_name = [z for z in columns if re.search("^([Zz])|([Zz])$", z) is not None][0]
-
+                regexes = [r"^([Xx])|([Xx])$",
+                           r"^([Yy])|([Yy])$",
+                           r"^([Zz])|([Zz])$",
+                           r"^([Tt])|([Tt])$",
+                           r"^([Nn])|([Nn])$"]
+                old_column_names = []
+                for i in range(nb_coo):
+                    old_column_names.append([c for c in columns if re.search(regexes[i], c) is not None][0])
             except KeyError:
-                logging.info(f"Given columns do not match expected X/Y/Z name formulation "
-                             f"of starting or ending by X/Y/Z. "
-                             f"Assigning them to coordinates X, Y, Z in this order.")
-                x_column_name = columns[0]
-                y_column_name = columns[1]
-                z_column_name = columns[2]
+                logging.info(f"Given columns do not match expected  name formulation "
+                             f"of starting or ending by X/Y/Z/T/N. "
+                             f"Assigning them to coordinates X, Y, Z, T, N, in this order.")
+                old_column_names = columns
 
-            result = {new_x_column_name: content[x_column_name],
-                      new_y_column_name: content[y_column_name],
-                      new_z_column_name: content[z_column_name]}
+            for i in range(nb_coo):
+                result[new_column_names[i]] = content[old_column_names[i]]
+
 
         new_cols = list(result.keys())
         self.marker_dict[marker_name] = new_cols
@@ -616,6 +638,19 @@ class TRC(FileObject):
         for coo in new_cols:
             self.data[coo] = result[coo]
         self.rename(self.filename.replace('.trc', f'added_{marker_name}'))
+
+    def remove_marker(self, marker_name: str) -> None:
+        for column in self.marker_dict[marker_name]:
+            self.data.drop(column, axis=1, inplace=True)
+            self.col_names.remove(column)
+        self.metadata.num_markers =- 1
+        self.marker_dict.pop(marker_name)
+        self.marker_set.remove(marker_name)
+
+    def rename_marker(self, old_name: str, new_name: str) -> None:
+        self.marker_set.append(new_name)
+        self.marker_dict[new_name] = self.marker_dict.pop(old_name)
+        self.marker_set.remove(old_name)
 
     def copy(self) -> Self:
         """Returns a copy of the object.

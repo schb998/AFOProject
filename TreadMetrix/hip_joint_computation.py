@@ -1,10 +1,7 @@
-import os
-
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from resources.file_types.trc import TRC
-from copy import deepcopy
 import logging
 import re
 
@@ -22,11 +19,10 @@ def hjc_harrington(marker_data: dict[str, npt.ArrayLike]) -> (np.typing.ArrayLik
     LHJC: numpy array
         Left hip joint center positions [n_frames, 3].
     """
-    marker_names = list(marker_data.keys())
-    lasis = np.array(marker_data[marker_names[0]]).astype(float)
-    lpsis = np.array(marker_data[marker_names[1]]).astype(float)
-    rasis = np.array(marker_data[marker_names[2]]).astype(float)
-    rpsis = np.array(marker_data[marker_names[3]]).astype(float)
+    lasis = np.array(marker_data["LASI"]).astype(float)
+    lpsis = np.array(marker_data["LPSI"]).astype(float)
+    rasis = np.array(marker_data["RASI"]).astype(float)
+    rpsis = np.array(marker_data["RPSI"]).astype(float)
 
     n_frames = lasis.shape[0]
 
@@ -41,7 +37,7 @@ def hjc_harrington(marker_data: dict[str, npt.ArrayLike]) -> (np.typing.ArrayLik
 
         provv = (rasis[t] - sacrum) / np.linalg.norm(rasis[t] - sacrum)
         ib = (rasis[t] - lasis[t]) / np.linalg.norm(rasis[t] - lasis[t])
-        kb = np.cross(ib, provv) # todo: issue here for data from C3D!!
+        kb = np.cross(ib, provv)
         kb = kb / np.linalg.norm(kb)
         jb = np.cross(kb, ib)
         jb = jb / np.linalg.norm(jb)
@@ -90,22 +86,21 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     """
     old_name = trc.filename
 
-    rasi = [m for m in trc.marker_set if re.search("^RASI", m) is not None][0]
-    lasi = [m for m in trc.marker_set if re.search("^LASI", m) is not None][0]
-    rpsi = [m for m in trc.marker_set if re.search("^RPSI", m) is not None][0]
-    lpsi = [m for m in trc.marker_set if re.search("^LPSI", m) is not None][0]
-    pelvis_marker_names = [lasi, lpsi, rasi, rpsi]
+    markers_names = {'LASI': [m for m in trc.marker_set if re.search("^LASI", m) is not None][0],
+                     'LPSI': [m for m in trc.marker_set if re.search("^LPSI", m) is not None][0],
+                     'RASI': [m for m in trc.marker_set if re.search("^RASI", m) is not None][0],
+                     'RPSI': [m for m in trc.marker_set if re.search("^RPSI", m) is not None][0]}
+    markers_data = {}
 
-    markers = {}
-    pelvis_marker_names.sort()
-    for m in pelvis_marker_names:
-        coordinates = trc.marker_dict[m]
+    for standard_name, colum_name in markers_names.items():
+        coordinates = trc.marker_dict[colum_name]
         x = trc.data[coordinates[0]]
         y = trc.data[coordinates[1]]
         z = trc.data[coordinates[2]]
         data = pd.DataFrame({'X': x, 'Y': y, 'Z': z})
-        markers[m] = data
-    rhjc, lhjc = hjc_harrington(markers)
+        markers_data[standard_name] = data
+
+    rhjc, lhjc = hjc_harrington(markers_data)
 
     new = trc.copy()
     new.add_marker("RHJC", rhjc)
@@ -131,12 +126,10 @@ def compute_hip_joints(input_path: str = None, input_object: TRC = None, output_
     try:
         trc = TRC.load_from_trc(input_path) if input_object is None else input_object
         updated_trc = add_virtual_markers_to_trc(trc)
-        TRC.adapt_to_opensim_use(trc=updated_trc, output_path=output_path)
-        if output_path is not None:
-            updated_trc.update_data(filepath=output_path)
-        logging.info(f"Updated TRC file saved to: {updated_trc.filepath}")
+        updated_trc = TRC.adapt_to_opensim_use(trc=updated_trc, output_path=output_path)
+        logging.info(f"Updated TRC file saved to: {updated_trc.filepath}.")
         return updated_trc
     except Exception as e:
-        message = f"Error while processing TRC file: {getattr(e, 'message', repr(e))}"
+        message = f"Error while processing TRC file: {getattr(e, 'message', repr(e))}."
         logging.warning(message)
         raise Exception(message)

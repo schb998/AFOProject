@@ -299,7 +299,8 @@ class MOT(FileObject):
                     line = next(file).strip("\n")
                 metadata = MOTMetadata.from_dict(header_lines)
 
-                data = pd.read_csv(file, sep=separator, engine='python')
+                data = pd.read_csv(file, sep=separator, dtype=float, engine='python')
+
                 data.index = [i for i in range(start_index, start_index + data.shape[0])]
                 file.close()
                 return cls(name, filename, metadata, data, filepath = filepath)
@@ -347,7 +348,7 @@ class MOT(FileObject):
         data[:, 1:] = h.to_numpy()
         osimcols = [c for c in h.columns]
         osimcols.insert(0, 'time')
-        data_df = pd.DataFrame(data=data, columns=osimcols)
+        data_df = pd.DataFrame(data=data, columns=osimcols, dtype=float)
 
         result = cls(name = filename.replace(".c3d", "") if filename is not None else None,
                      filename = filename.replace(".c3d", ".mot") if filename is not None else None,
