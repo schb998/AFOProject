@@ -5,7 +5,7 @@ from copy import deepcopy
 from resources.custom_exceptions import *
 import logging
 
-# todo: find a way to match selected trcs with the mots?
+# todo: find a way to automatically match selected trcs with the mots?
 
 """
 Basic paths management

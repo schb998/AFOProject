@@ -10,10 +10,9 @@ from typing import Self
 import logging
 import re
 from ptb.util.io.mocap.low_lvl.c3d import Reader
+from ptb.util.io.mocap.file_formats import TRC as Yatrc
 from resources.custom_exceptions import *
 from resources.file_types.fileobject import FileObject
-
-# todo: double-check operations when int/float/double difference
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
 output = os.path.join(path, "test_output")
@@ -336,6 +335,33 @@ class TRC(FileObject):
             error_message = error_message + getattr(e, 'message', repr(e))
             logging.warning(error_message)
             raise OSError(error_message)
+
+    @classmethod
+    def load_from_c3d_better(cls, c3d_path: str):
+        trc = Yatrc.create_from_c3d(c3d_path)
+        trc.update_from_markerset()
+        marker_set = trc.marker_names
+        num_coordinates = - 1
+        marker_dictionary = {}
+        for marker in marker_set:
+            marker_dictionary[marker] = trc.marker_set[marker].columns.tolist()
+            if num_coordinates == -1:
+                num_coordinates = len(marker_dictionary[marker])
+        columns = [c.split("_")[-1] for c in trc.column_labels]
+        filename = os.path.basename(c3d_path).replace(".c3d", ".trc")
+        meta_data = TRCMetadata(trc.headers)
+        data = pd.DataFrame(trc.data, columns=columns, index=trc.data[:,0].astype(int))
+        data.drop("Frame#", axis=1, inplace=True)
+
+        file_header = trc.first_line.split("\t")
+
+        res = cls(filename, meta_data, marker_set, columns, marker_dictionary, data, num_coordinates,
+                  file_header=file_header)
+        logging.info(f'TRC object successfully loaded from C3D.')
+
+        # close the file:
+
+        return res
 
     @classmethod
     def load_from_c3d(cls, c3d: str, filename: str = None, force_3d: bool = False) -> Self:
@@ -903,7 +929,7 @@ class _Test(unittest.TestCase):
             TRC.load_from_trc(path, _filename_nan)
             TRC.load_from_trc(os.path.join(path, _filename_standard))
             TRC.load_from_trc(os.path.join(path, _filename_nan))
-            TRC.load_from_c3d(os.path.join(path, _filename_c3d))
+            TRC.load_from_c3d_better(os.path.join(path, _filename_c3d))
         except OSError:
             self.fail(f"Could not load TRC file {path}.")
         self.assertRaises(OSError, TRC.load_from_trc,os.path.join(path, _filename_missing_z7))

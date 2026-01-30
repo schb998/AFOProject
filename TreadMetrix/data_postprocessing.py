@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from resources.trial_class import Trial, GaitCycle
 
-
 # todo: check segment_at_heel_strikes function when mot_frame_rate is None // trc_rate is not in trc.metadata
 
 selected_start = -1

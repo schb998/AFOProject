@@ -548,7 +548,7 @@ class Trial:
     @classmethod
     def from_c3d(cls, c3d: str, notes: str = None):
         mot = MOT.load_from_c3d(c3d)
-        trc = TRC.load_from_c3d(c3d)
+        trc = TRC.load_from_c3d_better(c3d)
         name = os.path.basename(c3d).replace(".c3d", "")
         return Trial(mot, trc, name, notes)
 

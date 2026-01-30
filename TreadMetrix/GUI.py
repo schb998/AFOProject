@@ -1,24 +1,27 @@
-import threading
 from tkinter import *
 from typing import Literal
-import resources.tkinter_toolbox as tbox
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from TreadMetrix.full_pipeline import trials_selection
+from TreadMetrix.full_pipeline import trials_selection, identify_new_trials_from_dict
 from resources.trial_class import Trial
 from data_postprocessing import process as post_processing
 from ik_computing import process as compute_ik
 from id_computing import process as compute_id
 from joint_power_computing import process as compute_jp
 from tkinter.constants import DISABLED, NORMAL
+import resources.paths.paths_access as local
+import osim_gestion as osim
 
 # todo: fix plot size
 # todo: threading - update plots when data is computed - event handling ??
+# todo: fix minor issue with string / stringvar handling of current trial variable
 
 BUTTONS = {}
 PLOTS = {}
 TRIALS = {}
-CURRENT_TRIAL: str
+CURRENT_TRIAL: StringVar
+TRIAL_DIRECTORY: str
+TRIALS_CHOICE: OptionMenu
 CANVAS: FigureCanvasTkAgg
 
 
@@ -86,10 +89,14 @@ def update_buttons_for_step(step: Literal["jp", "id", "ik", "grf"] | None = None
             BUTTONS["jp"]["state"] = DISABLED
 
 
-def switch_current_trial(new_trial: StringVar):
+def switch_current_trial_from_stringvar(new_trial: StringVar):
+    switch_current_trial(new_trial.get())
+
+
+def switch_current_trial(new_trial: str):
     global CURRENT_TRIAL
-    CURRENT_TRIAL = new_trial
-    trial = TRIALS[CURRENT_TRIAL]
+    CURRENT_TRIAL.set(new_trial)
+    trial = TRIALS[new_trial]
     if len(trial.gait_cycles["Right"]) == 0 and len(trial.gait_cycles["Left"]) == 0:
         update_buttons_for_step()
         show_plot(DEFAULT_PLOT)
@@ -101,33 +108,32 @@ def switch_current_trial(new_trial: StringVar):
             else "grf" if last_gc.grf is not None \
             else None
         update_buttons_for_step(step)
-        show_plot(PLOTS[CURRENT_TRIAL]["grf"] if step is not None else DEFAULT_PLOT)
-
+        show_plot(PLOTS[new_trial]["grf"] if step is not None else DEFAULT_PLOT)
 
 
 def update_grf():
-    PLOTS[CURRENT_TRIAL]["grf"] = plot_GRF()
+    PLOTS[CURRENT_TRIAL.get()]["grf"] = plot_GRF()
     BUTTONS["grf"]["state"] = NORMAL
 
 
 def update_ik():
-    PLOTS[CURRENT_TRIAL]["ik"] = plot_IK()
+    PLOTS[CURRENT_TRIAL.get()]["ik"] = plot_IK()
     BUTTONS["ik"]["state"] = NORMAL
 
 
 def update_id():
-    PLOTS[CURRENT_TRIAL]["id"] = plot_ID()
+    PLOTS[CURRENT_TRIAL.get()]["id"] = plot_ID()
     BUTTONS["id"]["state"] = NORMAL
 
 
 def update_jp():
-    PLOTS[CURRENT_TRIAL]["jp"] = plot_JP()
+    PLOTS[CURRENT_TRIAL.get()]["jp"] = plot_JP()
     BUTTONS["jp"]["state"] = NORMAL
 
 
 def plot_GRF(trial: Trial = None):
     if trial is None:
-        trial = TRIALS[CURRENT_TRIAL]
+        trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
     plot1 = fig.add_subplot(111)
     plot1.set_ylabel("GRF (N)")
@@ -172,7 +178,7 @@ def plot_GRF(trial: Trial = None):
 
 def plot_IK(trial: Trial = None):
     if trial is None:
-        trial = TRIALS[CURRENT_TRIAL]
+        trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
     plot1 = fig.add_subplot(111)
     plot1.set_ylabel("Ankle angle (insert unit)")
@@ -217,7 +223,7 @@ def plot_IK(trial: Trial = None):
 
 def plot_ID(trial: Trial = None):
     if trial is None:
-        trial = TRIALS[CURRENT_TRIAL]
+        trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
     plot1 = fig.add_subplot(111)
     plot1.set_ylabel("Ankle angle moment (insert unit)")
@@ -263,7 +269,7 @@ def plot_ID(trial: Trial = None):
 
 def plot_JP(trial: Trial = None):
     if trial is None:
-        trial = TRIALS[CURRENT_TRIAL]
+        trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
     plot1 = fig.add_subplot(111)
     plot1.set_ylabel("Ankle angle power (insert unit)")
@@ -313,7 +319,7 @@ def show_plot(fig: Figure):
 
 
 def gui(output, osim_scaled_model):
-    global BUTTONS, PLOTS, TRIALS, CURRENT_TRIAL, CANVAS
+    global BUTTONS, PLOTS, TRIALS, CURRENT_TRIAL, CANVAS, TRIALS_CHOICE
 
     window = Tk()
     window.title('AFO')
@@ -323,37 +329,42 @@ def gui(output, osim_scaled_model):
     CANVAS = canvas
 
     trial_list = list(TRIALS.keys())
-    CURRENT_TRIAL = trial_list[0]
-    value_inside = StringVar(window)
-    value_inside.set(CURRENT_TRIAL)
+
+    CURRENT_TRIAL = StringVar(window)
+    CURRENT_TRIAL.set(trial_list[0])
 
     for trial_name in trial_list:
         PLOTS[trial_name] = {"grf": DEFAULT_PLOT, "ik": DEFAULT_PLOT, "id": DEFAULT_PLOT, "jp": DEFAULT_PLOT}
-    question_menu = OptionMenu(window, value_inside, *trial_list,
-                               command = switch_current_trial)
+
+    question_menu = OptionMenu(window, CURRENT_TRIAL, *trial_list,
+                               command = switch_current_trial_from_stringvar)
+    TRIALS_CHOICE = question_menu
 
     # button that displays the plot
     grf_button = Button(master=window,
-                        command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["grf"])},
+                        command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["grf"])},
                         height=2, width=10, text="GRF")
     ik_button = Button(master=window,
-                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["ik"])},
+                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["ik"])},
                        height=2, width=10, text="IK")
     id_button = Button(master=window,
-                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["id"])},
+                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["id"])},
                        height=2, width=10, text="ID")
     jp_button = Button(master=window,
-                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL]["jp"])},
+                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["jp"])},
                        height=2, width=10, text="JP")
     BUTTONS = {"grf": grf_button, "ik": ik_button, "id": id_button, "jp": jp_button}
     manually_update_buttons(grf=False, ik=False, inverse_d=False, jp=False)
 
     current_trial_button = Button(master=window, text="Process",
-                                  command=lambda:{pipeline(output, osim_scaled_model)})
+                                  command=lambda:{pipeline(output, osim_scaled_model, window)})
 
     row = 0
     question_menu.grid(column=0, row=row, columnspan=2, sticky="EW")
     current_trial_button.grid(column=2, row=row)
+    if TRIAL_DIRECTORY is not None:
+        search_trials_button = Button(master=window, text="Search new trials", command=lambda:{update_trials(window)})
+        search_trials_button.grid(column=3, row=row)
     row += 1
     grf_button.grid(column=0, row=row)
     ik_button.grid(column=1, row=row)
@@ -366,10 +377,21 @@ def gui(output, osim_scaled_model):
     window.mainloop()
 
 
-def pipeline(output, osim_scaled_model):
-    print(CURRENT_TRIAL)
-    trial_to_process = TRIALS[CURRENT_TRIAL]
-    if PLOTS[CURRENT_TRIAL]["grf"] == DEFAULT_PLOT:
+def update_trials(window):
+    new_trials = identify_new_trials_from_dict(TRIAL_DIRECTORY, list(TRIALS.keys()))
+    new_trials_names = list(new_trials.keys())
+    TRIALS.update(new_trials)
+    menu = TRIALS_CHOICE.children["menu"]
+    for trial_name in new_trials_names:
+        PLOTS[trial_name] = {"grf": DEFAULT_PLOT, "ik": DEFAULT_PLOT, "id": DEFAULT_PLOT, "jp": DEFAULT_PLOT}
+        menu.add_command(label=trial_name, command=lambda: {switch_current_trial(trial_name)})
+
+
+def pipeline(output, osim_scaled_model, window):
+    current_trial = CURRENT_TRIAL.get()
+    print(current_trial)
+    trial_to_process = TRIALS[current_trial]
+    if PLOTS[current_trial]["grf"] == DEFAULT_PLOT:
         post_processing(trial_to_process, save_plot_path=output,
                         save_segmented_path=None,
                         show=False, save_optionals=False)
@@ -380,25 +402,33 @@ def pipeline(output, osim_scaled_model):
         update_id()
         compute_jp(trial_to_process, output)
         update_jp()
-    elif PLOTS[CURRENT_TRIAL]["ik"] == DEFAULT_PLOT:
+    elif PLOTS[current_trial]["ik"] == DEFAULT_PLOT:
         compute_ik(trial_to_process, osim_scaled_model, output, save=False)
         update_ik()
         compute_id(trial_to_process, output, output, osim_scaled_model)
         update_id()
         compute_jp(trial_to_process, output)
         update_jp()
-    elif PLOTS[CURRENT_TRIAL]["id"] == DEFAULT_PLOT:
+    elif PLOTS[current_trial]["id"] == DEFAULT_PLOT:
         compute_id(trial_to_process, output, output, osim_scaled_model)
         update_id()
         compute_jp(trial_to_process, output)
         update_jp()
-    elif PLOTS[CURRENT_TRIAL]["id"] == DEFAULT_PLOT:
+    elif PLOTS[current_trial]["jp"] == DEFAULT_PLOT:
         compute_jp(trial_to_process, output)
         update_jp()
+    if TRIAL_DIRECTORY is not None:
+        update_trials(window)
 
 
-def main(output, osim_scaled_model):
-    global TRIALS
-    TRIALS, _, _ = trials_selection()
-    gui(output, osim_scaled_model)
+def main():
+    global TRIALS, TRIAL_DIRECTORY
+    if not local.call_quick_setup():
+        local.main_gui()
+        osim.main()
+    TRIALS, TRIAL_DIRECTORY = trials_selection()
+    gui(local.get_output_path(), local.get_scaled_model_file())
 
+
+if __name__ == "__main__":
+    main()

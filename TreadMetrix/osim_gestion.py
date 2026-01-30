@@ -16,7 +16,6 @@ from resources.file_types.trc import TRC
 
 # todo: update configure_opensim so paths_back manage configuration instead
 # todo: continue separation osim_gestion // paths_back for model selection
-# todo: fix scaling for c3d static file input
 
 LABEL: Label
 BUTTON: Button
@@ -25,7 +24,6 @@ CURRENT_ROW: int = 0
 _osim_files_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), r"resources/osim_files")
 _setup = os.path.join(_osim_files_path, "scaling_setup.xml").replace("\\", "/")
 _base_model = os.path.join(_osim_files_path, "markerset.osim").replace("\\", "/")
-
 
 def _update_scaling_setup_file(scaling_setup: str, base_model_filepath: str = None) -> None:
     """Update the scaling setup file to have the valid absolute path of the base model file
@@ -211,7 +209,7 @@ def scale_model(static_filepath: str = None, output_filepath: str = None, scalin
     if static_filepath.endswith(TRC.extension):
         added_hj_filename = compute_hip_joints(static_filepath, output_path=dirname).filename
     else:
-        trc = TRC.load_from_c3d(static_filepath, force_3d=True)
+        trc = TRC.load_from_c3d_better(static_filepath)
         trc.save(dirname)
         static_filepath = trc.filepath
         added_hj = compute_hip_joints(static_filepath, trc, output_path=dirname)

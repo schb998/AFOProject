@@ -14,7 +14,6 @@ from ptb.util.osim.osim_store import OSIMStorage, HeadersLabels, OSIMForcePlate
 from resources.custom_exceptions import MissingPathException
 from resources.file_types.fileobject import FileObject
 
-# todo: double-check operations when int/float/double difference
 # todo: check c3d load-write issue
 
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing_files")
