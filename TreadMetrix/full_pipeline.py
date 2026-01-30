@@ -158,8 +158,7 @@ def main() -> None:
                 post_processing(trial, save_plot_path=local.get_corrected_mot_path(name),
                                 save_segmented_path=local.get_segmented_path(name) if whether_to_save else None,
                                 show=whether_to_show, save_optionals=whether_to_save)
-                compute_ik(trial, local.get_scaled_model_file(), local.get_ik_results_path(name),
-                           save=whether_to_save)
+                compute_ik(trial, local.get_scaled_model_file(), local.get_ik_results_path(name))
                 compute_id(trial, local.get_external_loads_path(name), local.get_id_results_path(name),
                            local.get_scaled_model_file())
                 compute_jp(trial, local.get_power_filtered_path(name))

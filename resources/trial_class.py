@@ -241,7 +241,7 @@ class GaitCycle:
                 and self.id is None
                 and self.jp is None)
 
-    def get_time_frame(self) -> (float, float) | None:
+    def get_time_frame(self):
         """Returns the first and last timestamp of the data, or None if the object does not contain any data.
 
         Returns:

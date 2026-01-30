@@ -446,14 +446,14 @@ def _pipeline(output, osim_scaled_model) -> None:
                         save_segmented_path=None,
                         show=False, save_optionals=False)
         _update_grf()
-        compute_ik(trial_to_process, osim_scaled_model, output, save=False)
+        compute_ik(trial_to_process, osim_scaled_model, output)
         _update_ik()
         compute_id(trial_to_process, output, output, osim_scaled_model)
         _update_id()
         compute_jp(trial_to_process, output)
         _update_jp()
     elif PLOTS[current_trial]["ik"] == DEFAULT_PLOT:
-        compute_ik(trial_to_process, osim_scaled_model, output, save=False)
+        compute_ik(trial_to_process, osim_scaled_model, output)
         _update_ik()
         compute_id(trial_to_process, output, output, osim_scaled_model)
         _update_id()
