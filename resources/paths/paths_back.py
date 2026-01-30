@@ -5,7 +5,7 @@ from copy import deepcopy
 from resources.custom_exceptions import *
 import logging
 
-# todo: find a way to match selected trcs with the mots?
+# todo: find a way to automatically match selected trcs with the mots?
 
 """
 Basic paths management
@@ -145,7 +145,10 @@ def are_loadbearing_paths_filled(detail: bool = False) -> bool | tuple[bool, lis
     """
 
     if not detail:
-        return get_local("output_path") is not None and ( (get_local("raw_directory") is not None) or (get_local("raw_mot") is not None and get_local("raw_trc") is not None) )
+        return (get_local("output_path") is not None
+                and ( (get_local("raw_directory") is not None)
+                      or (get_local("raw_mot") is not None and get_local("raw_trc") is not None)
+                      or (get_local('raw_c3d') is not None)))
 
     else:
         res = True
@@ -315,6 +318,48 @@ def set_raw_trcs(selection: list[str] | None) -> (bool, str | None):
     return True, message
 
 
+def set_raw_c3ds(selection: list[str] | None) -> (bool, str | None):
+    """Set up the given C3D files into the virtual save if valid.
+
+    Args:
+        selection: filepaths to save if valid
+
+    Returns:
+        bool, whether there are valid files to process in the given list
+        str | None, details such as invalid files or error message
+    """
+    error_message = "Failed attempt at updating selection of raw C3D files to process: "
+
+    # case: no file selected
+    if len(selection) == 0:
+        error_message = error_message + f"no file selected."
+        logging.warning(error_message)
+        return False, error_message
+
+    # checking validity of selected files
+    faulty = []
+    for file in selection:
+        if not os.path.isfile(file):
+            faulty.append(file)
+            selection.remove(file)
+
+    # case: no valid file left
+    if len(selection) == 0:
+        error_message = error_message + f"none of the selected files {faulty} were valid."
+        logging.warning(error_message)
+        return False, error_message
+
+    # keeping trace of eventual invalid files
+    if len(faulty) > 0:
+        message = f"Selected files {faulty} are invalid C3D files to process and will not be processed."
+        logging.info(message)
+    else:
+        message = None
+
+    _update_local("raw_c3d", selection)
+    return True, message
+
+
 def set_raw_directory(selection: str | None) -> (bool, str | None):
     """Set up the given directory into the virtual save if valid.
 
@@ -417,3 +462,9 @@ def delete_raw_directory() -> None:
     Returns: None
     """
     _remove_from_local("raw_directory")
+
+def delete_raw_c3d() -> None:
+    """Delete the selected raw c3d from the virtual save.
+    Returns: None
+    """
+    _remove_from_local("raw_c3d")

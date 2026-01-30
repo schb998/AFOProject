@@ -6,22 +6,24 @@ from tkinter.ttk import *
 import os
 import sys
 import resources.tkinter_toolbox as tbox
+from TreadMetrix.hip_joint_computation import compute_hip_joints
 from resources.custom_exceptions import *
 import resources.paths.paths_back as m
 import resources.paths.paths_access as c
 import xml.etree.ElementTree as ET
+
+from resources.file_types.trc import TRC
 
 # todo: update configure_opensim so paths_back manage configuration instead
 # todo: continue separation osim_gestion // paths_back for model selection
 
 LABEL: Label
 BUTTON: Button
-CURRENT_ROW = 0
+CURRENT_ROW: int = 0
 
 _osim_files_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), r"resources/osim_files")
 _setup = os.path.join(_osim_files_path, "scaling_setup.xml").replace("\\", "/")
 _base_model = os.path.join(_osim_files_path, "markerset.osim").replace("\\", "/")
-
 
 def _update_scaling_setup_file(scaling_setup: str, base_model_filepath: str = None) -> None:
     """Update the scaling setup file to have the valid absolute path of the base model file
@@ -182,7 +184,7 @@ def get_base_model_filename() -> str | None:
 
 
 def scale_model(static_filepath: str = None, output_filepath: str = None, scaling_setup_file: str = None,
-                base_model_file: str = None, keep_setup: bool = True) -> str | None:
+                base_model_file: str = None, keep_setup: bool = False) -> str | None:
     """Scale an Osim model according to the static file provided.
 
     Args:
@@ -199,39 +201,43 @@ def scale_model(static_filepath: str = None, output_filepath: str = None, scalin
     """
 
     while static_filepath is None:
-        message = 'Select the static TRC file.'
+        message = 'Select the static file.'
         tbox.infobox(message)
-        static_filepath = tbox.get_trc_file(instruction=message).name
+        static_filepath = tbox.get_file([tbox.FileTypes.C3D, tbox.FileTypes.TRC], instruction=message).name
 
-    static_file = os.path.basename(static_filepath)
+    dirname = os.path.dirname(static_filepath)
+    if static_filepath.endswith(TRC.extension):
+        added_hj_filename = compute_hip_joints(static_filepath, output_path=dirname).filename
+    else:
+        trc = TRC.load_from_c3d_better(static_filepath)
+        trc.save(dirname)
+        static_filepath = trc.filepath
+        added_hj = compute_hip_joints(static_filepath, trc, output_path=dirname)
+        added_hj_filename = added_hj.filename
+
     output_file = output_filepath if output_filepath is not None else static_filepath.replace(".trc", "_scaled_model.osim")
     base_model_file = base_model_file if base_model_file is not None else _base_model
 
     if scaling_setup_file is None:
-        scaling_directory = os.path.dirname(static_filepath)
-        _prepare_scaling_setup(scaling_directory, base_model_file)
-        scaling_setup_file = os.path.join(scaling_directory, "scaling_setup.xml").replace("\\", "/")
+        _prepare_scaling_setup(dirname, base_model_file)
+        scaling_setup_file = os.path.join(dirname, "scaling_setup.xml").replace("\\", "/")
 
     scale_tool = osim.ScaleTool(scaling_setup_file)
-
-    scale_tool.getModelScaler().setMarkerFileName(static_file)
+    scale_tool.getModelScaler().setMarkerFileName(added_hj_filename)
     scale_tool.setPrintResultFiles(True)
     scale_tool.getModelScaler().setOutputModelFileName(output_file)
     scale_tool.getMarkerPlacer().setOutputModelFileName(output_file)
-    scale_tool.getMarkerPlacer().setCoordinateFileName(static_file)
+    scale_tool.getMarkerPlacer().setCoordinateFileName(added_hj_filename)
 
-    worked = scale_tool.run()
+    scale_tool.run()
 
-    if worked:
-        success, detail = m.set_scaled_model(output_file)
-        if not success:
-            tbox.infobox(detail)
-        if not keep_setup:
-            os.remove(scaling_setup_file)
-        _update_scaled_model_label()
-        _update_scaled_model_button()
+    success, detail = m.set_scaled_model(output_file)
+    if not success:
+        tbox.infobox(detail)
+    if not keep_setup:
+        os.remove(scaling_setup_file)
 
-    return output_file if worked else None
+    return output_file if success else None
 
 
 def setup_ik_tool() -> osim.InverseKinematicsTool | None:
@@ -267,7 +273,6 @@ def _update_scaled_model_button():
             BUTTON.state(['disabled'])
 
 
-
 def main() -> None:
     """Open the user interface to manage OpenSim-related set up.
 
@@ -282,7 +287,9 @@ def main() -> None:
     tbox.set_up_window(root, window_width=700)
     root.columnconfigure(3)
 
-    scaling_button = Button(root, text="Scale a model", command=scale_model)
+    scaling_button = Button(root, text="Scale a model", command=lambda: {scale_model(),
+                                                                         _update_scaled_model_label(),
+                                                                         _update_scaled_model_button()})
     selection_button = Button(root, text="Select scaled model", command=select_scaled_model)
 
     label = Label(root, text="Selected scaled model:")
@@ -314,9 +321,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    static = r"C:\Users\lgre690\Documents\MyData\test_osim\temp\Static_0102.trc"
-    output = r"C:\Users\lgre690\Documents\MyData\test_osim\temp\scaling_result.osim"
-
-    # main()
-    # print(scale_model(static, output))
-    scale_model()
+     main()

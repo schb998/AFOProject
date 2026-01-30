@@ -4,6 +4,15 @@ from tkinter.ttk import *
 from tkinter.filedialog import askopenfile, askopenfilenames, askdirectory
 from tkinter.messagebox import showinfo
 import io
+from enum import Enum
+
+class FileTypes(Enum):
+    OSIM = [('OpenSim Project files', '*.osim')]
+    TRC = [('OpenSim Marker files', '*.trc')]
+    MOT = [('OpenSim Motion files', '*.mot')]
+    XML = [('Extensible Markup Language files', '*.xml')]
+    C3D = [('Motion Capture file', '*.c3d')]
+
 
 def reformat(string: list[str] | tuple[str] | str | None) -> str:
     """Reformat given object into a comprehensible string for gui usage.
@@ -74,57 +83,83 @@ def ask_question(question: str, title: str = None) -> bool:
     return answer.lower() == "yes"
 
 
-def get_osim_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
-    t = ""
+def _window_title_management(title: str = None, instruction: str = None, backup: str = "Selection window") -> str:
+    full_title = ""
     if title is not None:
-        t = t + title
+        full_title = full_title + title
     if instruction is not None:
-        if not t:
-            t = instruction
+        if not full_title:
+            full_title = instruction
         else:
-            t = t + " - " + instruction
-    if not t:
-        t = "Select OSIM file."
-    return askopenfile(title=t, mode=mode, filetypes=[('OpenSim Project files', '*.osim')])
+            full_title = full_title + " - " + instruction
+    if not full_title:
+        full_title = backup
+    return full_title
+
+
+def get_osim_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
+    return askopenfile(title=_window_title_management(title, instruction, "Select OSIM file."),
+                       mode=mode,
+                       filetypes=FileTypes.OSIM.value)
+
+
+def get_osim_files(instruction: str = None, initialdir: str = None, title=None) -> list[str] | None:
+    return list(askopenfilenames(title=_window_title_management(title, instruction, "Select OSIM files."),
+                                 initialdir=initialdir,
+                                 filetypes=FileTypes.OSIM.value))
 
 
 def get_mot_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
-    t = ""
-    if title is not None:
-        t = t + title
-    if instruction is not None:
-        if not t:
-            t = instruction
-        else:
-            t = t + " - " + instruction
-    if not t:
-        t = "Select MOT file."
-    return askopenfile(title=t, mode=mode, filetypes=[('OpenSim Motion files', '*.mot')])
+    return askopenfile(title=_window_title_management(title, instruction, "Select MOT file."),
+                       mode=mode,
+                       filetypes=FileTypes.MOT.value)
+
+
+def get_mot_files(instruction: str = None, initialdir: str = None, title=None) -> list[str] | None:
+    return list(askopenfilenames(title=_window_title_management(title, instruction, "Select MOT files."),
+                                 initialdir=initialdir,
+                                 filetypes=FileTypes.MOT.value))
 
 
 def get_xml_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
-    t = ""
-    if title is not None:
-        t = t + title
-    if instruction is not None:
-        if not t:
-            t = instruction
-        else:
-            t = t + " - " + instruction
-    if not t:
-        t = "Select XML file."
-    return askopenfile(title=t, mode=mode, filetypes=[('Extensible Markup Language files', '*.xml')])
+    return askopenfile(title=_window_title_management(title, instruction, "Select XML file."),
+                       mode=mode,
+                       filetypes=FileTypes.XML.value)
+
+
+def get_xml_files(instruction: str = None, initialdir: str = None, title=None) -> list[str] | None:
+    return list(askopenfilenames(title=_window_title_management(title, instruction, "Select XML files."),
+                                 initialdir=initialdir,
+                                 filetypes=FileTypes.XML.value))
 
 
 def get_trc_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
-    t = ""
-    if title is not None:
-        t = t + title
-    if instruction is not None:
-        if not t:
-            t = instruction
-        else:
-            t = t + " - " + instruction
-    if not t:
-        t = "Select TRC file."
-    return askopenfile(title=t, mode=mode, filetypes=[('OpenSim Marker files', '*.trc')])
+    return askopenfile(title=_window_title_management(title, instruction, "Select TRC file."),
+                       mode=mode,
+                       filetypes=FileTypes.TRC.value)
+
+
+def get_trc_files(instruction: str = None, initialdir: str = None, title=None) -> list[str] | None:
+    return list(askopenfilenames(title=_window_title_management(title, instruction, "Select TRC files."),
+                                 initialdir=initialdir,
+                                 filetypes=FileTypes.TRC.value))
+
+
+def get_c3d_file(instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
+    return askopenfile(title=_window_title_management(title, instruction, "Select C3D file."),
+                       mode=mode,
+                       filetypes=FileTypes.C3D.value)
+
+
+def get_c3d_files(instruction: str = None, initialdir: str = None, title=None) -> list[str] | None:
+    res = askopenfilenames(title=_window_title_management(title, instruction, "Select C3D files."),
+                                 initialdir=initialdir,
+                                 filetypes=FileTypes.C3D.value)
+    return list(res)
+
+
+def get_file(types: list[FileTypes], instruction: str = None, mode: str = 'r', title=None) -> io.TextIOWrapper | None:
+    filet = [t.value[0] for t in types]
+    return askopenfile(title=_window_title_management(title, instruction, "Select a file."),
+                       mode=mode,
+                       filetypes=filet)

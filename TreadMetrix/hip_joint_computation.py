@@ -2,7 +2,6 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from resources.file_types.trc import TRC
-from copy import deepcopy
 import logging
 import re
 
@@ -20,11 +19,10 @@ def hjc_harrington(marker_data: dict[str, npt.ArrayLike]) -> (np.typing.ArrayLik
     LHJC: numpy array
         Left hip joint center positions [n_frames, 3].
     """
-    marker_names = list(marker_data.keys())
-    lasis = np.array(marker_data[marker_names[0]])
-    lpsis = np.array(marker_data[marker_names[1]])
-    rasis = np.array(marker_data[marker_names[2]])
-    rpsis = np.array(marker_data[marker_names[3]])
+    lasis = np.array(marker_data["LASI"]).astype(float)
+    lpsis = np.array(marker_data["LPSI"]).astype(float)
+    rasis = np.array(marker_data["RASI"]).astype(float)
+    rpsis = np.array(marker_data["RPSI"]).astype(float)
 
     n_frames = lasis.shape[0]
 
@@ -86,37 +84,38 @@ def add_virtual_markers_to_trc(trc: TRC) -> TRC:
     Returns:
         TRC: Updated TRC object with added RHJC and LHJC markers.
     """
-    rasi = [m for m in trc.marker_set if re.search("^RASI", m) is not None][0]
-    lasi = [m for m in trc.marker_set if re.search("^LASI", m) is not None][0]
-    rpsi = [m for m in trc.marker_set if re.search("^RPSI", m) is not None][0]
-    lpsi = [m for m in trc.marker_set if re.search("^LPSI", m) is not None][0]
-    pelvis_marker_names = [lasi, lpsi, rasi, rpsi]
+    old_name = trc.filename
 
-    markers = {}
-    pelvis_marker_names.sort()
-    for m in pelvis_marker_names:
-        coordinates = trc.marker_dict[m]
+    markers_names = {'LASI': [m for m in trc.marker_set if re.search("^LASI", m) is not None][0],
+                     'LPSI': [m for m in trc.marker_set if re.search("^LPSI", m) is not None][0],
+                     'RASI': [m for m in trc.marker_set if re.search("^RASI", m) is not None][0],
+                     'RPSI': [m for m in trc.marker_set if re.search("^RPSI", m) is not None][0]}
+    markers_data = {}
+
+    for standard_name, colum_name in markers_names.items():
+        coordinates = trc.marker_dict[colum_name]
         x = trc.data[coordinates[0]]
         y = trc.data[coordinates[1]]
         z = trc.data[coordinates[2]]
         data = pd.DataFrame({'X': x, 'Y': y, 'Z': z})
-        markers[m] = data
-    rhjc, lhjc = hjc_harrington(markers)
+        markers_data[standard_name] = data
+
+    rhjc, lhjc = hjc_harrington(markers_data)
 
     new = trc.copy()
-    new.filename = deepcopy(trc.filename).replace(".trc", "_addedHJ.trc")
-
     new.add_marker("RHJC", rhjc)
     new.add_marker("LHJC", lhjc)
+    new.rename(filename=old_name)
 
     return new
 
 
-def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
+def compute_hip_joints(input_path: str = None, input_object: TRC = None, output_path: str = None) -> TRC:
     """
     Full workflow to read, update, and save a TRC file with new virtual markers.
 
     Parameters:
+        input_object:
         input_path (str): Path to the input TRC file.
         output_path (str): Path to save the updated TRC file. Optional. Object is not saved if not indicated.
 
@@ -125,13 +124,12 @@ def compute_hip_joints(input_path: str, output_path: str = None) -> TRC:
 
     """
     try:
-        trc = TRC.load_from_trc(input_path)
+        trc = TRC.load_from_trc(input_path) if input_object is None else input_object
         updated_trc = add_virtual_markers_to_trc(trc)
-        if output_path is not None:
-            updated_trc.save(output_path)
-            logging.info(f"Updated TRC file saved to: {output_path}")
+        updated_trc = TRC.adapt_to_opensim_use(trc=updated_trc, output_path=output_path)
+        logging.info(f"Updated TRC file saved to: {updated_trc.filepath}.")
         return updated_trc
     except Exception as e:
-        message = f"Error while processing TRC file: {getattr(e, 'message', repr(e))}"
+        message = f"Error while processing TRC file: {getattr(e, 'message', repr(e))}."
         logging.warning(message)
         raise Exception(message)

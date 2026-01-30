@@ -80,25 +80,21 @@ def process(trial: Trial,
 
             # Generate ExternalLoads XML
             df = grf.data
-            if cycle.paths.grf is not None:
-                grf_path = cycle.paths.grf
-            else:
+            if grf.filepath is None:
                 grf.save(temp_path)
-                grf_path = os.path.join(temp_path, grf.filename)
+            grf_path = grf.filepath
 
-            xml_file_path = os.path.join(side_xml, f"{name}_{side}_cycle{cycle.num}.xml")
+            xml_file_path = os.path.join(side_xml, f"{name}_exloads_{side}_{cycle.num}.xml")
             external_loads = compute_external_loads(df, grf_path, xml_file_path)
             cycle.add_external_loads(external_loads_path=xml_file_path, exl_object=external_loads)
 
-            if cycle.paths.ik_results is not None:
-                ik_path = cycle.paths.ik_results
-            else:
+            if ik.filepath is None:
                 ik.save(temp_path)
-                ik_path = os.path.join(temp_path, ik.filename)
+            ik_path = ik.filepath
 
             # Run Inverse Dynamics
             print(f"Running ID: {name}/{side}/{cycle.num}")
-            output_mot = f"{name}_{side}_cycle{cycle.num}.mot"
+            output_mot = f"{name}_ID_{side}_{cycle.num}.mot"
             id_tool = setup_id_tool(scaled_model_file, start_time, end_time, ik_path, xml_file_path, side_out, output_mot)
 
             try:
