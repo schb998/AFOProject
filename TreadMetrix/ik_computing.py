@@ -111,14 +111,13 @@ def marker_tasks(tool: osim.InverseKinematicsTool, markers: list[str], do_not_in
     return taskset
 
 
-def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save: bool = True):
+def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str):
     """Pipeline to compute the Internal Kinematics results from a trial's gait cycles.
 
     Args:
         trial: Trial object, trial to process
         scaled_model_file_path: str, path to the scaled model file
         ik_result_path: str, where to save the resulting IK files
-        save: bool, whether to keep the saved IK files or not
 
     Returns:
         None

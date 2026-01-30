@@ -25,6 +25,19 @@ _filename_nan = "MOT_nan.mot"  # missing data should be handled
 _filename_c3d = "C3D_standard.c3d"
 
 class MOTMetadata:
+    """MOTMetadata object. Object containing the metadata of a MOT file / a MOT object.
+
+    Attributes:
+        trial: str, name of the trial
+        version: int, version of the file
+        number_rows: int, number of rows (frames) of the data
+        number_columns: int, number of columns of the data
+        in_degrees: bool, whether the data is in degrees
+        name: str, name of the data
+        notes: str, additional notes
+        additional_metadata: dict, additional metadata
+
+    """
     _string_trial: str = "type"
     _string_version: str = "version"
     _string_number_rows: str = "nRows"
@@ -35,15 +48,18 @@ class MOTMetadata:
 
     def __init__(self, trial: str = None, version: int = None, n_rows: int = None, n_columns: int = None,
                  in_degrees: bool = None, name: str = None, notes: str = None, additional_metadata: dict = None) -> None:
-        """Creates a MOT object.
+        """Creates a MOTMetadata object.
 
         Args:
-            name:
-            notes:
-            version: int, version number of the MOT object
-            n_rows: int, number of rows of the MOT object's data
-            n_columns: int, number of columns of the MOT object's data
-            in_degrees: bool, whether the MOT object data is in degrees
+            trial: str, name of the trial
+            version: int, version of the file
+            n_rows: int, number of rows (frames) of the data
+            n_columns: int, number of columns of the data
+            in_degrees: bool, whether the data is in degrees
+            name: str, name of the data
+            notes: str, additional notes
+            additional_metadata: dict, additional metadata
+
         """
         self.trial = trial
         self.version = version
@@ -55,6 +71,14 @@ class MOTMetadata:
         self.additional_metadata = additional_metadata if additional_metadata is not None else {}
 
     def __eq__(self, other: object) -> bool:
+        """Equality operator.
+
+        Args:
+            other: object to compare.
+
+        Returns:
+            Whether the objects are equal
+        """
         if not isinstance(other, MOTMetadata):
             return False
         return (self.version == other.version
@@ -64,7 +88,13 @@ class MOTMetadata:
                 and self.additional_metadata == other.additional_metadata)
 
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """To string method. Used for save function of MOT object.
+
+        Returns:
+            str
+
+        """
         string = ""
         string = string if self.trial is None else string + MOTMetadata._string_trial + "=" + str(self.trial) + "\n"
         string = string if self.version is None else string + MOTMetadata._string_version + "=" + str(self.version) + "\n"
@@ -81,6 +111,16 @@ class MOTMetadata:
 
     @classmethod
     def from_dict(cls, dictionary: dict, from_ptb: bool = False) -> 'MOTMetadata':
+        """Creates a MOTMetadata object from a dictionary.
+
+        Args:
+            dictionary: dictionary of the data.
+            from_ptb: whether the dictionary comes from a ptb package's object.
+
+        Returns:
+            MOTMetadata object
+
+        """
         new = MOTMetadata()
         if from_ptb:
             new.trial = dictionary.pop(HeadersLabels.trial) if HeadersLabels.trial in dictionary else None
@@ -252,12 +292,12 @@ class MOT(FileObject):
         """Reads data from a MOT file into a MOT object.
 
         Args:
-            start_index: int, first frame and start of the index. 1 is the default value.
-            separator: character used to separate data in the mot file.
-                r'\\s' by default. OpenSim generated files require r'\\t'.
             filepath (string): path to the MOT file.
             filename (string): name of the MOT file. \
                 Should be filled if path does not include filename, optional otherwise.
+            start_index: int, first frame and start of the index. 1 is the default value.
+            separator: character used to separate data in the mot file.
+                r'\\s' by default. OpenSim generated files require r'\\t'.
 
         Returns:
             MOT object
@@ -311,6 +351,15 @@ class MOT(FileObject):
 
     @classmethod
     def load_from_c3d(cls, filepath: str, filename: str = None) -> Self:
+        """Create a MOT object from a C3D file.
+
+        Args:
+            filepath: str, path to the C3d file
+            filename: str, name of the file. Filename taken from the c3d file if None.
+
+        Returns:
+            MOT object
+        """
         filename = filename if filename is not None else os.path.basename(filepath)
         m = MocapDO.create_from_c3d(filepath)
 
@@ -357,7 +406,7 @@ class MOT(FileObject):
         return result
 
 
-    def rename(self, name: str = None, filename: str = None):
+    def rename(self, name: str = None, filename: str = None) -> None:
         """Updates the MOT object's name and/or file_name.
 
         Either arguments can be None. This method does nothing if both are None.
@@ -375,7 +424,18 @@ class MOT(FileObject):
                 self.filename = filename
 
 
-    def update_data(self, new_data: pd.DataFrame = None, filepath: str = None):
+    def update_data(self, new_data: pd.DataFrame = None, filepath: str = None) -> None:
+        """Update the MOT object. If no data is given, double-check the object's attributes and correct them if they
+        do not fit to fit the current data.
+
+        Args:
+            new_data: pd.DatFrame, new data if the data should be changed
+            filepath: str, path tot the file of the MOT object, if should be changed
+
+        Returns:
+            None
+
+        """
         if new_data is not None:
             self.data = new_data
         self.first_frame = self.data.index.values[0]
@@ -385,7 +445,7 @@ class MOT(FileObject):
         self.filepath = filepath if filepath is not None else self.filepath
 
 
-    def save(self, file_path: str = None, file_name: str = None):
+    def save(self, file_path: str = None, file_name: str = None) -> None:
         """Writes the MOT object into a MOT file.
 
         Does so at the given location, using the MOT object's filename parameter as the file's name.
@@ -568,7 +628,7 @@ class MOT(FileObject):
         """Recursively writes MOT object into files.
 
         Args:
-            mots (list): list of MOT objects.
+            mots (list of MOT): list of MOT objects.
             directory_path (string): output directory.
 
         Raises:

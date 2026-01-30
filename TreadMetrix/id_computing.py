@@ -4,7 +4,21 @@ import opensim as osim
 from matplotlib import pyplot as plt
 from resources.trial_class import Trial
 
-def compute_external_loads(df, grf_path, xml_file_path):
+# todo: compute external loads method parameters df & grf_path can be switched for a single MOT object
+
+
+def compute_external_loads(df, grf_path, xml_file_path) -> osim.ExternalLoads:
+    """Calls on OpenSim to compute the external loads
+
+    Args:
+        df: pd.dataFrame, grf data
+        grf_path: str, path to the GRF  file
+        xml_file_path: str, output path to saev the external loads
+
+    Returns:
+        osim external loads object
+
+    """
     external_loads = osim.ExternalLoads()
     external_loads.setDataFileName(grf_path)
     # left side
@@ -36,7 +50,9 @@ def compute_external_loads(df, grf_path, xml_file_path):
     external_loads.printToXML(xml_file_path)
     return external_loads
 
-def setup_id_tool(scaled_model_file, start_time, end_time, ik_path, xml_file_path, output_directory, output_file):
+def setup_id_tool(scaled_model_file, start_time, end_time, ik_path, xml_file_path, output_directory, output_file) \
+        -> osim.InverseDynamicsTool:
+    """Sets up OpenSim's Ik tool"""
     id_tool = osim.InverseDynamicsTool()
     id_tool.setModelFileName(scaled_model_file)
     id_tool.setStartTime(start_time)
@@ -52,6 +68,7 @@ def process(trial: Trial,
             external_loads_path: str,
             id_results_path: str,
             scaled_model_file: str) -> None:
+    """compute the id of the given trial"""
 
     name = trial.name
     for side in ["Right", "Left"]:

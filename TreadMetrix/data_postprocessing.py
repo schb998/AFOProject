@@ -14,7 +14,8 @@ from resources.trial_class import Trial, GaitCycle
 selected_start = -1
 selected_end = -1
 
-def reinitialize_inputs():
+def _reinitialize_inputs():
+    """Reinitializes the sampling timestamp variables."""
     global selected_start, selected_end
     selected_start = -1
     selected_end = -1
@@ -290,6 +291,7 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
 
 
     def onselect(xmin, xmax):
+        """Selection of a sample of the data."""
         global selected_start
         global selected_end
 
@@ -454,4 +456,4 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
         raise MissingPathException(f"Markers trajectory object (TRC) for trial {trial.name}", "No such object given.")
     segment_at_heel_strikes(trial, heel_strike_moments, save=save_segmented_path)
 
-    reinitialize_inputs()
+    _reinitialize_inputs()

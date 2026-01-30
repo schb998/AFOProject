@@ -9,7 +9,7 @@ import numpy as np
 import resources.paths.paths_access as local
 
 
-# tests to visualize the difference of speed in a unique file
+#  tests to visualize the difference of speed in a unique file
 
 def segment():
     # local.main_gui()

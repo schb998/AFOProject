@@ -13,10 +13,22 @@ from ik_computing import process as compute_ik
 from id_computing import process as compute_id
 from joint_power_computing import process as compute_jp
 
+# todo: if "speed" in trial name, ask for input and samples into multiple trials
+
 _static_regex = r"([sS][tT][aA][tT][iI][cC])|([cC][aA][lL])"
 
 
 def identify_new_trials_from_dict(directory: str, previous_trials: dict[str, Trial] | list[str] | None = None) -> dict[str, Trial]:
+    """Identify new trials to process from the given directory.
+
+    Args:
+        directory: str,path to the directory in which to search for new trials
+        previous_trials: trials already identified
+
+    Returns:
+        directory of the trials with their name as the keys
+
+    """
     # list the trials already selected:
     previous_trials_list = previous_trials.keys() if isinstance(previous_trials, dict) \
         else previous_trials if previous_trials is not None \
@@ -52,6 +64,12 @@ def identify_new_trials_from_dict(directory: str, previous_trials: dict[str, Tri
 
 
 def create_trials_from_saved_selection() -> dict[str, Trial]:
+    """Create trials from the paths of the save file
+
+    Returns:
+        directory of the trials with their name as the keys
+
+    """
     # read the save file:
     try:
          mot_files = local.get_raw_mot_path()
@@ -90,6 +108,11 @@ def create_trials_from_saved_selection() -> dict[str, Trial]:
 
 
 def trials_selection():
+    """Select and organize the trials of the pipeline
+
+    Returns:
+
+    """
     try:
         selected_directory = local.get_raw_directory()
         trials_to_process = identify_new_trials_from_dict(selected_directory)
@@ -99,7 +122,13 @@ def trials_selection():
     return trials_to_process, selected_directory
 
 
-def set_up():
+def set_up() -> (bool, bool):
+    """Sets up the user's preference for the pipeline, including the paths to use and save.
+
+    Return:
+        (bool, bool), whether to save the optional files of the pipeline, and whether to show the optional plots
+
+    """
     # update local paths:
     local.main_gui()
     osim.main()
@@ -107,7 +136,13 @@ def set_up():
     return local.call_should_save(), local.call_should_show()
 
 
-def main():
+def main() -> None:
+    """Main pipeline. Runs as long as it's not interrupted, checking for more trials if a directory has been given.
+
+    Returns:
+        None
+
+    """
     whether_to_save, whether_to_show = False, False if local.call_quick_setup() else set_up()
 
     trials, directory = trials_selection()

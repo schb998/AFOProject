@@ -6,18 +6,41 @@ from resources.tkinter_toolbox import ask_question
 
 
 def call_to_gui() -> None:
+    """Call to the GUI that manages the paths of the pipeline.
+
+    Returns:
+        None
+    """
     main_gui()
 
 
 def call_quick_setup() -> bool:
+    """Ask the user whether to use the quick setup.
+
+    Returns:
+        bool, whether to use the quick setup
+
+    """
     return ask_question("Run the pipeline using quick setup?", "Quick setup")
 
 
 def call_should_save() -> bool:
+    """Ask the user for their saving preferences
+
+    Returns:
+        bool, whether to save the optional files
+
+    """
     return ask_question("Save the optional files?", "Saving preference")
 
 
 def call_should_show() -> bool:
+    """Ask the user for their visual feedback preferences
+
+    Returns:
+        bool, whether to show the optional plots
+
+    """
     return ask_question("Show the plots as the code run?", "Show preference")
 
 
@@ -59,6 +82,14 @@ def get_osim_path() -> str | None:
 
 
 def get_scaled_model_file() -> str:
+    """
+
+    Returns: the path to the saved scaled model file, if existing
+
+    Raises:
+        MissingPathException if no such path has been saved
+
+    """
     content = model.get_local("osim_scaled_model")
     if content is not None:
         return content
@@ -66,6 +97,12 @@ def get_scaled_model_file() -> str:
 
 
 def get_raw_directory() -> str:
+    """
+
+    Returns: the path to the raw directory of the pipeline, if existing
+    Raises MissingPathException if no such path has been saved
+
+    """
     content = model.get_local("raw_directory")
     if content is not None:
         return content

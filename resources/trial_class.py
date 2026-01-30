@@ -201,13 +201,32 @@ class GaitCycle:
                      iks: MOT | None = None, ik_path: str | None = None,
                      exls: CustomExternalLoads | osim.ExternalLoads | None = None, exl_path: str | None = None,
                      ids: MOT | None = None, id_path: str | None = None,
-                     jps: CustomJointPower | pd.DataFrame | None = None, jp_path: str | None = None):
-            self.add_grf(ground_reaction_forces_path=grf_path, grf_object=grfs)
-            self.add_trc(markers_trajectory_path=trc_path, trc_object=trcs)
-            self.add_ik(inverse_kinematic_path=ik_path, ik_object=iks)
-            self.add_external_loads(external_loads_path=exl_path, exl_object=exls)
-            self.add_id(inverse_dynamic_path=id_path, id_object=ids)
-            self.add_joint_power(joint_power_path=jp_path, jp_object=jps)
+                     jps: CustomJointPower | pd.DataFrame | None = None, jp_path: str | None = None) -> None:
+        """Add givenobjects to the cycle object.
+
+        Args:
+            grfs:  MOT object, MOT object of the ground force reactions data if already loaded
+            grf_path: path to the ground force reaction data file
+            trcs: TRC object, if already loaded
+            trc_path: path to the trc data file
+            iks: MOT object, MOT objects of the inverse kinematic data if already loaded
+            ik_path: path to the inverse kinematic data file
+            exls:  OpenSim ExternalLoads object, if already loaded
+            exl_path: path to the external loads data file
+            ids:  MOT object, MOT objects of the inverse dynamic data if already loaded
+            id_path: path to the inverse dynamic data file
+            jps: panda DataFrame object, if already loaded
+            jp_path: path to the join power data file
+
+        Returns:
+            None
+        """
+        self.add_grf(ground_reaction_forces_path=grf_path, grf_object=grfs)
+        self.add_trc(markers_trajectory_path=trc_path, trc_object=trcs)
+        self.add_ik(inverse_kinematic_path=ik_path, ik_object=iks)
+        self.add_external_loads(external_loads_path=exl_path, exl_object=exls)
+        self.add_id(inverse_dynamic_path=id_path, id_object=ids)
+        self.add_joint_power(joint_power_path=jp_path, jp_object=jps)
 
     def is_empty(self):
         """Check if the current object contains any data.
@@ -222,7 +241,7 @@ class GaitCycle:
                 and self.id is None
                 and self.jp is None)
 
-    def get_time_frame(self):
+    def get_time_frame(self) -> (float, float) | None:
         """Returns the first and last timestamp of the data, or None if the object does not contain any data.
 
         Returns:
@@ -253,7 +272,7 @@ class GaitCycle:
             ending_time: ending time of the time frame
 
         Returns:
-
+            whether the current object is included in the given time frame.
         """
         time = self.get_time_frame()
         if time is None:
@@ -312,6 +331,7 @@ class GaitCycle:
             """Manage the paths and input whether objects should be loaded
 
             Args:
+                extension: str, extension of the objects' files
                 objects: list of the loaded objects, can be None
                 path: path(s) to the objects, can be None
 
@@ -507,7 +527,7 @@ class GaitCycle:
 
 class Trial:
     """
-    Structure regrouping trial in one objet.
+    Structure regrouping the data of a trial in one objet.
 
     Attributes:
         name: str, name of the trial
@@ -546,14 +566,24 @@ class Trial:
 
 
     @classmethod
-    def from_c3d(cls, c3d: str, notes: str = None):
+    def from_c3d(cls, c3d: str, notes: str = None) -> Self:
+        """Creates a trial object from a C3D file.
+
+        Args:
+            c3d: str, path to teh c3d file
+            notes: str, additional notes on the trial.
+
+        Returns:
+            trial object
+
+        """
         mot = MOT.load_from_c3d(c3d)
         trc = TRC.load_from_c3d_better(c3d)
         name = os.path.basename(c3d).replace(".c3d", "")
         return Trial(mot, trc, name, notes)
 
 
-    def add_trc(self, path_to_trc: str = None, trc: TRC = None):
+    def add_trc(self, path_to_trc: str = None, trc: TRC = None) -> None:
         """Add the Marker Motion data (TRC) to a trial.
 
         Args:
@@ -574,6 +604,16 @@ class Trial:
                 raise MissingPathException("Corrected Ground Reaction Forces (MOT) file", detail=e.strerror)
 
     def add_corrected_grf(self, path_to_corrected_grf: str = None, corrected_grf: MOT = None) -> None:
+        """Add the corrected GRF data to the trial
+
+        Args:
+            path_to_corrected_grf: str, path to the corrected GRF file (MOT) if existing
+            corrected_grf: MOt, GRD fata if already loaded into a MOT object
+
+        Returns:
+            None
+
+        """
         if corrected_grf is not None:
             self.corrected_grf = corrected_grf
             self.corrected_grf.filepath = path_to_corrected_grf if self.corrected_grf.filepath is None else None
@@ -586,13 +626,14 @@ class Trial:
                     raise MissingPathException("Corrected Ground Reaction Forces (MOT) file", detail=e.strerror)
 
     def add_cycles(self, right_cycles: list[GaitCycle], left_cycles: list[GaitCycle]) -> None:
-        """Adding the given GaitCycles to the trial data, at the end of their respective sides.
+        """Addthe given GaitCycles to the trial data, at the end of their respective sides.
 
         Args:
-            right_cycles:
-            left_cycles:
+            right_cycles: list of gait cycles
+            left_cycles: list of gait cycles
 
         Returns:
+            None
 
         """
         self.gait_cycles["Right"].extend(right_cycles)
@@ -640,7 +681,7 @@ class Trial:
             ending_time: float, upper time bound
 
         Returns:
-            Trial sampled from the current objesct.
+            Trial sampled from the current object.
         """
         time = [starting_time, ending_time]
         time.sort()

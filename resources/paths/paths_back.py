@@ -59,7 +59,7 @@ def save_to_json() -> None:
 # manipulate virtual save _LOCAL:
 
 def _update_local(key: str, value: str | list[str]) -> None:
-    """Update value of the local save.
+    """Update value of the local save for the given key.
 
     Args:
         key: key to update. Create it if not already in local save.
@@ -74,10 +74,10 @@ def _update_local(key: str, value: str | list[str]) -> None:
 
 
 def _remove_from_local(key: str) -> None:
-    """Remove value of the local save.
+    """Remove value of the given key from the local save.
 
     Args:
-        key: key to update.
+        key: key of the saved path to remove.
 
     Returns:
         None

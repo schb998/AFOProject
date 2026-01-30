@@ -27,6 +27,19 @@ _filename_missing_z7 = "TRC_missing_z7.trc"  # error : missing marker coordinate
 coordinates_names = ['X', 'Y', 'Z', 'T', 'N']
 
 class TRCMetadata(object):
+    """TRCMetadata object. Object containing the metadata of a TRC file.
+
+    Attributes:
+        data_rate: int, rate of the data
+        camera_rate, int rate of the camera
+        num_frames: int, number of fames (columns) of the data
+        num_markers: int, number of markers of the data
+        units: string, unit of the data
+        og_data_rate: int, original data rate
+        og_start_frame: int, frist frame of the original data
+        og_num_frames: int, number of frames of the original data
+        additional_metadata: dict, additional metadata
+    """
     _string_data_rate: str = "DataRate"
     _string_camera_rate : str = "CameraRate"
     _string_num_frames: str = 'NumFrames'
@@ -37,8 +50,12 @@ class TRCMetadata(object):
     _string_og_num_frames: str = 'OrigNumFrames'
 
 
-    def __init__(self, metadata: dict[str, str | int | float]):
-        """Creates a TRCMetadata object."""
+    def __init__(self, metadata: dict[str, str | int | float]) -> Self:
+        """Creates a TRCMetadata object.
+
+        Args:
+            metadata: dict[str, str | int | float], metadata of TRC file
+        """
 
         self.data_rate = metadata.pop(self._string_data_rate) if self._string_data_rate in metadata else None
         self.camera_rate = metadata.pop(self._string_camera_rate) if self._string_camera_rate in metadata else None
@@ -53,6 +70,14 @@ class TRCMetadata(object):
             self.additional_metadata[key] = metadata[key]
 
     def __eq__(self, other: object) -> bool:
+        """Equality operator.
+
+        Args:
+            other: object to compare
+
+        Returns:
+            whether teh objects are equal.
+        """
         if not isinstance(other, TRCMetadata):
             return False
         if self.data_rate != other.data_rate:
@@ -112,17 +137,16 @@ class TRC(FileObject):
     """TRC object.
 
     Attributes:
+        data:        Dataframe containing the data. The frames are used as index.
         filename:    String indicating the name of the originating file.
+        filepath: String of the path to the matching TRC file, if existing
         metadata:    Dictionary with the TRC metadata.
         marker_set:  List of the markers used.
         col_names:   List of the names of the data columns.
         marker_dict: Dictionary of the columns associated with each marker.
-        data:        Dataframe containing the data. The frames are used as index.
         first_frame: Integer, first frame of the data.
         num_coordinates: Integer, number of coordinates by marker
         file_header: List of string, content of the TRC file's header line. Optional.
-        filepath: String of the path to the matching TRC file, if existing
-
     """
 
     extension = ".trc"
@@ -338,8 +362,19 @@ class TRC(FileObject):
 
     @classmethod
     def load_from_c3d_better(cls, c3d_path: str):
+        """Load a TRC object from a C3D file
+
+        Args:
+            c3d_path: str, path to the c3d file
+
+        Returns:
+
+        """
+        # uses the ptb package to read the c3d into a ptb's TRC object
         trc = Yatrc.create_from_c3d(c3d_path)
         trc.update_from_markerset()
+
+        # translates teh data into a custom TRC object:
         marker_set = trc.marker_names
         num_coordinates = - 1
         marker_dictionary = {}
@@ -358,8 +393,6 @@ class TRC(FileObject):
         res = cls(filename, meta_data, marker_set, columns, marker_dictionary, data, num_coordinates,
                   file_header=file_header)
         logging.info(f'TRC object successfully loaded from C3D.')
-
-        # close the file:
 
         return res
 
@@ -666,6 +699,15 @@ class TRC(FileObject):
         self.rename(self.filename.replace('.trc', f'added_{marker_name}'))
 
     def remove_marker(self, marker_name: str) -> None:
+        """Remove a marker from the data.
+
+        Args:
+            marker_name: name of teh marker to remove
+
+        Returns:
+            none
+
+        """
         for column in self.marker_dict[marker_name]:
             self.data.drop(column, axis=1, inplace=True)
             self.col_names.remove(column)
@@ -674,6 +716,16 @@ class TRC(FileObject):
         self.marker_set.remove(marker_name)
 
     def rename_marker(self, old_name: str, new_name: str) -> None:
+        """Rename a marker in the data
+
+        Args:
+            old_name: str, old name of the marker
+            new_name: str, new name of the marker
+
+        Returns:
+            None
+
+        """
         self.marker_set.append(new_name)
         self.marker_dict[new_name] = self.marker_dict.pop(old_name)
         self.marker_set.remove(old_name)

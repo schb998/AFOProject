@@ -48,11 +48,13 @@ def _update_scaling_setup_file(scaling_setup: str, base_model_filepath: str = No
 
 
 def _prepare_scaling_setup(directory_path: str, base_model_filepath: str = None) -> None:
+    """Copy the scaling setup file in teh right directory"""
     shutil.copy(_setup, directory_path)
     _update_scaling_setup_file(os.path.join(directory_path, "scaling_setup.xml"), base_model_filepath)
 
 
 def _update_base_opensim_label():
+    """Updates the label of the opensim path"""
     global LABEL
     if LABEL is not None:
         try:
@@ -63,6 +65,7 @@ def _update_base_opensim_label():
 
 
 def _update_base_opensim_setup_button():
+    """Updates the state of the opensim setup button"""
     global BUTTON
     if BUTTON is not None:
         try:
@@ -72,7 +75,7 @@ def _update_base_opensim_setup_button():
             BUTTON.state(['disabled'])
 
 
-def configure_opensim() -> None:
+def _configure_opensim() -> None:
     """Locally configures Opensim.
 
     Returns:
@@ -145,7 +148,7 @@ def configure_opensim() -> None:
     os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
 
 
-def select_scaled_model() -> None:
+def _select_scaled_model() -> None:
     message = "Please select scaled model file."
     tbox.infobox(message)
     file = tbox.get_osim_file(instruction=message)
@@ -156,7 +159,7 @@ def select_scaled_model() -> None:
     _update_scaled_model_button()
 
 
-def get_scaled_model_filename() -> str | None:
+def _get_scaled_model_filename() -> str | None:
     message = "Please select scaled model file."
     tbox.infobox(message)
     file = tbox.get_osim_file(instruction=message)
@@ -165,7 +168,7 @@ def get_scaled_model_filename() -> str | None:
     return None
 
 
-def open_base_model_file() -> str | None:
+def _open_base_model_file() -> str | None:
     message = "Please select model file to be scaled."
     tbox.infobox(message)
     file = tbox.get_osim_file(instruction=message)
@@ -174,7 +177,7 @@ def open_base_model_file() -> str | None:
     return None
 
 
-def get_base_model_filename() -> str | None:
+def _get_base_model_filename() -> str | None:
     message = "Please select model file to be scaled."
     tbox.infobox(message)
     file = tbox.get_osim_file(instruction=message)
@@ -254,6 +257,7 @@ def setup_ik_tool() -> osim.InverseKinematicsTool | None:
 
 
 def _update_scaled_model_label():
+    """Updates the content fo teh label showing the current selected scaled model"""
     global LABEL
     if LABEL is not None:
         try:
@@ -264,6 +268,7 @@ def _update_scaled_model_label():
 
 
 def _update_scaled_model_button():
+    """Updates the state of the scaled model selection confirmation button"""
     global BUTTON
     if BUTTON is not None:
         try:
@@ -280,7 +285,7 @@ def main() -> None:
         None
 
     """
-    configure_opensim()
+    _configure_opensim()
 
     root = Tk()
     root.title("Model scaling and IK via OpenSim")
@@ -290,7 +295,7 @@ def main() -> None:
     scaling_button = Button(root, text="Scale a model", command=lambda: {scale_model(),
                                                                          _update_scaled_model_label(),
                                                                          _update_scaled_model_button()})
-    selection_button = Button(root, text="Select scaled model", command=select_scaled_model)
+    selection_button = Button(root, text="Select scaled model", command=_select_scaled_model)
 
     label = Label(root, text="Selected scaled model:")
     selected = Label(root, text=tbox.reformat(m.get_local("osim_scaled_model")), background="darkgrey")

@@ -9,7 +9,7 @@ BUTTON: Button
 CURRENT_ROW = 0
 default_title = "AFO project"
 
-def _update_labels():
+def _update_labels() -> None:
     """Update content labels of the gui.
 
     Returns:
@@ -19,7 +19,7 @@ def _update_labels():
         lab.config(text=tbox.reformat(back.get_local(LABELS[lab])))
 
 
-def _update_row():
+def _update_row() -> None:
     """Update current row number.
 
     Returns:
@@ -29,8 +29,8 @@ def _update_row():
     CURRENT_ROW = CURRENT_ROW + 1
 
 
-def _update_button():
-    """Update button activability depending on the validity of the paths required by the pipeline.
+def _update_button() -> None:
+    """Update button state depending on the validity of the paths required by the pipeline.
 
     Returns:
         None
@@ -301,7 +301,16 @@ def _setup_raw_trc(root: Tk) -> (Label, Label, Button, Button):
     return label, selected, select_button, unselect_button
 
 
-def _setup_or_label(root: Tk) -> (Label, Label):
+def _setup_or_label(root: Tk) -> Label:
+    """Set up a quick label containing the word "or".
+
+    Args:
+        root: Tkinter root window
+
+    Returns:
+        the label
+
+    """
     or_label = Label(root, text="OR")
     or_label.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=10)
     _update_row()
@@ -309,6 +318,12 @@ def _setup_or_label(root: Tk) -> (Label, Label):
 
 
 def main() -> None:
+    """GUI managing the save file and the different paths required by the pipeline.
+
+    Returns:
+        None
+
+    """
     root = Tk()
     root.title("Path management")
     tbox.set_up_window(root, window_width=600, window_height=400)

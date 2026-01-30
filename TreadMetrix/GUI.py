@@ -15,6 +15,7 @@ import osim_gestion as osim
 # todo: fix plot size
 # todo: threading - update plots when data is computed - event handling ??
 # todo: fix minor issue with string / stringvar handling of current trial variable
+# todo: fix crashing issue when pipeline starts running with no trial to process
 
 BUTTONS = {}
 PLOTS = {}
@@ -25,7 +26,8 @@ TRIALS_CHOICE: OptionMenu
 CANVAS: FigureCanvasTkAgg
 
 
-def _default_plot():
+def _default_plot() -> Figure:
+    """Computes a default plot to show when teh data has not yet been processed"""
     fig = Figure(figsize=(5, 5), dpi=100)
     plot1 = fig.add_subplot(111)
     plot1.text(0.5, 0.5, f"Nothing to show at the moment", ha='center', va='center', alpha=0.5)
@@ -35,14 +37,26 @@ def _default_plot():
 DEFAULT_PLOT = _default_plot()
 
 
-def _blank_plot():
+def _blank_plot() -> Figure:
+    """Computes a blank plot to show"""
     return Figure(figsize=(5, 5), dpi=100)
 
 
 BLANK_PLOT = _blank_plot()
 
 
-def manually_update_buttons(grf: bool = None, ik: bool = None, inverse_d: bool = None, jp: bool = None):
+def _manually_update_buttons(grf: bool = None, ik: bool = None, inverse_d: bool = None, jp: bool = None) -> None:
+    """Manually activates/deactivates the buttons.
+
+    Args:
+        grf: bool, whether the grf button is active
+        ik: bool, whether the ik button is active
+        inverse_d: bool, whether the id button is active
+        jp: bool, whether the jp button is active
+
+    Returns: None
+
+    """
     global BUTTONS
     if grf is not None:
         BUTTONS["grf"]["state"] = NORMAL if grf else DISABLED
@@ -54,7 +68,16 @@ def manually_update_buttons(grf: bool = None, ik: bool = None, inverse_d: bool =
         BUTTONS["jp"]["state"] = NORMAL if jp else DISABLED
 
 
-def update_buttons_for_step(step: Literal["jp", "id", "ik", "grf"] | None = None):
+def _update_buttons_for_step(step: Literal["jp", "id", "ik", "grf"] | None = None) -> None:
+    """Updates the button according to the given step of the pipeline
+
+    Args:
+        step: str | None, step of the pipeline. Either "jp", "id", "ik", "grf" or None.
+
+    Returns:
+        None
+
+    """
     if step is None:
         BUTTONS["grf"]["state"] = DISABLED
         BUTTONS["ik"]["state"] = DISABLED
@@ -89,17 +112,25 @@ def update_buttons_for_step(step: Literal["jp", "id", "ik", "grf"] | None = None
             BUTTONS["jp"]["state"] = DISABLED
 
 
-def switch_current_trial_from_stringvar(new_trial: StringVar):
-    switch_current_trial(new_trial.get())
+def _switch_current_trial_from_stringvar(new_trial: StringVar) -> None:
+    """Switch the current trial from a StingVar value
+
+    Args:
+        new_trial: StingVar, value of the current trial
+
+    Returns: None
+
+    """
+    _switch_current_trial(new_trial.get())
 
 
-def switch_current_trial(new_trial: str):
+def _switch_current_trial(new_trial: str):
     global CURRENT_TRIAL
     CURRENT_TRIAL.set(new_trial)
     trial = TRIALS[new_trial]
     if len(trial.gait_cycles["Right"]) == 0 and len(trial.gait_cycles["Left"]) == 0:
-        update_buttons_for_step()
-        show_plot(DEFAULT_PLOT)
+        _update_buttons_for_step()
+        _show_plot(DEFAULT_PLOT)
     else:
         last_gc = trial.gait_cycles["Left"][-1]
         step = "jp" if last_gc.jp is not None \
@@ -107,31 +138,36 @@ def switch_current_trial(new_trial: str):
             else "ik" if last_gc.ik is not None \
             else "grf" if last_gc.grf is not None \
             else None
-        update_buttons_for_step(step)
-        show_plot(PLOTS[new_trial]["grf"] if step is not None else DEFAULT_PLOT)
+        _update_buttons_for_step(step)
+        _show_plot(PLOTS[new_trial]["grf"] if step is not None else DEFAULT_PLOT)
 
 
-def update_grf():
-    PLOTS[CURRENT_TRIAL.get()]["grf"] = plot_GRF()
+def _update_grf() -> None:
+    """Update the grf plot of the current trial"""
+    PLOTS[CURRENT_TRIAL.get()]["grf"] = _plot_GRF()
     BUTTONS["grf"]["state"] = NORMAL
 
 
-def update_ik():
-    PLOTS[CURRENT_TRIAL.get()]["ik"] = plot_IK()
+def _update_ik() -> None:
+    """Update the ik plot of the current trial"""
+    PLOTS[CURRENT_TRIAL.get()]["ik"] = _plot_IK()
     BUTTONS["ik"]["state"] = NORMAL
 
 
-def update_id():
-    PLOTS[CURRENT_TRIAL.get()]["id"] = plot_ID()
+def _update_id() -> None:
+    """Update the id plot of the current trial"""
+    PLOTS[CURRENT_TRIAL.get()]["id"] = _plot_ID()
     BUTTONS["id"]["state"] = NORMAL
 
 
-def update_jp():
-    PLOTS[CURRENT_TRIAL.get()]["jp"] = plot_JP()
+def _update_jp() -> None:
+    """Update the jp plot of the current trial"""
+    PLOTS[CURRENT_TRIAL.get()]["jp"] = _plot_JP()
     BUTTONS["jp"]["state"] = NORMAL
 
 
-def plot_GRF(trial: Trial = None):
+def _plot_GRF(trial: Trial = None) -> Figure:
+    """Makes a plot of the trial's GRF"""
     if trial is None:
         trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
@@ -176,7 +212,8 @@ def plot_GRF(trial: Trial = None):
     return fig
 
 
-def plot_IK(trial: Trial = None):
+def _plot_IK(trial: Trial = None)-> Figure:
+    """Makes a plot of the trial's IK"""
     if trial is None:
         trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
@@ -221,7 +258,8 @@ def plot_IK(trial: Trial = None):
     return fig
 
 
-def plot_ID(trial: Trial = None):
+def _plot_ID(trial: Trial = None)-> Figure:
+    """Makes a plot of the trial's ID"""
     if trial is None:
         trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
@@ -267,7 +305,8 @@ def plot_ID(trial: Trial = None):
     return fig
 
 
-def plot_JP(trial: Trial = None):
+def _plot_JP(trial: Trial = None)-> Figure:
+    """Makes a plot of the trial's JP"""
     if trial is None:
         trial = TRIALS[CURRENT_TRIAL.get()]
     fig = Figure(figsize=(5, 5), dpi=100)
@@ -313,12 +352,21 @@ def plot_JP(trial: Trial = None):
     return fig
 
 
-def show_plot(fig: Figure):
+def _show_plot(fig: Figure):
+    """Sets the given plot into the window."""
     CANVAS.figure = fig
     CANVAS.draw()
 
 
-def gui(output, osim_scaled_model):
+def _gui(output, osim_scaled_model) -> None:
+    """GUI setup.
+
+    Parameters:
+        output: str, output directory of the pipeline
+        osim_scaled_model: str, path to the scaled model
+
+    returns: None
+    """
     global BUTTONS, PLOTS, TRIALS, CURRENT_TRIAL, CANVAS, TRIALS_CHOICE
 
     window = Tk()
@@ -337,33 +385,33 @@ def gui(output, osim_scaled_model):
         PLOTS[trial_name] = {"grf": DEFAULT_PLOT, "ik": DEFAULT_PLOT, "id": DEFAULT_PLOT, "jp": DEFAULT_PLOT}
 
     question_menu = OptionMenu(window, CURRENT_TRIAL, *trial_list,
-                               command = switch_current_trial_from_stringvar)
+                               command = _switch_current_trial_from_stringvar)
     TRIALS_CHOICE = question_menu
 
     # button that displays the plot
     grf_button = Button(master=window,
-                        command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["grf"])},
+                        command=lambda: {_show_plot(PLOTS[CURRENT_TRIAL.get()]["grf"])},
                         height=2, width=10, text="GRF")
     ik_button = Button(master=window,
-                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["ik"])},
+                       command=lambda: {_show_plot(PLOTS[CURRENT_TRIAL.get()]["ik"])},
                        height=2, width=10, text="IK")
     id_button = Button(master=window,
-                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["id"])},
+                       command=lambda: {_show_plot(PLOTS[CURRENT_TRIAL.get()]["id"])},
                        height=2, width=10, text="ID")
     jp_button = Button(master=window,
-                       command=lambda: {show_plot(PLOTS[CURRENT_TRIAL.get()]["jp"])},
+                       command=lambda: {_show_plot(PLOTS[CURRENT_TRIAL.get()]["jp"])},
                        height=2, width=10, text="JP")
     BUTTONS = {"grf": grf_button, "ik": ik_button, "id": id_button, "jp": jp_button}
-    manually_update_buttons(grf=False, ik=False, inverse_d=False, jp=False)
+    _manually_update_buttons(grf=False, ik=False, inverse_d=False, jp=False)
 
     current_trial_button = Button(master=window, text="Process",
-                                  command=lambda:{pipeline(output, osim_scaled_model, window)})
+                                  command=lambda:{_pipeline(output, osim_scaled_model)})
 
     row = 0
     question_menu.grid(column=0, row=row, columnspan=2, sticky="EW")
     current_trial_button.grid(column=2, row=row)
     if TRIAL_DIRECTORY is not None:
-        search_trials_button = Button(master=window, text="Search new trials", command=lambda:{update_trials(window)})
+        search_trials_button = Button(master=window, text="Search new trials", command=lambda:{_update_trials()})
         search_trials_button.grid(column=3, row=row)
     row += 1
     grf_button.grid(column=0, row=row)
@@ -377,17 +425,19 @@ def gui(output, osim_scaled_model):
     window.mainloop()
 
 
-def update_trials(window):
+def _update_trials() -> None:
+    """Check if new trials are to be processed and add them to the trials list"""
     new_trials = identify_new_trials_from_dict(TRIAL_DIRECTORY, list(TRIALS.keys()))
     new_trials_names = list(new_trials.keys())
     TRIALS.update(new_trials)
     menu = TRIALS_CHOICE.children["menu"]
     for trial_name in new_trials_names:
         PLOTS[trial_name] = {"grf": DEFAULT_PLOT, "ik": DEFAULT_PLOT, "id": DEFAULT_PLOT, "jp": DEFAULT_PLOT}
-        menu.add_command(label=trial_name, command=lambda: {switch_current_trial(trial_name)})
+        menu.add_command(label=trial_name, command=lambda: {_switch_current_trial(trial_name)})
 
 
-def pipeline(output, osim_scaled_model, window):
+def _pipeline(output, osim_scaled_model) -> None:
+    """Runs the pipeline for the current trial, using the output directory and the given scaled model"""
     current_trial = CURRENT_TRIAL.get()
     print(current_trial)
     trial_to_process = TRIALS[current_trial]
@@ -395,39 +445,40 @@ def pipeline(output, osim_scaled_model, window):
         post_processing(trial_to_process, save_plot_path=output,
                         save_segmented_path=None,
                         show=False, save_optionals=False)
-        update_grf()
+        _update_grf()
         compute_ik(trial_to_process, osim_scaled_model, output, save=False)
-        update_ik()
+        _update_ik()
         compute_id(trial_to_process, output, output, osim_scaled_model)
-        update_id()
+        _update_id()
         compute_jp(trial_to_process, output)
-        update_jp()
+        _update_jp()
     elif PLOTS[current_trial]["ik"] == DEFAULT_PLOT:
         compute_ik(trial_to_process, osim_scaled_model, output, save=False)
-        update_ik()
+        _update_ik()
         compute_id(trial_to_process, output, output, osim_scaled_model)
-        update_id()
+        _update_id()
         compute_jp(trial_to_process, output)
-        update_jp()
+        _update_jp()
     elif PLOTS[current_trial]["id"] == DEFAULT_PLOT:
         compute_id(trial_to_process, output, output, osim_scaled_model)
-        update_id()
+        _update_id()
         compute_jp(trial_to_process, output)
-        update_jp()
+        _update_jp()
     elif PLOTS[current_trial]["jp"] == DEFAULT_PLOT:
         compute_jp(trial_to_process, output)
-        update_jp()
+        _update_jp()
     if TRIAL_DIRECTORY is not None:
-        update_trials(window)
+        _update_trials()
 
 
-def main():
+def main() -> None:
+    """Main loop of the GUI pipeline."""
     global TRIALS, TRIAL_DIRECTORY
     if not local.call_quick_setup():
         local.main_gui()
         osim.main()
     TRIALS, TRIAL_DIRECTORY = trials_selection()
-    gui(local.get_output_path(), local.get_scaled_model_file())
+    _gui(local.get_output_path(), local.get_scaled_model_file())
 
 
 if __name__ == "__main__":

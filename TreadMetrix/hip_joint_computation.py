@@ -115,8 +115,9 @@ def compute_hip_joints(input_path: str = None, input_object: TRC = None, output_
     Full workflow to read, update, and save a TRC file with new virtual markers.
 
     Parameters:
-        input_object:
+
         input_path (str): Path to the input TRC file.
+        input_object (TRC): TRC object containing marker data, if previously loaded
         output_path (str): Path to save the updated TRC file. Optional. Object is not saved if not indicated.
 
     Returns:
