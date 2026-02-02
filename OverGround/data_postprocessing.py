@@ -616,12 +616,67 @@ def process_overground_trial(trial: Trial,
     )
 
 
+def from_app(args):
+    DATA_ROOT = args['directory']
+    PARTICIPANT = args['participant_id']
+    INFO_CSV_NAME = args['csv_name']
+    CONTACT_THRESHOLD_N = args['threshold']
+    participant_root = os.path.join(DATA_ROOT, PARTICIPANT)
+
+    infosheet_path = os.path.join(participant_root, "infosheet", INFO_CSV_NAME)
+    raw_grf_dir = os.path.join(participant_root, "raw", "grf_mot")
+    raw_trc_dir = os.path.join(participant_root, "raw", "markers_trc")
+
+    processed_root = os.path.join(participant_root, "processed")
+    corrected_out = os.path.join(processed_root, "grf_corrected")
+    segmented_out = os.path.join(processed_root, "segmented")
+    manifests_out = os.path.join(processed_root, "manifests")
+    safe_mkdir(manifests_out)
+
+    manifest_path = os.path.join(manifests_out, "overground_cycles_manifest.csv")
+
+    if not os.path.exists(infosheet_path):
+        raise FileNotFoundError(f"Infosheet not found: {infosheet_path}")
+
+    info = OvergroundInfoSheet(infosheet_path)
+
+    all_rows = []
+
+    for trial_name in info.trial_names():
+        grf_file = find_file_ignore_case(raw_grf_dir, f"{trial_name}.mot")
+        trc_file = find_file_ignore_case(raw_trc_dir, f"{trial_name}.trc")
+
+        if grf_file is None or trc_file is None:
+            print(f"[SKIP] {trial_name}: missing GRF/TRC file.")
+            continue
+
+        trial = load_trial_objects(trial_name, grf_file, trc_file)
+
+        rows = process_overground_trial(
+            trial=trial,
+            info=info,
+            corrected_out=corrected_out,
+            segmented_out=segmented_out,
+            threshold=CONTACT_THRESHOLD_N
+        )
+
+        for r in rows:
+            r["participant"] = PARTICIPANT
+        all_rows.extend(rows)
+
+    df = pd.DataFrame(all_rows)
+    df.to_csv(manifest_path, index=False)
+
+    print("\n[Done] GRF correction + ID-cycle segmentation completed.")
+    print(f"[Done] Manifest written: {manifest_path}")
+    print(f"[Done] Total segmented cycles: {len(df)}")
+
 # MAIN
 
 def main():
-    DATA_ROOT = r"D:\TestOverground\Overground"
-    PARTICIPANT = "PLB_03"
-    INFO_CSV_NAME = "Trials_PLB_03.csv"
+    DATA_ROOT = r"C:\Users\tyeu008\Documents\example"
+    PARTICIPANT = "PLB_02"
+    INFO_CSV_NAME = "Trials_PLB_02.csv"
     CONTACT_THRESHOLD_N = 20.0
 
     participant_root = os.path.join(DATA_ROOT, PARTICIPANT)

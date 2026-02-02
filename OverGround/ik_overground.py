@@ -84,7 +84,7 @@ def iter_segmented_trcs(segmented_root: str):
 
 def main():
     # ===================== EDIT THESE =====================
-    DATA_ROOT = r"D:\TestOverground\Overground"
+    DATA_ROOT = r"C:\Users\tyeu008\Documents\example"
     PARTICIPANT = "PLB_02"
     SCALED_MODEL_NAME = "scaled_model.osim"  # in participant_root\models\
     # ======================================================
