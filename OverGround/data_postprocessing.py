@@ -9,8 +9,7 @@ from resources.file_types.trc import TRC
 from resources.custom_exceptions import MissingPathException
 from resources.trial_class import Trial, GaitCycle
 
-
-
+# Utilities
 def safe_mkdir(path: str):
     os.makedirs(path, exist_ok=True)
 
@@ -34,26 +33,55 @@ def nearest_index(time_vec: np.ndarray, t: float) -> int:
 
 
 def parse_side_cell(x: str) -> str:
-    """Return 'left'/'right'/'both'/'none'."""
+    """
+    Return role for the FP cell:
+      - 'left' / 'right'  -> usable and side-known
+      - 'unknown'         -> 'Both' (unusable for kinetics, but HS can be used as a boundary)
+      - 'none'            -> blank/none
+    """
     val = str(x).strip().lower()
     if val in ("l", "left"):
         return "left"
     if val in ("r", "right"):
         return "right"
     if val in ("b", "both"):
-        return "both"
+        return "unknown"
     return "none"
 
 
+def to_yes_flag(x) -> bool:
+    """Robust Yes/No parsing (for Dynamic)."""
+    if x is None:
+        return False
+    s = str(x).strip().lower()
+    if s in ("yes", "y", "true", "t"):
+        return True
+    try:
+        return float(s) != 0.0
+    except ValueError:
+        return False
+
+
+def to_int_count(x) -> int:
+    """Robust int parsing (for ID count)."""
+    if x is None:
+        return 0
+    s = str(x).strip()
+    if s == "":
+        return 0
+    try:
+        return int(round(float(s)))  # handles 1, 1.0, "1.0"
+    except ValueError:
+        return 0
 
 # Infosheet
 
 class OvergroundInfoSheet:
     """
-    Expected headers (case-sensitive):
+    Expected headers:
       - Trials/Events
-      - ID                (1/0 or Yes/No)
-      - Dynamic           (Yes/No)  (optional, but often present)
+      - ID                (COUNT of cycles to export for ID)
+      - Dynamic           (Yes/No)  (flag)
       - Valid GaitCycle   (Right/Left/Both/None)
       - FP1, FP2, FP3     (Left/Right/Both/blank)
     """
@@ -66,7 +94,7 @@ class OvergroundInfoSheet:
                 raise KeyError(f"Infosheet missing required column: '{c}'")
 
         # normalize string columns
-        for c in ["Trials/Events", "Valid GaitCycle", "FP1", "FP2", "FP3", "Dynamic", "ID"]:
+        for c in ["Trials/Events", "Valid GaitCycle", "FP1", "FP2", "FP3", "Dynamic"]:
             if c in self.df.columns:
                 self.df[c] = self.df[c].astype(str).str.strip()
 
@@ -79,14 +107,17 @@ class OvergroundInfoSheet:
             return rows2.iloc[0]
         return rows.iloc[0]
 
-    @staticmethod
-    def is_yes(x: str) -> bool:
-        return str(x).strip().lower() in ("yes", "y", "true", "1")
-
-    def use_for_id(self, trial_name: str) -> bool:
-        """Your rule: ID column must be 1/Yes."""
+    def id_count(self, trial_name: str) -> int:
+        """ID is a COUNT (how many cycles to export)."""
         r = self.row_for_trial(trial_name)
-        return self.is_yes(r.get("ID", "0"))
+        return max(0, to_int_count(r.get("ID", 0)))
+
+    def dynamic_ok(self, trial_name: str) -> bool:
+        """Dynamic is a FLAG (Yes/No). If column missing, assume True."""
+        if "Dynamic" not in self.df.columns:
+            return True
+        r = self.row_for_trial(trial_name)
+        return to_yes_flag(r.get("Dynamic", "Yes"))
 
     def valid_sides(self, trial_name: str) -> list[str]:
         r = self.row_for_trial(trial_name)
@@ -147,9 +178,8 @@ def baseline_correct(mot_object: MOT, fz_col: str, related_cols: list[str]) -> N
 
     mot_object.data = corrected_df
 
+
 # Contact detection (HS/TO from threshold)
-
-
 def detect_contacts_threshold(vy: np.ndarray,
                              threshold: float,
                              min_contact_samples: int,
@@ -204,82 +234,204 @@ def detect_overground_contacts(mot: MOT, fs: float, threshold: float = 20.0) -> 
     return out
 
 
-#  Build GAIT CYCLES as HS -> next HS (per side)
-
-
-def build_hs_events_by_side(mot: MOT,
-                            contacts_by_plate: dict[int, list[tuple[int, int]]],
-                            fp_map: dict[int, str]) -> dict[str, list[dict]]:
+# HS events
+def build_hs_events(mot: MOT,
+                    contacts_by_plate: dict[int, list[tuple[int, int]]],
+                    fp_map: dict[int, str]) -> dict[str, list[dict]]:
     """
     Returns:
-      {
-        "Right": [ {"plate":2, "hs_idx":..., "hs_time":...}, ... ],
-        "Left":  [ ... ]
-      }
-
-    Collect HS events across all plates mapped to that side.
+      events["Left"]  = HS events from left-labeled plates
+      events["Right"] = HS events from right-labeled plates
+      events["Unknown"] = HS events from 'Both' plates (unusable, but can be boundary)
     """
     mot_t = mot.data["time"].to_numpy()
+    events = {"Left": [], "Right": [], "Unknown": []}
 
-    events = {"Right": [], "Left": []}
     for plate, intervals in contacts_by_plate.items():
-        side = fp_map.get(plate, "none")  # left/right/both/none
-        if side not in ("left", "right"):
-            continue  # ignore both/none
-        side_key = "Right" if side == "right" else "Left"
-
+        role = fp_map.get(plate, "none")  # left/right/unknown/none
         for (hs_idx, to_idx) in intervals:
             hs_time = float(mot_t[int(hs_idx)])
-            events[side_key].append({
+            to_time = float(mot_t[int(to_idx)])
+            e = {
                 "plate": int(plate),
+                "role": role,  # left/right/unknown/none
                 "hs_idx": int(hs_idx),
-                "hs_time": hs_time,
                 "to_idx": int(to_idx),
-                "to_time": float(mot_t[int(to_idx)])
-            })
+                "hs_time": hs_time,
+                "to_time": to_time,
+                "unusable_plate": (role == "unknown")
+            }
+            if role == "left":
+                events["Left"].append(e)
+            elif role == "right":
+                events["Right"].append(e)
+            elif role == "unknown":
+                events["Unknown"].append(e)
 
-    # sort events in time order
-    for s in ["Right", "Left"]:
-        events[s].sort(key=lambda d: d["hs_time"])
-
+    for k in ("Left", "Right", "Unknown"):
+        events[k].sort(key=lambda d: d["hs_time"])
     return events
 
 
-def segment_cycles_hs_to_hs(trial: Trial,
-                            info: OvergroundInfoSheet,
-                            contacts_by_plate: dict[int, list[tuple[int, int]]],
-                            save_root: str,
-                            pad_s: float = 0.05,
-                            min_cycle_s: float = 0.30,
-                            max_cycle_s: float = 2.50) -> list[dict]:
-    """
-    Creates cycles for each valid side:
-      cycle i = HS_i -> HS_(i+1) for that side (across plates)
+def peak_force_in_interval(mot: MOT, plate: int, hs_idx: int, to_idx: int) -> float:
+    col = f"ground_force{plate}_vy"
+    if col not in mot.data.columns:
+        return 0.0
+    a = int(min(hs_idx, to_idx))
+    b = int(max(hs_idx, to_idx))
+    vy = mot.data[col].to_numpy()
+    a = clamp_int(a, 0, len(vy) - 1)
+    b = clamp_int(b, 0, len(vy) - 1)
+    if b <= a:
+        return 0.0
+    return float(np.max(vy[a:b+1]))
 
-    The forceplate assigned to the cycle is the plate at HS_i (start event),
-    e.g. Right HS on FP3 then next Right HS on FP1 => one Right cycle, plate=3.
 
-    Uses ABSOLUTE FRAME sampling for MOT/TRC.
+def opposite_contact_exists(events: dict[str, list[dict]],
+                            side: str,
+                            t1: float,
+                            t2: float) -> bool:
     """
+    Heuristic: require at least one usable HS from the opposite side between t1 and t2.
+    Helps avoid pairing a HS with a wrong unknown boundary.
+    """
+    opp = "Right" if side == "Left" else "Left"
+    for e in events.get(opp, []):
+        if t1 < e["hs_time"] < t2:
+            return True
+    return False
+
+
+def build_candidate_cycles(mot: MOT,
+                           events: dict[str, list[dict]],
+                           side: str,
+                           valid_sides: list[str],
+                           min_cycle_s: float = 0.30,
+                           max_cycle_s: float = 2.50,
+                           require_opposite_between: bool = True) -> list[dict]:
+    """
+    Candidate cycle = usable HS (side) -> next HS in time among:
+      - next usable HS of same side
+      - next Unknown HS (Both plate) (as boundary)
+    Start HS must be usable. End HS may be usable or unknown.
+
+    Returns list of dict with fields:
+      hs1, hs2, side, duration, score
+    """
+    if side not in valid_sides:
+        return []
+
+    usable = events[side]
+    unknown = events["Unknown"]
+
+    merged = sorted(usable + unknown, key=lambda d: d["hs_time"])
+
+    candidates = []
+    for hs1 in usable:
+        # find hs1 position in merged by time+idx
+        hs1_time = hs1["hs_time"]
+
+        # find next boundary event after hs1
+        next_ev = None
+        for ev in merged:
+            if ev["hs_time"] > hs1_time + 1e-12:
+                next_ev = ev
+                break
+        if next_ev is None:
+            continue
+
+        hs2 = next_ev
+        duration = float(hs2["hs_time"] - hs1_time)
+        if duration < min_cycle_s or duration > max_cycle_s:
+            continue
+
+        if require_opposite_between:
+            # only apply if both sides are valid
+            if len(valid_sides) == 2:
+                if not opposite_contact_exists(events, side, hs1_time, hs2["hs_time"]):
+                    continue
+
+        # scoring
+        peak = peak_force_in_interval(mot, hs1["plate"], hs1["hs_idx"], hs1["to_idx"])
+        hs2_bonus = 1.0 if not hs2.get("unusable_plate", False) else 0.0
+        # prefer durations closer to ~1s (soft)
+        dur_penalty = abs(duration - 1.0)
+
+        score = (peak * 1e-3) + (2.0 * hs2_bonus) - (0.5 * dur_penalty)
+
+        candidates.append({
+            "side": side,
+            "hs1": hs1,
+            "hs2": hs2,
+            "duration": duration,
+            "peak_vy": peak,
+            "score": score,
+            "start_time": hs1_time,
+            "end_time": float(hs2["hs_time"]),
+        })
+
+    # sort best first
+    candidates.sort(key=lambda d: d["score"], reverse=True)
+    return candidates
+
+
+def select_best_cycles(candidates: list[dict],
+                       id_count: int,
+                       overlap_s: float = 0.20) -> list[dict]:
+    """
+    Choose top id_count cycles with minimal overlap.
+    Two cycles overlap if their time windows overlap more than overlap_s seconds.
+    """
+    selected = []
+    for c in candidates:
+        if len(selected) >= id_count:
+            break
+        ok = True
+        for s in selected:
+            a1, a2 = c["start_time"], c["end_time"]
+            b1, b2 = s["start_time"], s["end_time"]
+            overlap = max(0.0, min(a2, b2) - max(a1, b1))
+            if overlap > overlap_s:
+                ok = False
+                break
+        if ok:
+            selected.append(c)
+    # optional: sort selected chronologically for cleaner output
+    selected.sort(key=lambda d: d["start_time"])
+    return selected
+
+# Segmentation HS->HS using selected cycles
+
+
+def segment_cycles_for_id(trial: Trial,
+                          info: OvergroundInfoSheet,
+                          contacts_by_plate: dict[int, list[tuple[int, int]]],
+                          save_root: str,
+                          pad_s: float = 0.05,
+                          min_cycle_s: float = 0.30,
+                          max_cycle_s: float = 2.50) -> list[dict]:
     mot = trial.corrected_grf
     trc = trial.trc
     if trc is None:
-        raise MissingPathException(f"Markers trajectory object (TRC) for trial {trial.name}", "No such object given.")
+        raise MissingPathException(
+            f"Markers trajectory object (TRC) for trial {trial.name}",
+            "No such object given."
+        )
 
+    id_count = info.id_count(trial.name)
     valid_sides = info.valid_sides(trial.name)
     fp_map = info.fp_side_map(trial.name)
 
+    print(f"[DEBUG] ID_count: {id_count}")
     print(f"[DEBUG] Valid sides: {valid_sides}")
     print(f"[DEBUG] FP map: {fp_map}")
     print(f"[DEBUG] Contacts per plate: { {p: len(iv) for p, iv in contacts_by_plate.items()} }")
 
-    if len(valid_sides) == 0:
+    if id_count <= 0 or len(valid_sides) == 0:
         return []
 
     mot_t = mot.data["time"].to_numpy()
     trc_t = trc.data["Time"].to_numpy()
-
-    pad_s = float(pad_s)
 
     mot_first = int(getattr(mot, "first_frame", 0))
     trc_first = int(getattr(trc, "first_frame", 0))
@@ -290,127 +442,129 @@ def segment_cycles_hs_to_hs(trial: Trial,
     trc_abs_min = trc_first
     trc_abs_max = trc_first + trc_n - 1
 
-    # build HS events per side
-    hs_events = build_hs_events_by_side(mot, contacts_by_plate, fp_map)
+    events = build_hs_events(mot, contacts_by_plate, fp_map)
+
+    # Build candidates across allowed sides
+    all_candidates = []
+    for side in ("Left", "Right"):
+        all_candidates.extend(
+            build_candidate_cycles(
+                mot=mot,
+                events=events,
+                side=side,
+                valid_sides=valid_sides,
+                min_cycle_s=min_cycle_s,
+                max_cycle_s=max_cycle_s,
+                require_opposite_between=True
+            )
+        )
+
+    if len(all_candidates) == 0:
+        print(f"[WARN] No candidate HS->HS cycles found for {trial.name}.")
+        return []
+
+    selected = select_best_cycles(all_candidates, id_count=id_count)
+
+    if len(selected) == 0:
+        print(f"[WARN] Candidates existed but none selected (overlap/filters) for {trial.name}.")
+        return []
 
     manifest_rows = []
     total_cycles = 0
 
-    for side in ["Right", "Left"]:
-        if side not in valid_sides:
+    for pick in selected:
+        side = pick["side"]
+        hs1 = pick["hs1"]
+        hs2 = pick["hs2"]
+
+        # Start must be usable (it is, by construction)
+        if hs1.get("unusable_plate", False):
             continue
 
-        ev = hs_events.get(side, [])
-        if len(ev) < 2:
+        start_time = float(hs1["hs_time"]) - float(pad_s)
+        end_time = float(hs2["hs_time"]) + float(pad_s)
 
+        # convert times to indices
+        mot_start_idx = clamp_int(nearest_index(mot_t, start_time), 0, mot_n - 1)
+        mot_end_idx = clamp_int(nearest_index(mot_t, end_time), 0, mot_n - 1)
+        trc_start_idx = clamp_int(nearest_index(trc_t, start_time), 0, trc_n - 1)
+        trc_end_idx = clamp_int(nearest_index(trc_t, end_time), 0, trc_n - 1)
+
+        if mot_end_idx <= mot_start_idx or trc_end_idx <= trc_start_idx:
             continue
 
-        for i in range(len(ev) - 1):
-            hs1 = ev[i]
-            hs2 = ev[i + 1]
+        # absolute frames
+        mot_start_frame = clamp_int(mot_first + int(mot_start_idx), mot_abs_min, mot_abs_max)
+        mot_end_frame = clamp_int(mot_first + int(mot_end_idx), mot_abs_min, mot_abs_max)
+        trc_start_frame = clamp_int(trc_first + int(trc_start_idx), trc_abs_min, trc_abs_max)
+        trc_end_frame = clamp_int(trc_first + int(trc_end_idx), trc_abs_min, trc_abs_max)
 
-            start_time = float(hs1["hs_time"]) - pad_s
-            end_time = float(hs2["hs_time"]) + pad_s
+        if mot_end_frame <= mot_start_frame or trc_end_frame <= trc_start_frame:
+            continue
 
-            duration = end_time - start_time
-            if duration < min_cycle_s or duration > max_cycle_s:
-                # avoid weird tiny segments or huge gaps
-                continue
+        try:
+            grf_seg = mot.sample(mot_start_frame, mot_end_frame)
+            trc_seg = trc.sample(trc_start_frame, trc_end_frame)
+        except Exception as e:
+            print(f"[WARN] Skipping selected cycle sampling failed: {trial.name} {side}: {repr(e)}")
+            continue
 
-            # Convert times to indices
-            mot_start_idx = nearest_index(mot_t, start_time)
-            mot_end_idx = nearest_index(mot_t, end_time)
-            trc_start_idx = nearest_index(trc_t, start_time)
-            trc_end_idx = nearest_index(trc_t, end_time)
+        # add cycle object
+        cycle_num = len(trial.gait_cycles[side]) + 1
+        cycle = GaitCycle(side=side, number=cycle_num)
+        cycle.forceplate_num = int(hs1["plate"])  # plate of the START HS (usable)
 
-            # Clamp indices to array bounds
-            mot_start_idx = clamp_int(mot_start_idx, 0, mot_n - 1)
-            mot_end_idx = clamp_int(mot_end_idx, 0, mot_n - 1)
-            trc_start_idx = clamp_int(trc_start_idx, 0, trc_n - 1)
-            trc_end_idx = clamp_int(trc_end_idx, 0, trc_n - 1)
+        cycle.add_grf(grf_object=grf_seg)
+        cycle.add_trc(trc_object=trc_seg)
+        trial.gait_cycles[side].append(cycle)
 
-            if mot_end_idx <= mot_start_idx or trc_end_idx <= trc_start_idx:
-                continue
+        # save
+        cycle_dir = os.path.join(save_root, trial.name, side, f"FP{cycle.forceplate_num}", f"cycle_{cycle_num}")
+        safe_mkdir(cycle_dir)
 
-            # Convert to ABSOLUTE frames
-            mot_start_frame = mot_first + int(mot_start_idx)
-            mot_end_frame = mot_first + int(mot_end_idx)
-            trc_start_frame = trc_first + int(trc_start_idx)
-            trc_end_frame = trc_first + int(trc_end_idx)
+        grf_filename = f"{trial.name}_{side}_cycle{cycle_num}.mot"
+        trc_filename = f"{trial.name}_{side}_cycle{cycle_num}.trc"
 
-            # Clamp absolute frames
-            mot_start_frame = clamp_int(mot_start_frame, mot_abs_min, mot_abs_max)
-            mot_end_frame = clamp_int(mot_end_frame, mot_abs_min, mot_abs_max)
-            trc_start_frame = clamp_int(trc_start_frame, trc_abs_min, trc_abs_max)
-            trc_end_frame = clamp_int(trc_end_frame, trc_abs_min, trc_abs_max)
+        grf_seg.rename(name=f"{trial.name}_{side.lower()}_cycle{cycle_num}", filename=grf_filename)
+        trc_seg.rename(filename=trc_filename)
 
-            if mot_end_frame <= mot_start_frame or trc_end_frame <= trc_start_frame:
-                continue
+        grf_seg.save(cycle_dir)
+        trc_seg.save(cycle_dir)
 
-            # Sample
-            try:
-                grf_seg = mot.sample(mot_start_frame, mot_end_frame)
-                trc_seg = trc.sample(trc_start_frame, trc_end_frame)
-            except Exception as e:
-                print(f"[WARN] Skipping cycle {trial.name} {side} HS->HS sampling failed: {repr(e)}")
-                print(f"       MOT frames: {mot_start_frame}..{mot_end_frame} (valid {mot_abs_min}..{mot_abs_max})")
-                print(f"       TRC frames: {trc_start_frame}..{trc_end_frame} (valid {trc_abs_min}..{trc_abs_max})")
-                continue
+        cycle.grf.filepath = os.path.join(cycle_dir, grf_filename)
+        cycle.trc.filepath = os.path.join(cycle_dir, trc_filename)
 
-            cycle_num = len(trial.gait_cycles[side]) + 1
-            cycle = GaitCycle(side=side, number=cycle_num)
+        manifest_rows.append({
+            "trial": trial.name,
+            "side": side,
+            "cycle_num": cycle_num,
+            "id_count_requested": id_count,
+            "start_plate": int(hs1["plate"]),
+            "end_plate": int(hs2["plate"]),
+            "end_plate_unusable": bool(hs2.get("unusable_plate", False)),
+            "hs1_time": float(hs1["hs_time"]),
+            "hs2_time": float(hs2["hs_time"]),
+            "start_time": float(mot_t[mot_start_idx]),
+            "end_time": float(mot_t[mot_end_idx]),
+            "duration_s": float(pick["duration"]),
+            "peak_vy_start": float(pick["peak_vy"]),
+            "score": float(pick["score"]),
+            "grf_path": cycle.grf.filepath,
+            "trc_path": cycle.trc.filepath,
+        })
 
-            # IMPORTANT:
-            # Use the plate of the FIRST HS as the plate for this gait cycle
-            # (example: Right HS on FP3 then Right HS on FP1 => cycle plate = 3)
-            cycle.forceplate_num = int(hs1["plate"])
-
-            cycle.add_grf(grf_object=grf_seg)
-            cycle.add_trc(trc_object=trc_seg)
-            trial.gait_cycles[side].append(cycle)
-
-            # Save
-            cycle_dir = os.path.join(save_root, trial.name, side, f"FP{cycle.forceplate_num}", f"cycle_{cycle_num}")
-            safe_mkdir(cycle_dir)
-
-            grf_filename = f"{trial.name}_{side}_cycle{cycle_num}.mot"
-            trc_filename = f"{trial.name}_{side}_cycle{cycle_num}.trc"
-
-            grf_seg.rename(name=f"{trial.name}_{side.lower()}_cycle{cycle_num}", filename=grf_filename)
-            trc_seg.rename(filename=trc_filename)
-
-            grf_seg.save(cycle_dir)
-            trc_seg.save(cycle_dir)
-
-            cycle.grf.filepath = os.path.join(cycle_dir, grf_filename)
-            cycle.trc.filepath = os.path.join(cycle_dir, trc_filename)
-
-            manifest_rows.append({
-                "trial": trial.name,
-                "side": side,
-                "cycle_num": cycle_num,
-                "forceplate_start_hs": int(hs1["plate"]),
-                "hs1_time": float(hs1["hs_time"]),
-                "hs2_time": float(hs2["hs_time"]),
-                "start_time": float(mot_t[mot_start_idx]),
-                "end_time": float(mot_t[mot_end_idx]),
-                "grf_path": cycle.grf.filepath,
-                "trc_path": cycle.trc.filepath,
-            })
-
-            total_cycles += 1
+        total_cycles += 1
 
     if total_cycles == 0:
-        print(f"[WARN] No HS->HS gait cycles segmented for {trial.name}.")
-        print("       Common reasons: only 1 HS in plates for that side, FP map marked as 'both/none', or time mismatch.")
+        print(f"[WARN] No cycles segmented after selection for {trial.name}.")
+    else:
+        print(f"[INFO] Segmented {total_cycles}/{id_count} cycle(s) for ID in {trial.name}.")
 
     return manifest_rows
 
 
-# Trial loader
 
 def load_trial_objects(trial_name: str, grf_path: str, trc_path: str) -> Trial:
-    # Trial requires mot. Passing paths works with your Trial.__init__
     return Trial(mot=grf_path, trc=trc_path, name=trial_name)
 
 
@@ -437,28 +591,34 @@ def process_overground_trial(trial: Trial,
     safe_mkdir(corrected_out)
     corrected.save(corrected_out)
 
-    # only segment trials where ID == 1
-    if not info.use_for_id(trial.name):
-        print(f"[INFO] Skipping segmentation for {trial.name}: infosheet ID != 1.")
+    # Dynamic flag
+    if not info.dynamic_ok(trial.name):
+        print(f"[INFO] Skipping segmentation for {trial.name}: Dynamic != Yes.")
+        return []
+
+    # ID is COUNT
+    id_count = info.id_count(trial.name)
+    if id_count <= 0:
+        print(f"[INFO] Skipping segmentation for {trial.name}: ID_count <= 0.")
         return []
 
     contacts = detect_overground_contacts(corrected, fs, threshold=threshold)
 
     safe_mkdir(segmented_out)
-    return segment_cycles_hs_to_hs(
+    return segment_cycles_for_id(
         trial=trial,
         info=info,
         contacts_by_plate=contacts,
         save_root=segmented_out,
-        pad_s=0.05  # small pad so we don't cut too tight
+        pad_s=0.05,
+        min_cycle_s=0.30,
+        max_cycle_s=2.50
     )
 
 
 # MAIN
 
-
 def main():
-    # path
     DATA_ROOT = r"D:\TestOverground\Overground"
     PARTICIPANT = "PLB_03"
     INFO_CSV_NAME = "Trials_PLB_03.csv"
@@ -510,7 +670,7 @@ def main():
     df = pd.DataFrame(all_rows)
     df.to_csv(manifest_path, index=False)
 
-    print("\n[Done] GRF correction + HS->HS segmentation completed.")
+    print("\n[Done] GRF correction + ID-cycle segmentation completed.")
     print(f"[Done] Manifest written: {manifest_path}")
     print(f"[Done] Total segmented cycles: {len(df)}")
 
