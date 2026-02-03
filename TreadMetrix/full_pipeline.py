@@ -35,12 +35,15 @@ if __name__ == "__main__":
     except MissingPathException:
         mot_files = local.get_raw_mot_path()
         trc_files = local.get_raw_trc_path()
+        print(MissingPathException)
 
     mot_files.sort()
     trc_files.sort()
 
     for file in mot_files:
         trial_name = os.path.basename(file).replace('.mot', '')
+        if not (show or save):
+            trial_name = trial_name.replace('MOT', '')
         try:
             trial = Trial(mot=file)
             try:
