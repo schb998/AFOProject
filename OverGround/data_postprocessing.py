@@ -10,6 +10,8 @@ from resources.custom_exceptions import MissingPathException
 from resources.trial_class import Trial, GaitCycle
 import matplotlib.pyplot as plt
 
+from scipy.signal import find_peaks
+
 # Utilities
 def safe_mkdir(path: str):
     os.makedirs(path, exist_ok=True)
@@ -186,19 +188,32 @@ def baseline_correct(
     # Apply baseline correction
     corrected_df[fz_col] = corrected_df[fz_col] + baseline
     corrected_fy = corrected_df[fz_col].to_numpy()
-
+    peaks, _ = find_peaks(corrected_fy, height=0.66*np.max(corrected_fy))
+    backwards = -1
+    for i in range(peaks[0], 0, -1):
+        if corrected_fy[i] < 0:
+            backwards = i+1
+            break
+    forward = -1
+    for i in range(peaks[-1], corrected_fy.shape[0]):
+        if corrected_fy[i] < 0:
+            forward = i - 1
+            break
+    corrected_fy[:backwards] = 0
+    corrected_fy[forward:] = 0
+    corrected_df[fz_col] = corrected_fy
     # Zero out positive peaks in swing (after baseline correction)
-    if len(swing_valleys) > 0:
-        for valley in swing_valleys:
-            window = 100  # frames before and after
-            start = max(valley - window, 0)
-            end = min(valley + window, len(corrected_fy))
-
-            swing_segment = corrected_fy[start:end]
-            pos_peaks = np.where(swing_segment > 0)[0]
-            corrected_fy[start + pos_peaks] = 0.0000
-
-        corrected_df[fz_col] = corrected_fy
+    # if len(swing_valleys) > 0:
+    #     for valley in swing_valleys:
+    #         window = 100  # frames before and after
+    #         start = max(valley - window, 0)
+    #         end = min(valley + window, len(corrected_fy))
+    #
+    #         swing_segment = corrected_fy[start:end]
+    #         pos_peaks = np.where(swing_segment > 0)[0]
+    #         corrected_fy[start + pos_peaks] = 0.0000
+    #
+    #     corrected_df[fz_col] = corrected_fy
 
     # Offset correction for related force/moment columns
     for col in related_cols:
@@ -223,6 +238,9 @@ def baseline_correct(
         plt.grid(True)
         plt.tight_layout()
         plt.show()
+        # stp =f"{fz_col} Baseline + Swing-Phase Artifact Removal"
+        # plt.savefig("C:\\Users\\tyeu008\\Documents\\test\\{0}".format(stp))
+        # print()
 
 
 # Contact detection (HS/TO from threshold)
