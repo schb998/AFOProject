@@ -8,6 +8,7 @@ from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 from resources.custom_exceptions import MissingPathException
 from resources.trial_class import Trial, GaitCycle
+import matplotlib.pyplot as plt
 
 # Utilities
 def safe_mkdir(path: str):
@@ -151,32 +152,77 @@ def filter_grf(mot: MOT, fs: float, cutoff_hz: float = 12.0, order: int = 6) -> 
     mot.data = filtered_df
 
 
-def baseline_correct(mot_object: MOT, fz_col: str, related_cols: list[str]) -> None:
+def baseline_correct(
+    mot_object: MOT,
+    fz_col: str,
+    related_cols: list[str],
+    plot_debug: bool = False
+) -> None:
     if fz_col not in mot_object.data.columns:
+        print(f"[DEBUG] {fz_col} not found in .mot file.")
         return
 
     fy = mot_object.data[fz_col].to_numpy()
     if len(fy) < 3:
         return
 
+    original_fy = fy.copy()
     corrected_df = deepcopy(mot_object.data)
 
+    # Identify valleys (swing phase)
     valley_idx = np.where((fy[1:-1] < fy[:-2]) & (fy[1:-1] < fy[2:]))[0] + 1
     swing_valleys = valley_idx[fy[valley_idx] < 0]
+
+    # Compute baseline
     if len(swing_valleys) == 0:
-        return
+        print(f"[WARN] No valleys detected for {fz_col}. Using fallback window-based baseline.")
+        fallback_idx = np.where(fy < 0)[0]
+        baseline = abs(np.median(fy[fallback_idx])) if len(fallback_idx) > 0 else 0.0
+    else:
+        baseline = abs(np.median(fy[swing_valleys]))
 
-    baseline = abs(np.median(fy[swing_valleys]))
+    print(f"[DEBUG] Baseline offset for {fz_col}: {baseline:.3f} N")
+
+    # Apply baseline correction
     corrected_df[fz_col] = corrected_df[fz_col] + baseline
+    corrected_fy = corrected_df[fz_col].to_numpy()
 
+    # Zero out positive peaks in swing (after baseline correction)
+    if len(swing_valleys) > 0:
+        for valley in swing_valleys:
+            window = 100  # frames before and after
+            start = max(valley - window, 0)
+            end = min(valley + window, len(corrected_fy))
+
+            swing_segment = corrected_fy[start:end]
+            pos_peaks = np.where(swing_segment > 0)[0]
+            corrected_fy[start + pos_peaks] = 0.0000
+
+        corrected_df[fz_col] = corrected_fy
+
+    # Offset correction for related force/moment columns
     for col in related_cols:
-        if col not in corrected_df.columns:
-            continue
-        related = mot_object.data[col].to_numpy()
-        offset = np.median(related[swing_valleys])
-        corrected_df[col] = corrected_df[col] - offset if offset > 0 else corrected_df[col] + abs(offset)
+        if col in corrected_df.columns:
+            related = mot_object.data[col].to_numpy()
+            offset = np.median(related[swing_valleys]) if len(swing_valleys) > 0 else 0
+            corrected_df[col] = related - offset if offset > 0 else related + abs(offset)
 
     mot_object.data = corrected_df
+
+    # Optional 
+    if plot_debug:
+        time = mot_object.data["time"].to_numpy()
+        plt.figure(figsize=(10, 4))
+        plt.plot(time, original_fy, label="Before correction", alpha=0.6)
+        plt.plot(time, corrected_fy, label="After baseline + swing zeroing", alpha=0.9)
+        plt.axhline(0, linestyle="--", color="black", linewidth=0.8)
+        plt.title(f"{fz_col} Baseline + Swing-Phase Artifact Removal")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Vertical GRF (N)")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
 
 
 # Contact detection (HS/TO from threshold)
@@ -584,7 +630,7 @@ def process_overground_trial(trial: Trial,
 
     for plate in (1, 2, 3):
         vy = f"ground_force{plate}_vy"
-        baseline_correct(corrected, vy, [f"ground_force{plate}_vx", f"ground_force{plate}_vz"])
+        baseline_correct(corrected, vy, [f"ground_force{plate}_vx", f"ground_force{plate}_vz"], plot_debug=True)
 
     trial.add_corrected_grf(corrected_grf=corrected)
 
