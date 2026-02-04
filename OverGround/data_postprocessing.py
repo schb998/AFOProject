@@ -189,19 +189,25 @@ def baseline_correct(
     corrected_df[fz_col] = corrected_df[fz_col] + baseline
     corrected_fy = corrected_df[fz_col].to_numpy()
     peaks, _ = find_peaks(corrected_fy, height=0.66*np.max(corrected_fy))
-    backwards = -1
-    for i in range(peaks[0], 0, -1):
-        if corrected_fy[i] < 0:
-            backwards = i+1
-            break
-    forward = -1
-    for i in range(peaks[-1], corrected_fy.shape[0]):
-        if corrected_fy[i] < 0:
-            forward = i - 1
-            break
-    corrected_fy[:backwards] = 0
-    corrected_fy[forward:] = 0
-    corrected_df[fz_col] = corrected_fy
+    if len(peaks) >= 2:
+        backwards = -1
+        for i in range(peaks[0], 0, -1):
+            if corrected_fy[i] < 0:
+                backwards = i+1
+                break
+
+        if backwards == -1:
+            backwards = 0
+        forward = -1
+        for i in range(peaks[-1], corrected_fy.shape[0]):
+            if corrected_fy[i] < 0:
+                forward = i - 1
+                break
+        corrected_fy[:backwards] = 0
+        corrected_fy[forward:] = 0
+        corrected_df[fz_col] = corrected_fy
+    else:
+        print("No Peaks")
     # Zero out positive peaks in swing (after baseline correction)
     # if len(swing_valleys) > 0:
     #     for valley in swing_valleys:
@@ -583,20 +589,22 @@ def segment_cycles_for_id(trial: Trial,
         trial.gait_cycles[side].append(cycle)
 
         # save
-        cycle_dir = os.path.join(save_root, trial.name, side, f"FP{cycle.forceplate_num}", f"cycle_{cycle_num}")
-        safe_mkdir(cycle_dir)
+        fp_folder = f"FP{cycle.forceplate_num}"
+        save_dir = os.path.join(save_root, trial.name, side, fp_folder)
+        safe_mkdir(save_dir)
 
         grf_filename = f"{trial.name}_{side}_cycle{cycle_num}.mot"
         trc_filename = f"{trial.name}_{side}_cycle{cycle_num}.trc"
 
+        # rename before saving so the files have the intended names
         grf_seg.rename(name=f"{trial.name}_{side.lower()}_cycle{cycle_num}", filename=grf_filename)
         trc_seg.rename(filename=trc_filename)
 
-        grf_seg.save(cycle_dir)
-        trc_seg.save(cycle_dir)
+        grf_seg.save(save_dir)
+        trc_seg.save(save_dir)
 
-        cycle.grf.filepath = os.path.join(cycle_dir, grf_filename)
-        cycle.trc.filepath = os.path.join(cycle_dir, trc_filename)
+        cycle.grf.filepath = os.path.join(save_dir, grf_filename)
+        cycle.trc.filepath = os.path.join(save_dir, trc_filename)
 
         manifest_rows.append({
             "trial": trial.name,
@@ -738,9 +746,9 @@ def from_app(args):
 # MAIN
 
 def main():
-    DATA_ROOT = r"C:\Users\tyeu008\Documents\example"
-    PARTICIPANT = "PLB_02"
-    INFO_CSV_NAME = "Trials_PLB_02.csv"
+    DATA_ROOT = r"D:\TestOverground\Overground"
+    PARTICIPANT = "PLB_03"
+    INFO_CSV_NAME = "Trials_PLB_03.csv"
     CONTACT_THRESHOLD_N = 20.0
 
     participant_root = os.path.join(DATA_ROOT, PARTICIPANT)

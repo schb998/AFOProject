@@ -7,7 +7,7 @@ found = ft_spec is not None
 ft = None
 if not found:
     print("flet  Not Available Installing flet")
-    os.system('python -m pip install pip install \'flet[all]\'')
+    os.system('python -m pip install \'flet[all]\'')
     ft = importlib.import_module('flet')
     spam_spec = importlib.util.find_spec("flet")
     found = spam_spec is not None

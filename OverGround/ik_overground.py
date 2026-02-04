@@ -59,35 +59,33 @@ def marker_tasks(tool: osim.InverseKinematicsTool, markers: list[str], do_not_in
 
 def iter_segmented_trcs(segmented_root: str):
     """
-    Expects structure produced by data_postprocessing.py:
-      segmented/Right/FP1/cycle_1/*.trc
-      segmented/Left/FP2/cycle_3/*.trc
-      ...
-    Yields (side, fp_folder, cycle_folder, trc_path)
+    Expects structure:
+      segmented/<Trial>/Right/FP2/*.trc
+      segmented/<Trial>/Left/FP1/*.trc
+    Yields (trial, side, fp_folder, trc_path)
     """
-    for side in ["Right", "Left"]:
-        side_dir = os.path.join(segmented_root, side)
-        if not os.path.isdir(side_dir):
+    for trial_name in os.listdir(segmented_root):
+        tdir = os.path.join(segmented_root, trial_name)
+        if not os.path.isdir(tdir):
             continue
-        for fp in os.listdir(side_dir):
-            fp_dir = os.path.join(side_dir, fp)
-            if not os.path.isdir(fp_dir):
+        for side in ["Right", "Left"]:
+            side_dir = os.path.join(tdir, side)
+            if not os.path.isdir(side_dir):
                 continue
-            for cycle_folder in os.listdir(fp_dir):
-                cdir = os.path.join(fp_dir, cycle_folder)
-                if not os.path.isdir(cdir):
+            for fp in os.listdir(side_dir):
+                fp_dir = os.path.join(side_dir, fp)
+                if not os.path.isdir(fp_dir):
                     continue
-                trcs = [os.path.join(cdir, f) for f in os.listdir(cdir) if f.lower().endswith(".trc")]
-                for trc_path in trcs:
-                    yield side, fp, cycle_folder, trc_path
+                for f in os.listdir(fp_dir):
+                    if f.lower().endswith(".trc"):
+                        yield trial_name, side, fp, os.path.join(fp_dir, f)
 
 
 def main():
-    # ===================== EDIT THESE =====================
-    DATA_ROOT = r"C:\Users\tyeu008\Documents\example"
-    PARTICIPANT = "PLB_02"
-    SCALED_MODEL_NAME = "scaled_model.osim"  # in participant_root\models\
-    # ======================================================
+    # change
+    DATA_ROOT = r"D:\TestOverground\Overground"
+    PARTICIPANT = "PLB_03"
+    SCALED_MODEL_NAME = "scaledmodelIM.osim"
 
     participant_root = os.path.join(DATA_ROOT, PARTICIPANT)
     scaled_model_file = os.path.join(participant_root, "models", SCALED_MODEL_NAME)
@@ -98,7 +96,7 @@ def main():
 
     if not os.path.exists(scaled_model_file):
         raise FileNotFoundError(f"Scaled model not found: {scaled_model_file}")
-
+    # # AlterG
     marker_names = [
         'Sternum', 'LShoulder', 'RShoulder', 'LASIS', 'RASIS', 'RPSIS', 'LPSIS',
         'RFibula', 'RShank', 'RAnkleLateral', 'RToe', 'LToe', 'RMT5', 'RMT2', 'RHeel',
@@ -107,28 +105,37 @@ def main():
     ]
     do_not_include = ['RKneeMedial', 'RAnkleMedial', 'RToe', 'LKneeMedial', 'LAnkleMedial', 'LToe']
 
+    # ABI full markerset
+    # marker_names = [
+    #     'CLAV', 'T10', 'C7', 'LACR1', 'LASI', 'LPSI', 'LMFC', 'LLFC', 'LTH1', 'LTH2',
+    #     'LTH3', 'LTB1', 'LTB2', 'LTB3', 'LLMAL', 'LMMAL', 'LMT1', 'LMT5', 'LToe', 'LCAL',
+    #     'RACR1', 'RASI', 'RPSI', 'RMFC', 'RLFC', 'RTH1', 'RTH2', 'RTH3', 'RTB1', 'RTB2', 'RTB3', 'RLMAL',
+    #     'RMMAL', 'RMT1', 'RMT5', 'RToe', 'RCAL'
+    # ]
+    # do_not_include = ['LMMAL', 'RMMAL', 'RMFC', 'LMFC', 'RToe', 'LToe']
+
     safe_mkdir(ik_out_root)
 
-    for side, fp, cycle_folder, trc_path in iter_segmented_trcs(segmented_root):
+    for trial_name, side, fp, trc_path in iter_segmented_trcs(segmented_root):
         trc = TRC.load_from_trc(trc_path)
 
-        cycle_name = os.path.splitext(os.path.basename(trc_path))[0]  # e.g. Walk01-02_Right_cycle1
-        out_dir = os.path.join(ik_out_root, side, fp, cycle_folder)
+        cycle_name = os.path.splitext(os.path.basename(trc_path))[0]
+        out_dir = os.path.join(ik_out_root, trial_name, side, fp)
         safe_mkdir(out_dir)
 
-        # Run IK
         ik_tool = set_up_ik_tool(
             scaled_model_file,
             trc_path,
             float(trc.data["Time"].iloc[0]),
             float(trc.data["Time"].iloc[-1])
         )
+
         marker_tasks(ik_tool, marker_names, do_not_include)
 
         mot_path = os.path.join(out_dir, f"{cycle_name}.mot")
         ik_tool.setOutputMotionFileName(mot_path)
 
-        print(f"[IK] Running: {side}/{fp}/{cycle_folder} -> {os.path.basename(mot_path)}")
+        print(f"[IK] Running: {trial_name}/{side}/{fp} -> {os.path.basename(mot_path)}")
         ik_tool.run()
 
         # Filter and overwrite
@@ -144,8 +151,6 @@ def main():
             mot.save(out_dir)
         else:
             print(f"[IK] FAILED: {mot_path}")
-
-    print("\n[Done] IK completed.")
 
 
 if __name__ == "__main__":
