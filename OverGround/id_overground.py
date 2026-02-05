@@ -219,7 +219,7 @@ def setup_id_tool(
 def main():
     print("[DEBUG] Starting main...")
     # Use relative path to resources/example which is at ../resources/example from this script
-    DATA_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "resources", "example"))
+    DATA_ROOT = r"D:\TestOverground\Overground"
     PARTICIPANT = "PLB_03"
     SCALED_MODEL_NAME = "scaledmodelIM.osim"
     

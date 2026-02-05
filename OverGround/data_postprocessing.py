@@ -472,7 +472,6 @@ def select_best_cycles(candidates: list[dict],
 
 # Segmentation HS->HS using selected cycles
 
-
 def segment_cycles_for_id(trial: Trial,
                           info: OvergroundInfoSheet,
                           contacts_by_plate: dict[int, list[tuple[int, int]]],
