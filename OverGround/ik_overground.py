@@ -4,6 +4,10 @@ import numpy as np
 import pandas as pd
 from scipy.signal import butter, filtfilt
 import opensim as osim
+import sys
+
+# Add project root to path to allow importing 'resources'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
@@ -83,7 +87,8 @@ def iter_segmented_trcs(segmented_root: str):
 
 def main():
     # change
-    DATA_ROOT = r"D:\TestOverground\Overground"
+    # Use relative path to resources/example which is at ../resources/example from this script
+    DATA_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "resources", "example"))
     PARTICIPANT = "PLB_03"
     SCALED_MODEL_NAME = "scaledmodelIM.osim"
 

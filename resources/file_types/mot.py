@@ -66,7 +66,7 @@ class MOTMetadata:
         string = string if self.number_columns is None else string + MOTMetadata._string_number_columns + "=" + str(self.number_columns) + "\n"
         if self.in_degrees is not None:
             addition = "yes" if self.in_degrees else "no"
-            string = string + "=" + addition + "\n"
+            string = string + MOTMetadata._string_in_degrees + "=" + addition + "\n"
         for key in self.additional_metadata.keys():
             string = string + key + "=" + str(self.additional_metadata[key]) + "\n"
         return string

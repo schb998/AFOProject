@@ -2,6 +2,10 @@ import os
 import pathlib
 import opensim as osim
 import pandas as pd
+import sys
+
+# Add project root to path to allow importing 'resources'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
@@ -213,12 +217,14 @@ def setup_id_tool(
 
 
 def main():
-    DATA_ROOT = r"D:\TestOverground\Overground"
+    print("[DEBUG] Starting main...")
+    # Use relative path to resources/example which is at ../resources/example from this script
+    DATA_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "resources", "example"))
     PARTICIPANT = "PLB_03"
     SCALED_MODEL_NAME = "scaledmodelIM.osim"
-    INFOSHEET_DIR = r"D:\TestOverground\Overground\PLB_03\infosheet"
-
+    
     participant_root = os.path.join(DATA_ROOT, PARTICIPANT)
+    INFOSHEET_DIR = os.path.join(participant_root, "infosheet")
     model_file = os.path.join(participant_root, "models", SCALED_MODEL_NAME)
 
     processed_root = os.path.join(participant_root, "processed")
