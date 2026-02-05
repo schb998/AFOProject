@@ -1,232 +1,300 @@
 import os
 import pathlib
-import numpy as np
-import pandas as pd
 import opensim as osim
+import pandas as pd
 
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 
 
-def safe_mkdir(path: str):
-    os.makedirs(path, exist_ok=True)
+def safe_mkdir(p: str):
+    os.makedirs(p, exist_ok=True)
+
+
+def find_first_csv(infosheet_dir: str) -> str:
+    if not os.path.isdir(infosheet_dir):
+        raise FileNotFoundError(f"Infosheet folder not found: {infosheet_dir}")
+
+    csvs = [os.path.join(infosheet_dir, f) for f in os.listdir(infosheet_dir) if f.lower().endswith(".csv")]
+    if len(csvs) == 0:
+        raise FileNotFoundError(f"No .csv file found in infosheet folder: {infosheet_dir}")
+
+    csvs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return csvs[0]
+
+
+def parse_plate_num(fp_folder: str) -> int | None:
+    s = fp_folder.strip().upper()
+    if not s.startswith("FP"):
+        return None
+    try:
+        return int(s.replace("FP", "").strip())
+    except ValueError:
+        return None
+
+
+def find_same_stem_file(folder: str, stem: str, exts: tuple[str, ...]) -> str | None:
+    if not os.path.isdir(folder):
+        return None
+    stem_low = stem.lower()
+    exts_low = tuple(e.lower() for e in exts)
+    for f in os.listdir(folder):
+        base, ext = os.path.splitext(f)
+        if base.lower() == stem_low and ext.lower() in exts_low:
+            return os.path.join(folder, f)
+    return None
 
 
 def iter_segmented_cycles(segmented_root: str):
     """
     Expects:
-      segmented/<Trial>/<Side>/<FPx>/*.trc
-      segmented/<Trial>/<Side>/<FPx>/*.mot   (GRF)
-
-    Yields:
-      (trial_name, side, fp_folder, trc_path, grf_path)
+      segmented/<Trial>/<Side>/<FPx>/
+          <cycle_name>.mot   (GRF)
+          <cycle_name>.trc   (TRC)
     """
-    for trial_name in os.listdir(segmented_root):
-        tdir = os.path.join(segmented_root, trial_name)
+    for trial in os.listdir(segmented_root):
+        tdir = os.path.join(segmented_root, trial)
         if not os.path.isdir(tdir):
             continue
 
-        for side in ("Right", "Left"):
+        for side in ["Left", "Right"]:
             sdir = os.path.join(tdir, side)
             if not os.path.isdir(sdir):
                 continue
 
-            for fp_folder in os.listdir(sdir):
-                fpdir = os.path.join(sdir, fp_folder)
+            for fp in os.listdir(sdir):
+                fpdir = os.path.join(sdir, fp)
                 if not os.path.isdir(fpdir):
                     continue
 
-                # pair trc + grf mot by basename
-                trcs = {os.path.splitext(f)[0]: os.path.join(fpdir, f)
-                        for f in os.listdir(fpdir) if f.lower().endswith(".trc")}
-                mots = {os.path.splitext(f)[0]: os.path.join(fpdir, f)
-                        for f in os.listdir(fpdir) if f.lower().endswith(".mot")}
+                for f in os.listdir(fpdir):
+                    if not f.lower().endswith(".mot"):
+                        continue
+                    grf_mot_path = os.path.join(fpdir, f)
+                    cycle_name = os.path.splitext(f)[0]
 
-                # Only yield pairs that exist in both
-                for base, trc_path in trcs.items():
-                    if base in mots:
-                        yield trial_name, side, fp_folder, trc_path, mots[base]
+                    trc_path = find_same_stem_file(fpdir, cycle_name, exts=(".trc",))
+                    if trc_path is None:
+                        print(f"[SEG] Missing TRC for cycle: {grf_mot_path}")
+                        continue
 
-
-def corresponding_ik_path(ik_root: str, trial_name: str, side: str, fp_folder: str, base: str) -> str:
-    """
-    IK layout:
-      ik/<Trial>/<Side>/<FPx>/<base>.mot
-    """
-    return os.path.join(ik_root, trial_name, side, fp_folder, f"{base}.mot")
+                    yield trial, side, fp, grf_mot_path, trc_path, cycle_name
 
 
-#  GRF plate detection
+def get_time_range_from_trc(trc_path: str) -> tuple[float, float]:
+    trc = TRC.load_from_trc(trc_path)
 
-def detect_active_grf_plate(grf_df: pd.DataFrame, min_peak_N: float = 20.0) -> int | None:
-    """
-    Picks the plate with the highest peak vertical GRF.
-    Returns 1/2/3 or None.
-    """
-    best_plate = None
-    best_peak = -1.0
+    if trc.data is None or trc.data.shape[0] == 0:
+        raise ValueError(f"TRC has no rows: {trc_path}")
 
-    for plate in (1, 2, 3):
-        vy = f"ground_force{plate}_vy"
-        if vy not in grf_df.columns:
-            continue
-        peak = float(grf_df[vy].max())
-        if peak > best_peak:
-            best_peak = peak
-            best_plate = plate
+    time_col = None
+    for c in ["Time", "time"]:
+        if c in trc.data.columns:
+            time_col = c
+            break
+    if time_col is None:
+        raise KeyError(f"No Time column found in TRC: {trc_path}. Columns: {list(trc.data.columns)}")
 
-    if best_peak < min_peak_N:
+    start_time = float(trc.data[time_col].iloc[0])
+    end_time = float(trc.data[time_col].iloc[-1])
+    return start_time, end_time
+
+# Infosheet
+
+def load_infosheet_map(infosheet_csv: str) -> dict[str, dict]:
+    df = pd.read_csv(infosheet_csv)
+    df = df.rename(columns={c: str(c).strip() for c in df.columns})
+
+    trial_col = "Trials/Events"
+    if trial_col not in df.columns:
+        raise KeyError(f"Infosheet missing '{trial_col}' column. Found: {list(df.columns)}")
+
+    sheet = {}
+    for _, r in df.iterrows():
+        trial_name = str(r[trial_col]).strip()
+        row = {}
+        for k, v in r.to_dict().items():
+            if pd.isna(v):
+                row[str(k).strip()] = ""
+            else:
+                row[str(k).strip()] = str(v).strip()
+        sheet[trial_name] = row
+    return sheet
+
+
+def should_run_side(info_row: dict, side: str) -> bool:
+    valid = info_row.get("Valid GaitCycle", "").strip().lower()
+    if valid == "" or valid == "both":
+        return True
+    return valid == side.strip().lower()
+
+
+def plate_flag_to_body(flag: str) -> str | None:
+    f = (flag or "").strip().lower()
+    if f == "left":
+        return "calcn_l"
+    if f == "right":
+        return "calcn_r"
+    if f == "both":
         return None
-    return best_plate
+    return None
 
 
-# ---------- ExternalLoads XML creation ----------
+def plate_is_nonzero(df, plate_num: int, eps_sum: float = 1e-6) -> bool:
+    cols = [f"ground_force{plate_num}_vx", f"ground_force{plate_num}_vy", f"ground_force{plate_num}_vz"]
+    if any(c not in df.columns for c in cols):
+        return False
+    return float(df[cols].abs().sum().sum()) > eps_sum
 
-def write_external_loads_xml(
-    grf_df: pd.DataFrame,
+
+def build_external_loads_from_infosheet(
     grf_mot_path: str,
-    xml_out_path: str,
-    side: str,
-    min_peak_N: float = 20.0
-) -> int | None:
-    """
-    Creates ExternalLoads with exactly ONE ExternalForce:
-      - the plate with largest peak vertical force.
-    Returns the selected plate (1/2/3) or None if no usable GRF.
-    """
-
-    plate = detect_active_grf_plate(grf_df, min_peak_N=min_peak_N)
-    if plate is None:
-        return None
-
-    applied_body = "calcn_r" if side.lower().startswith("r") else "calcn_l"
+    xml_path: str,
+    info_row: dict,
+    eps_sum: float = 1e-6,
+    plate_nums: tuple[int, ...] = (1, 2, 3),
+):
+    mot = MOT.load_from_mot(grf_mot_path)
+    df = mot.data
 
     ext_loads = osim.ExternalLoads()
     ext_loads.setDataFileName(grf_mot_path)
 
-    ext = osim.ExternalForce()
-    ext.setName(f"FP{plate}")
-    ext.set_applied_to_body(applied_body)
-    ext.set_force_expressed_in_body("ground")
-    ext.set_point_expressed_in_body("ground")
+    added_any = False
 
-    # IMPORTANT: matches your GRF headers
-    ext.set_force_identifier(f"ground_force{plate}_v")
-    ext.set_point_identifier(f"ground_force{plate}_p")
-    ext.set_torque_identifier(f"ground_torque{plate}_")
+    for p in plate_nums:
+        flag = info_row.get(f"FP{p}", "")
+        body = plate_flag_to_body(flag)
 
-    ext_loads.cloneAndAppend(ext)
+        if body is None:
+            continue
 
-    safe_mkdir(os.path.dirname(xml_out_path))
-    ext_loads.printToXML(xml_out_path)
+        if not plate_is_nonzero(df, p, eps_sum=eps_sum):
+            continue
 
-    return plate
+        ext = osim.ExternalForce()
+        ext.setName(f"FP{p}")
+        ext.set_applied_to_body(body)
+        ext.set_force_expressed_in_body("ground")
+        ext.set_point_expressed_in_body("ground")
+        ext.set_force_identifier(f"ground_force{p}_v")
+        ext.set_point_identifier(f"ground_force{p}_p")
+        ext.set_torque_identifier(f"ground_torque{p}_")
 
+        ext_loads.cloneAndAppend(ext)
+        added_any = True
 
-#ID tool setup ----------
+    if not added_any:
+        print(f"[EXLOADS] Skip: no valid non-zero plates (after infosheet) for {os.path.basename(grf_mot_path)}")
+        return None
+
+    safe_mkdir(os.path.dirname(xml_path))
+    ext_loads.printToXML(xml_path)
+    print(f"[EXLOADS] Wrote: {xml_path}")
+    return xml_path
 
 def setup_id_tool(
-    scaled_model_file: str,
+    model_file: str,
     start_time: float,
     end_time: float,
     ik_path: str,
-    external_loads_xml: str,
-    results_dir: str,
-    output_file: str
+    xml_path: str,
+    output_mot_path: str,
 ) -> osim.InverseDynamicsTool:
+    tool = osim.InverseDynamicsTool()
+    tool.setModelFileName(model_file)
+    tool.setStartTime(start_time)
+    tool.setEndTime(end_time)
+    tool.setCoordinatesFileName(ik_path)
+    tool.setExternalLoadsFileName(xml_path)
+    tool.setResultsDir(os.path.dirname(output_mot_path))
+    tool.setOutputGenForceFileName(os.path.basename(output_mot_path))
+    return tool
 
-    id_tool = osim.InverseDynamicsTool()
-    id_tool.setModelFileName(scaled_model_file)
-    id_tool.setStartTime(start_time)
-    id_tool.setEndTime(end_time)
-    id_tool.setCoordinatesFileName(ik_path)
-    id_tool.setExternalLoadsFileName(external_loads_xml)
-    id_tool.setResultsDir(results_dir)
-    id_tool.setOutputGenForceFileName(output_file)
-    return id_tool
-
-
-# ---------- MAIN ID pipeline ----------
 
 def main():
     DATA_ROOT = r"D:\TestOverground\Overground"
     PARTICIPANT = "PLB_03"
     SCALED_MODEL_NAME = "scaledmodelIM.osim"
+    INFOSHEET_DIR = r"D:\TestOverground\Overground\PLB_03\infosheet"
 
     participant_root = os.path.join(DATA_ROOT, PARTICIPANT)
-    scaled_model_file = os.path.join(participant_root, "models", SCALED_MODEL_NAME)
+    model_file = os.path.join(participant_root, "models", SCALED_MODEL_NAME)
 
     processed_root = os.path.join(participant_root, "processed")
     segmented_root = os.path.join(processed_root, "segmented")
     ik_root = os.path.join(processed_root, "ik")
-
     id_root = os.path.join(processed_root, "id")
     exloads_root = os.path.join(processed_root, "external_loads")
 
-    if not os.path.exists(scaled_model_file):
-        raise FileNotFoundError(f"Scaled model not found: {scaled_model_file}")
+    if not os.path.exists(model_file):
+        raise FileNotFoundError(f"Scaled model not found: {model_file}")
+    if not os.path.isdir(segmented_root):
+        raise FileNotFoundError(f"Segmented folder not found: {segmented_root}")
+    if not os.path.isdir(ik_root):
+        raise FileNotFoundError(f"IK folder not found: {ik_root}")
 
-    n_done = 0
-    n_skip = 0
+    infosheet_csv = find_first_csv(INFOSHEET_DIR)
+    print(f"[INFO] Using infosheet CSV: {infosheet_csv}")
+    infosheet_map = load_infosheet_map(infosheet_csv)
 
-    for trial_name, side, fp_folder, trc_path, grf_path in iter_segmented_cycles(segmented_root):
-        base = os.path.splitext(os.path.basename(trc_path))[0]  # same as mot basename
+    for trial, side, fp, grf_path, trc_path, cycle_name in iter_segmented_cycles(segmented_root):
+        info = infosheet_map.get(trial)
+        if info is None:
+            print(f"[ID] Skip: no infosheet row for trial '{trial}'")
+            continue
 
-        ik_path = corresponding_ik_path(ik_root, trial_name, side, fp_folder, base)
+        if not should_run_side(info, side):
+            print(f"[ID] Skip: trial {trial} side {side} (Valid GaitCycle={info.get('Valid GaitCycle','')})")
+            continue
+
+        ik_path = os.path.join(ik_root, trial, side, fp, f"{cycle_name}.mot")
         if not os.path.exists(ik_path):
-            print(f"[SKIP] Missing IK: {ik_path}")
-            n_skip += 1
+            print(f"[ID] Missing IK: {ik_path}")
             continue
 
-        # Load TRC to get time range
-        trc = TRC.load_from_trc(trc_path)
-        start_time = float(trc.data["Time"].iloc[0])
-        end_time = float(trc.data["Time"].iloc[-1])
+        # Master window from TRC
+        try:
+            start_time, end_time = get_time_range_from_trc(trc_path)
+        except Exception as e:
+            print(f"[ID] Skip: cannot read TRC time {trc_path} -> {repr(e)}")
+            continue
 
-        # Load GRF df for XML creation
-        grf = MOT.load_from_mot(grf_path)
-        grf_df = grf.data
-
-        xml_path = os.path.join(exloads_root, trial_name, side, fp_folder, f"{base}.xml")
-        used_plate = write_external_loads_xml(
-            grf_df=grf_df,
+        xml_path = os.path.join(exloads_root, trial, side, fp, f"{cycle_name}.xml")
+        xml_ok = build_external_loads_from_infosheet(
             grf_mot_path=grf_path,
-            xml_out_path=xml_path,
-            side=side,
-            min_peak_N=20.0
+            xml_path=xml_path,
+            info_row=info,
+            eps_sum=1e-6,
+            plate_nums=(1, 2, 3),
         )
-
-        if used_plate is None:
-            print(f"[SKIP] No usable GRF plate detected for: {trial_name}/{side}/{fp_folder}/{base}")
-            n_skip += 1
+        if xml_ok is None:
             continue
 
-        out_dir = os.path.join(id_root, trial_name, side, fp_folder)
+        out_dir = os.path.join(id_root, trial, side, fp)
         safe_mkdir(out_dir)
+        output_mot_path = os.path.join(out_dir, f"{cycle_name}_id.mot")
 
-        out_mot = f"{base}_id.mot"
-        print(f"[ID] {trial_name}/{side}/{fp_folder}  plate=FP{used_plate}  -> {out_mot}")
+        print(f"[ID] Running: {trial}/{side}/{fp}/{cycle_name}")
+        print(f"     TRC window: {start_time:.6f} → {end_time:.6f}")
+        print(f"     GRF file : {os.path.basename(grf_path)}")
+        print(f"     TRC file : {os.path.basename(trc_path)}")
+        print(f"     IK file  : {os.path.basename(ik_path)}")
 
-        id_tool = setup_id_tool(
-            scaled_model_file=scaled_model_file,
-            start_time=start_time,
-            end_time=end_time,
-            ik_path=ik_path,
-            external_loads_xml=xml_path,
-            results_dir=out_dir,
-            output_file=out_mot
-        )
+        id_tool = setup_id_tool(model_file, start_time, end_time, ik_path, xml_ok, output_mot_path)
 
         try:
             id_tool.run()
-            n_done += 1
         except Exception as e:
-            print(f"[FAIL] ID failed for {trial_name}/{side}/{fp_folder}/{base}: {repr(e)}")
-            n_skip += 1
+            print(f"[ID] FAILED: {trial}/{side}/{fp}/{cycle_name} -> {repr(e)}")
+            continue
+
+        if os.path.exists(output_mot_path):
+            print(f"[ID] Saved: {output_mot_path}")
+        else:
+            print(f"[ID] WARNING: OpenSim ran but output not found: {output_mot_path}")
 
     print("\n[Done] ID completed.")
-    print(f"[Done] Successful: {n_done}")
-    print(f"[Done] Skipped/failed: {n_skip}")
 
 
 if __name__ == "__main__":
