@@ -156,7 +156,8 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
             cycle_name = f"{trial.name}_{side.lower()}_cycle{cycle.num}"
             mot_name = f"{cycle_name}.mot"
             mot_path = os.path.join(ik_output_path, mot_name)
-            ik_tool.setOutputMotionFileName(mot_path)
+            temp_mot_path = os.path.join(temp_directory, mot_name)
+            ik_tool.setOutputMotionFileName(temp_mot_path)
 
             # Add marker tasks
             task_set = marker_tasks(ik_tool, marker_names, do_not_include)
@@ -164,12 +165,13 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
             ik_tool.run()
 
             # Read and filter:
-            if os.path.exists(mot_path):
-                header, time_vec, data = read_mot_storage(mot_path)
+            if os.path.exists(temp_mot_path):
+                header, time_vec, data = read_mot_storage(temp_mot_path)
                 data = filter_signals(data)
                 data = np.hstack((time_vec, data))
 
-                mot = MOT.load_from_mot(mot_path)
+                mot = MOT.load_from_mot(temp_mot_path)
+                mot.filename = mot_name
                 data = pd.DataFrame(data)
                 data.columns = header
                 mot.update_data(data)
