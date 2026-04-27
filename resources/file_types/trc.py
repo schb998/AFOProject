@@ -1,3 +1,4 @@
+from __future__ import annotations
 import bisect
 import os
 import unittest
@@ -6,10 +7,14 @@ import pandas as pd
 import numpy as np
 import ast
 import random
-from typing import Self
+from typing import Any
+Self = Any
 import logging
 import re
-from ptb.util.io.mocap.low_lvl.c3d import Reader
+try:
+    from ptb.util.io.mocap.low_lvl.c3d import Reader
+except ImportError:
+    pass
 from resources.custom_exceptions import *
 from resources.file_types.fileobject import FileObject
 

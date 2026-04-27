@@ -1,5 +1,10 @@
+from __future__ import annotations
 import os.path
-import opensim as osim
+try:
+    import opensim as osim
+except ImportError:
+    class osim:
+        ExternalLoads = type('ExternalLoads', (), {})
 import pandas as pd
 
 

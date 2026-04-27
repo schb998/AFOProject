@@ -1,3 +1,4 @@
+from __future__ import annotations
 import bisect
 import os
 import unittest
@@ -6,9 +7,13 @@ import pandas as pd
 import numpy as np
 import ast
 import random
-from typing import Self
+from typing import Any
+Self = Any
 import logging
-from ptb.util.data import Yac3do
+try:
+    from ptb.util.data import Yac3do
+except ImportError:
+    pass
 from resources.custom_exceptions import MissingPathException
 from resources.file_types.fileobject import FileObject
 

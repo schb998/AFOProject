@@ -12,7 +12,7 @@ from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
 
 """ change the markerset to the one you used, the script filters the marker trajectories first, reads the segmented trc files and opensim ik tool """
-
+""" first compute the ik and then filter"""""
 
 def safe_mkdir(path: str):
     os.makedirs(path, exist_ok=True)

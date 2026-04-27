@@ -1,9 +1,15 @@
+from __future__ import annotations
 import os.path
-import opensim as osim
+try:
+    import opensim as osim
+except ImportError:
+    class osim:
+        ExternalLoads = type('ExternalLoads', (), {})
 import pandas as pd
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
-from typing import Self
+from typing import Any
+Self = Any
 from resources.custom_exceptions import *
 from resources.file_types.fileobject import CustomExternalLoads, CustomJointPower
 

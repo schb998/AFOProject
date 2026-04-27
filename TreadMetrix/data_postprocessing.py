@@ -1,3 +1,4 @@
+from __future__ import annotations
 from matplotlib.widgets import SpanSelector
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
@@ -240,7 +241,7 @@ def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: 
     mot_df.data = df_corrected
 
 
-def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]], output: str) \
+def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]], output: str, show: bool = True) \
         -> None:
     """Saves plot of the vertical forces with toe offs and heel strikes.
 
@@ -271,8 +272,8 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
     right_fy = mot.data['ground_force2_vy']
     left_fy = mot.data['ground_force1_vy']
 
-    selected_start = time_scale.iloc[0]
-    selected_end = time_scale.iloc[-1]
+    selected_start = 0
+    selected_end = len(time_scale) - 1
 
     ax1.plot(time_scale, right_fy, label='Right Fy', alpha=0.7, color='orange')
     ax1.plot(time_scale, left_fy, label='Left Fy', alpha=0.7, color='green')
@@ -325,7 +326,8 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
     plt.savefig(os.path.join(output,
                              f"{mot.filename.replace('.mot', '')}_vertical_grfs_with_toeoffs_heelstrikes.png"),
                 bbox_inches='tight')
-    plt.show()
+    if show:
+        plt.show()
 
 
 
@@ -435,7 +437,7 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
     zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'left')
 
     # plot and save the corrected data:
-    plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path)
+    plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path, show=show)
 
     corrected_grf = corrected_grf.sample(int(selected_start), int(selected_end))
     corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
