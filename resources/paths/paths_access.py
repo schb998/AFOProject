@@ -18,6 +18,27 @@ def call_should_save() -> bool:
 def call_should_show() -> bool:
     return ask_question("Show the plots as the code run?", "Show preference")
 
+def call_should_use_offset_corrector() -> bool:
+    val = model.get_local("use_offset_corrector")
+    if val is not None:
+        return bool(val)
+    return ask_question("Apply interactive treadmill offset corrector?", "Offset Corrector preference")
+
+def call_postprocessing_version() -> str:
+    val = model.get_local("postprocessing_version")
+    if val in ["v1", "v2"]:
+        return str(val).lower()
+    use_v2 = ask_question("Use Data Post-Processing V2 (Stance Boundary Detection)? Select 'No' for V1 (Peak Detection).", "Post-Processing Version")
+    return "v2" if use_v2 else "v1"
+
+def call_should_use_interactive_selector() -> bool:
+    val = model.get_local("use_interactive_gait_selector")
+    if val is not None:
+        return bool(val)
+    return ask_question("Use interactive Gait Event & TRC/MOT Segmenter GUI?", "Interactive Gait Selector preference")
+
+
+
 def get_output_path(trial_name: str = None) -> str:
     """Get the pipeline's saved output path.
 
@@ -60,6 +81,17 @@ def get_scaled_model_file() -> str:
     if content is not None:
         return content
     raise MissingPathException("scaled OpenSim model")
+
+
+def get_subject_weight() -> float | None:
+    weight = model.get_local("subject_weight")
+    if weight is not None:
+        try:
+            val = float(weight)
+            return val if val > 0 else None
+        except (ValueError, TypeError):
+            return None
+    return None
 
 
 def get_raw_directory() -> str:

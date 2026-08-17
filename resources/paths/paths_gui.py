@@ -252,6 +252,56 @@ def _set_up_raw_directory(root: Tk) -> (Label, Label, Button, Button):
     return label, selected, select_button, unselect_button
 
 
+def _setup_offset_corrector_toggle(root: Tk):
+    label = Label(root, text="Offset Corrector:")
+    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=5)
+
+    val = back.get_local("use_offset_corrector")
+    corrector_var = BooleanVar(value=bool(val) if val is not None else True)
+
+    def toggle():
+        back._update_local("use_offset_corrector", corrector_var.get())
+
+    chk = Checkbutton(root, text="Enable Treadmill Offset Corrector", variable=corrector_var, command=toggle)
+    chk.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=5)
+    _update_row()
+
+
+def _setup_postprocessing_version_select(root: Tk):
+    label = Label(root, text="Post-Processing:")
+    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=5)
+
+    current_val = back.get_postprocessing_version()
+    version_var = StringVar(value="Version 2 (Stance Boundary)" if current_val == "v2" else "Version 1 (Peak Detection)")
+
+    def on_select(event):
+        chosen = version_var.get()
+        if "Version 1" in chosen:
+            back.set_postprocessing_version("v1")
+        else:
+            back.set_postprocessing_version("v2")
+
+    combo = Combobox(root, textvariable=version_var, values=["Version 2 (Stance Boundary)", "Version 1 (Peak Detection)"], state="readonly", width=30)
+    combo.bind("<<ComboboxSelected>>", on_select)
+    combo.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=5)
+    _update_row()
+
+
+def _setup_interactive_selector_toggle(root: Tk):
+    label = Label(root, text="Gait Event GUI:")
+    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=5)
+
+    val = back.get_use_interactive_gait_selector()
+    selector_var = BooleanVar(value=bool(val))
+
+    def toggle():
+        back.set_use_interactive_gait_selector(selector_var.get())
+
+    chk = Checkbutton(root, text="Enable Interactive Gait Event & TRC/MOT Segmenter GUI", variable=selector_var, command=toggle)
+    chk.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=5)
+    _update_row()
+
+
 def main() -> None:
     root = Tk()
     root.title("Path management")
@@ -268,10 +318,16 @@ def main() -> None:
     _setup_raw_mot(root)
     _setup_raw_trc(root)
 
+    _setup_offset_corrector_toggle(root)
+    _setup_postprocessing_version_select(root)
+    _setup_interactive_selector_toggle(root)
+
+
     _update_row()
     save_button = Button(root, text="Save to file", default='active',
                          command=lambda: {back.save_to_json()})
     save_button.grid(row=CURRENT_ROW, column=0)
+
 
     proceed_button = Button(root, text="Proceed", default='active',
                             command=lambda: {root.destroy()})

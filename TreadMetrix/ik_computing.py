@@ -16,23 +16,29 @@ This file is used to compute Inverse Kinematic data.
 # todo: set the _ik_marker_errors.sto output of the ik tool in the given ik folder
 
 
-def filter_signals(data: array.array, fs: int = 100, cutoff: int = 6, order: int = 2) -> np.ndarray:
+def filter_signals(data: np.ndarray, fs: float = 100.0, cutoff: float = 6.0, order: int = 4) -> np.ndarray:
     """
-    Filter the signal according to the Butterworth method.
+    Filter the signal according to the Butterworth method (zero-phase, forward-backward).
+
+    Recommended parameters based on spectrum analysis of P03 gait data:
+      - Kinematics (IK angles): 4th-order Butterworth, 6 Hz cutoff, zero-phase
 
     Args:
-        data: array, signal to be filtered
-        fs: int, sampling frequency
-        cutoff: int, half cycles
-        order: int, order of the filter
+        data:   array, signal to be filtered
+        fs:     float, sampling frequency (Hz). Must be computed from the actual data.
+        cutoff: float, cutoff frequency (Hz). Default 6.0 Hz per spectrum analysis.
+        order:  int,   filter order. Default 4 (effective 8th-order with filtfilt).
 
     Returns:
         array: filtered signal
-
     """
+    if len(data) <= 3:
+        return data
     nyq = 0.5 * fs
-    b, a = butter(order, cutoff / nyq, btype='low', analog=False)
-    return filtfilt(b, a, data, axis=0)
+    normal_cutoff = min(0.99, cutoff / nyq)
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    padlen = min(15, len(data) - 1)
+    return filtfilt(b, a, data, axis=0, padlen=padlen)
 
 
 def read_mot_storage(filepath: str) -> (list[str], np.array, np.array):
@@ -127,12 +133,16 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
     os.makedirs(ik_result_path, exist_ok=True)
 
     marker_names = [
-        'Sternum', 'LShoulder', 'RShoulder', 'LASIS', 'RASIS', 'RPSIS', 'LPSIS',
-        'RFibula', 'RShank', 'RAnkleLateral', 'RToe', 'LToe', 'RMT5', 'RMT2', 'RHeel',
-        'LFibula', 'LShank', 'LAnkleLateral', 'LMT5', 'LMT2', 'LHeel', 'RKneeLateral',
-        'LAnkleMedial', 'LKneeLateral', 'RAnkleMedial', 'LKneeMedial', 'RKneeMedial'
+        'CLAV', 'RACR1', 'LACR1', 'RASI', 'LASI', 'RPSI', 'LPSI',
+        'RTH1', 'RTH2', 'RTH3', 'RLFC', 'RMFC',
+        'RTB1', 'RTB2', 'RTB3', 'RLMAL', 'RMMAL',
+        'RCAL', 'RMT1', 'RMT5', 'RToe',
+        'LTH1', 'LTH2', 'LTH3', 'LLFC', 'LMFC',
+        'LTB1', 'LTB2', 'LTB3', 'LLMAL', 'LMMAL',
+        'LCAL', 'LMT1', 'LMT5', 'LToe',
+        'T10', 'C7', 'RHJC', 'LHJC'
     ]
-    do_not_include = ['RKneeMedial', 'RAnkleMedial', 'RToe', 'LKneeMedial', 'LAnkleMedial', 'LToe']
+    do_not_include = ['RMFC', 'RMMAL', 'RToe', 'LMFC', 'LMMAL', 'LToe']
 
     for side in ["Right", "Left"]:
         ik_output_path = os.path.join(ik_result_path, side)
@@ -144,7 +154,7 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
 
             print(f"Processing {side}/{trc.filename}...")
 
-            if cycle.trc.filepath is None:
+            if cycle.trc.filepath is None or not os.path.exists(cycle.trc.filepath):
                 trc.save(temp_directory)
             trc_full_path = cycle.trc.filepath
 
@@ -153,11 +163,10 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
                                      float(trc.data['Time'].iloc[-1]))
 
             # Name format
-            cycle_name = f"{trial.name}_{side.lower()}_cycle{cycle.num}"
+            cycle_name = f"{trial.name}_{side}_cycle{cycle.num}"
             mot_name = f"{cycle_name}.mot"
             mot_path = os.path.join(ik_output_path, mot_name)
-            temp_mot_path = os.path.join(temp_directory, mot_name)
-            ik_tool.setOutputMotionFileName(temp_mot_path)
+            ik_tool.setOutputMotionFileName(mot_path)
 
             # Add marker tasks
             task_set = marker_tasks(ik_tool, marker_names, do_not_include)
@@ -165,13 +174,15 @@ def process(trial: Trial, scaled_model_file_path: str, ik_result_path: str, save
             ik_tool.run()
 
             # Read and filter:
-            if os.path.exists(temp_mot_path):
-                header, time_vec, data = read_mot_storage(temp_mot_path)
-                data = filter_signals(data)
+            if os.path.exists(mot_path):
+                header, time_vec, data = read_mot_storage(mot_path)
+                # Compute fs dynamically from the actual time vector
+                fs_ik = 1.0 / float(np.mean(np.diff(time_vec.ravel())))
+                # Kinematic filtering at 6.0 Hz cut-off frequency
+                data = filter_signals(data, fs=fs_ik, cutoff=6.0, order=4)
                 data = np.hstack((time_vec, data))
 
-                mot = MOT.load_from_mot(temp_mot_path)
-                mot.filename = mot_name
+                mot = MOT.load_from_mot(mot_path)
                 data = pd.DataFrame(data)
                 data.columns = header
                 mot.update_data(data)

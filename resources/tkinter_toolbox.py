@@ -70,7 +70,11 @@ def on_closing(window: Tk, custom: str = None) -> bool:
 
 
 def ask_question(question: str, title: str = None) -> bool:
-    answer = messagebox.askquestion(title, question)
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    answer = messagebox.askquestion(title, question, parent=root)
+    root.destroy()
     return answer.lower() == "yes"
 
 

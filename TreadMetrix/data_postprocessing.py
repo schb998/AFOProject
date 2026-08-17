@@ -1,4 +1,3 @@
-from __future__ import annotations
 from matplotlib.widgets import SpanSelector
 from resources.file_types.mot import MOT
 from resources.file_types.trc import TRC
@@ -21,17 +20,26 @@ def reinitialize_inputs():
     selected_start = -1
     selected_end = -1
 
-def filter_grf(mot: MOT, fs: float) -> None:
+def filter_grf(mot: MOT, fs: float, cutoff: float = 15.0, order: int = 4) -> None:
     """Filters data of a MOT object with a Butterworth filter.
 
     Args:
         mot: MOT object whose data is to be filtered.
         fs: sampling frequency.
+        cutoff: cutoff frequency in Hz (default 15.0 Hz).
+        order: filter order (default 4).
     """
-    b, a = butter(6, (12 / (fs / 2)), btype='low', output='ba')
+    if len(mot.data) <= 3:
+        return
+    nyq = 0.5 * fs
+    normal_cutoff = min(0.99, cutoff / nyq)
+    b, a = butter(order, normal_cutoff, btype='low', output='ba')
+    padlen = min(15, len(mot.data) - 1)
     filtered_df = deepcopy(mot.data)
     for col in mot.data.columns.tolist():
-        filtered_df[col] = filtfilt(b, a, mot.data[col])
+        if col.lower() == 'time':
+            continue
+        filtered_df[col] = filtfilt(b, a, mot.data[col], padlen=padlen)
     mot.data = filtered_df
 
 
@@ -51,24 +59,68 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
     """
     fy = mot_object.data[fz_col]
     corrected_df = deepcopy(mot_object.data)
+    
+    # Invert the signal because find_peaks finds local maxima.
+    # The swing phase (when foot is in the air) corresponds to the minimum values of the raw fy signal.
+    # So we find peaks of -fy.
     valley_indices, _ = find_peaks(-fy)
-    swing_valleys = valley_indices[fy[valley_indices] < 0]
-
+    
     print(f"\nCorrecting {fz_col}")
-    print(f"Number of swing valleys below 0N: {len(swing_valleys)}")
+    
+    if len(valley_indices) == 0:
+        print("No valleys found. Skipping correction.")
+        return
 
-    if len(swing_valleys) == 0:
-        print("No valleys found below zero. Skipping correction.")
+    # Calculate sampling frequency (fs) from time column
+    time_arr = mot_object.data['time'].values
+    fs = int(round(1.0 / (time_arr[1] - time_arr[0])))
 
-    baseline = abs(np.median(fy[swing_valleys]))
-    print(f"Baseline offset to add: {baseline:.2f}")
-    corrected_df[fz_col] = fy + baseline
+    # We find all valleys (peaks of inverted signal)
+    valley_indices, _ = find_peaks(-fy, distance=fs//4) # distance to avoid multiple peaks in same swing
+    
+    print(f"\nCorrecting {fz_col}")
+    
+    if len(valley_indices) == 0:
+        print("No valleys found. Skipping correction.")
+        return
+
+    # Filter out valleys that are clearly during stance phase 
+    # (e.g. if a false valley is found near the peak)
+    # A true swing valley should be in the lower 30% of the signal's range
+    signal_range = np.max(fy) - np.min(fy)
+    upper_threshold = np.min(fy) + 0.3 * signal_range
+    swing_valleys = valley_indices[fy[valley_indices] <= upper_threshold]
+
+    print(f"Number of swing valleys found: {len(swing_valleys)}")
+
+    if len(swing_valleys) < 2:
+        print("Not enough swing valleys for interpolation. Using median.")
+        baseline_array = np.full(len(fy), np.median(fy[swing_valleys]) if len(swing_valleys) > 0 else 0)
+    else:
+        # Interpolate the baseline across the entire signal
+        from scipy.interpolate import interp1d
+        valley_times = swing_valleys
+        valley_values = fy[swing_valleys]
+        
+        # Create interpolation function, fill bounds with the nearest value
+        interp_func = interp1d(valley_times, valley_values, kind='linear', bounds_error=False, fill_value=(valley_values.iloc[0], valley_values.iloc[-1]))
+        baseline_array = interp_func(np.arange(len(fy)))
+    
+    # Subtract the dynamic baseline
+    corrected_df[fz_col] = fy - baseline_array
 
     for col in related_cols:
         related = mot_object.data[col]
-        offset = np.median(related[swing_valleys])
-        corrected_df[col] = related - offset if offset > 0 else related + abs(offset)
-        print(f"Offset for {col}: {offset:.2f}")
+        
+        if len(swing_valleys) < 2:
+            offset_array = np.full(len(related), np.median(related[swing_valleys]) if len(swing_valleys) > 0 else 0)
+        else:
+            rel_values = related[swing_valleys]
+            interp_func_rel = interp1d(valley_times, rel_values, kind='linear', bounds_error=False, fill_value=(rel_values.iloc[0], rel_values.iloc[-1]))
+            offset_array = interp_func_rel(np.arange(len(related)))
+            
+        corrected_df[col] = related - offset_array
+        print(f"Applied dynamic offset for {col}")
 
     mot_object.data = corrected_df
 
@@ -93,7 +145,7 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
             plt.show()
 
 
-def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
+def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 15) -> dict[str, list[int]]:
     """Detects the gait cycles' "toe off" points.
 
     Args:
@@ -106,12 +158,12 @@ def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[s
 
     """
     toe_offs = {'R': [], 'L': []}
-    prominence = 15
+    prominence = 5
     distance = int(fs / 10)
-    height = 200
+    height = 20
 
-    if 'ground_force2_vy' in zeroed_mot.data.columns.tolist():
-        rzf = zeroed_mot.data['ground_force2_vy']
+    if 'ground_force5_vy' in zeroed_mot.data.columns.tolist():
+        rzf = zeroed_mot.data['ground_force5_vy']
         r_indexes, _ = find_peaks(rzf, prominence=prominence, distance=distance, height=height)
         peak = 0
         while peak < np.shape(r_indexes)[0]:
@@ -125,8 +177,8 @@ def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[s
                 break
             peak = next_peaks[0]
 
-    if 'ground_force1_vy' in zeroed_mot.data.columns.tolist():
-        lzf = zeroed_mot.data['ground_force1_vy']
+    if 'ground_force4_vy' in zeroed_mot.data.columns.tolist():
+        lzf = zeroed_mot.data['ground_force4_vy']
         l_indexes, _ = find_peaks(lzf, prominence=prominence, distance=distance, height=height)
         peak = 0
         while peak < np.shape(l_indexes)[0]:
@@ -143,7 +195,7 @@ def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[s
     return toe_offs
 
 
-def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
+def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 15) -> dict[str, list[int]]:
     """Detects the gait cycles' "heel strikes" points.
     Args:
         zeroed_mot: data to process.
@@ -155,12 +207,12 @@ def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> di
 
     """
     heel_contacts = {'R': [], 'L': []}
-    distance = int(fs / 2)
-    prominence = 14
+    distance = int(fs / 3)
+    prominence = 5
     height = -100
 
-    if 'ground_force2_vy' in zeroed_mot.data.columns.tolist():
-        rzf = zeroed_mot.data['ground_force2_vy']
+    if 'ground_force5_vy' in zeroed_mot.data.columns.tolist():
+        rzf = zeroed_mot.data['ground_force5_vy']
         r_indexes, _ = find_peaks(-rzf, prominence=prominence, distance=distance, height=height)
         rest = len(rzf)
         peak = 0
@@ -177,8 +229,8 @@ def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> di
             peak = next_peaks[0]
             rest = len(rzf[r_indexes[peak]:])
 
-    if 'ground_force1_vy' in zeroed_mot.data.columns.tolist():
-        lzf = zeroed_mot.data['ground_force1_vy']
+    if 'ground_force4_vy' in zeroed_mot.data.columns.tolist():
+        lzf = zeroed_mot.data['ground_force4_vy']
         l_indexes, _ = find_peaks(-lzf, prominence=prominence, distance=distance, height=height)
         rest = len(lzf)
         peak = 0
@@ -218,15 +270,15 @@ def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: 
     if side == 'r' or side == 'right':
         to_list = toe_offs['R']
         hs_list = heel_strikes['R']
-        cols_to_zero = ['ground_force2_vx', 'ground_force2_vy', 'ground_force2_vz',
-                        'ground_force2_px', 'ground_force2_py', 'ground_force2_pz',
-                        'ground_torque2_x', 'ground_torque2_y', 'ground_torque2_z']
+        cols_to_zero = ['ground_force5_vx', 'ground_force5_vy', 'ground_force5_vz',
+                        'ground_force5_px', 'ground_force5_py', 'ground_force5_pz',
+                        'ground_torque5_x', 'ground_torque5_y', 'ground_torque5_z']
     elif side == 'l' or side == 'left':
         to_list = toe_offs['L']
         hs_list = heel_strikes['L']
-        cols_to_zero = ['ground_force1_vx', 'ground_force1_vy', 'ground_force1_vz',
-                        'ground_force1_px', 'ground_force1_py', 'ground_force1_pz',
-                        'ground_torque1_x', 'ground_torque1_y', 'ground_torque1_z']
+        cols_to_zero = ['ground_force4_vx', 'ground_force4_vy', 'ground_force4_vz',
+                        'ground_force4_px', 'ground_force4_py', 'ground_force4_pz',
+                        'ground_torque4_x', 'ground_torque4_y', 'ground_torque4_z']
     else:
         raise ValueError("Side must be 'R' or 'L'")
 
@@ -236,12 +288,12 @@ def zero_swing_phase(mot_df: MOT, toe_offs: dict[str, list[int]], heel_strikes: 
             heel_idx = hs_after_toe[0]
             for col in cols_to_zero:
                 if col in df_corrected.columns.tolist():
-                    df_corrected.loc[toe_idx:heel_idx, col] = 0
+                    df_corrected.loc[toe_idx:heel_idx - 1, col] = 0
 
     mot_df.data = df_corrected
 
 
-def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]], output: str, show: bool = True) \
+def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dict[str, list[int]], output: str) \
         -> None:
     """Saves plot of the vertical forces with toe offs and heel strikes.
 
@@ -269,8 +321,8 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
     os.makedirs(output, exist_ok=True)
 
     time_scale = mot.data['time'] if 'time' in mot.data.columns.tolist() else np.arange(mot.data.shape[0])
-    right_fy = mot.data['ground_force2_vy']
-    left_fy = mot.data['ground_force1_vy']
+    right_fy = mot.data['ground_force5_vy']
+    left_fy = mot.data['ground_force4_vy']
 
     selected_start = 0
     selected_end = len(time_scale) - 1
@@ -326,8 +378,7 @@ def plot_grf_details(mot: MOT, heel_strikes: dict[str, list[int]], toe_offs: dic
     plt.savefig(os.path.join(output,
                              f"{mot.filename.replace('.mot', '')}_vertical_grfs_with_toeoffs_heelstrikes.png"),
                 bbox_inches='tight')
-    if show:
-        plt.show()
+    plt.show()
 
 
 
@@ -353,6 +404,21 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
     right_mots = mot.segment(heel_strike_moments['R'], True)[1:-1]
     left_mots = mot.segment(heel_strike_moments['L'], True)[1:-1]
 
+    for i, m in enumerate(right_mots):
+        m.name = f"{trial.name}_Right_cycle{i}"
+        m.filename = f"{trial.name}_Right_cycle{i}.mot"
+
+    for i, m in enumerate(left_mots):
+        m.name = f"{trial.name}_Left_cycle{i}"
+        m.filename = f"{trial.name}_Left_cycle{i}.mot"
+
+    # Apply secondary 6.0 Hz low-pass filter on segmented GRF forces prior to ID calculation
+    mot_frame_rate = 1 / np.mean(np.diff(mot.data['time']))
+    for m in right_mots:
+        filter_grf(m, mot_frame_rate, cutoff=6.0, order=4)
+    for m in left_mots:
+        filter_grf(m, mot_frame_rate, cutoff=6.0, order=4)
+
     if save is not None:
         right_path = os.path.join(save, "Right")
         left_path = os.path.join(save, "Left")
@@ -374,15 +440,31 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
         if trc_rate is None:
             trc_rate = 1 / np.mean(np.diff(trc.data['Time']))
         rate_conversion = trc_rate / mot_frame_rate
+
+        ff = trc.first_frame
+        lf = ff + len(trc.data) - 1
+
         trc_heel_strike_moments = {}
         for side in heel_strike_moments:
             trc_heel_strike_moments[side] = []
             for i in range(len(heel_strike_moments[side])):
-                trc_heel_strike_moments[side].append(int(heel_strike_moments[side][i] * rate_conversion))
+                frame_num = int(round(heel_strike_moments[side][i] * rate_conversion)) + ff
+                frame_num = max(ff, min(lf, frame_num))
+                trc_heel_strike_moments[side].append(frame_num)
+            trc_heel_strike_moments[side] = sorted(list(set(trc_heel_strike_moments[side])))
 
         # segment trc:
-        right_trcs = trc.segment(trc_heel_strike_moments['R'], True)[1:-1]
-        left_trcs = trc.segment(trc_heel_strike_moments['L'], True)[1:-1]
+        right_trcs = trc.segment(trc_heel_strike_moments['R'], True)[1:-1] if len(trc_heel_strike_moments['R']) >= 2 else []
+        left_trcs = trc.segment(trc_heel_strike_moments['L'], True)[1:-1] if len(trc_heel_strike_moments['L']) >= 2 else []
+
+
+        for i, t in enumerate(right_trcs):
+            t.name = f"{trial.name}_Right_cycle{i}"
+            t.filename = f"{trial.name}_Right_cycle{i}.trc"
+
+        for i, t in enumerate(left_trcs):
+            t.name = f"{trial.name}_Left_cycle{i}"
+            t.filename = f"{trial.name}_Left_cycle{i}.trc"
 
         if save is not None:
             right_path = os.path.join(save, "Right")
@@ -423,9 +505,9 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
     corrected_grf = trial.grf.copy()
     corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
     filter_grf(corrected_grf, frame_rate)
-    baseline_correct_debug(corrected_grf, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'],
+    baseline_correct_debug(corrected_grf, 'ground_force5_vy', ['ground_force5_vx', 'ground_force5_vz'],
                            output_path=save_plot_path if save_optionals else None, show=show)
-    baseline_correct_debug(corrected_grf, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'],
+    baseline_correct_debug(corrected_grf, 'ground_force4_vy', ['ground_force4_vx', 'ground_force4_vz'],
                            output_path=save_plot_path if save_optionals else None, show=show)
 
     # detect toe off and heel strikes:
@@ -437,7 +519,7 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None, 
     zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'left')
 
     # plot and save the corrected data:
-    plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path, show=show)
+    plot_grf_details(corrected_grf, heel_strike_moments, toe_off_moments, save_plot_path)
 
     corrected_grf = corrected_grf.sample(int(selected_start), int(selected_end))
     corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")

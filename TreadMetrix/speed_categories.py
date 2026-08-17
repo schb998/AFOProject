@@ -20,8 +20,8 @@ def segment():
     frame_rate = 1 / np.mean(np.diff(mot_object.data['time']))
 
     pp.filter_grf(mot_object, frame_rate)
-    pp.baseline_correct_debug(mot_object, 'ground_force2_vy', ['ground_force2_vx', 'ground_force2_vz'])
-    pp.baseline_correct_debug(mot_object, 'ground_force1_vy', ['ground_force1_vx', 'ground_force1_vz'])
+    pp.baseline_correct_debug(mot_object, 'ground_force5_vy', ['ground_force5_vx', 'ground_force5_vz'])
+    pp.baseline_correct_debug(mot_object, 'ground_force4_vy', ['ground_force4_vx', 'ground_force4_vz'])
     mot_to_moments = pp.detect_toe_offs(mot_object, frame_rate)
     mot_hs_moments = pp.detect_heel_strikes(mot_object, frame_rate)
     pp.zero_swing_phase(mot_object, mot_to_moments, mot_hs_moments, 'right')

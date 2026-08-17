@@ -106,11 +106,15 @@ def _delete_invalid_paths():
     for key in list(_LOCAL.keys()):
         content = _LOCAL[key]
 
+        # Skip non-path entries like subject_weight, use_offset_corrector, postprocessing_version, use_interactive_gait_selector
+        if key in ["subject_weight", "use_offset_corrector", "postprocessing_version", "use_interactive_gait_selector"] or not isinstance(content, (str, list)):
+            continue
+
         # if we're checking a list, test each element of the list:
         if isinstance(content, list):
             # remove each inexisting elelment from the list:
             for element in content:
-                if not os.path.exists(element):
+                if isinstance(element, str) and not os.path.exists(element):
                     content.remove(element)
                     faulty.append(element)
             # remove the list if empty:
@@ -118,7 +122,7 @@ def _delete_invalid_paths():
                 _remove_from_local(key)
 
         # check singular element:
-        elif not os.path.exists(content):
+        elif isinstance(content, str) and not os.path.exists(content):
             _remove_from_local(key)
             faulty.append(content)
 
@@ -384,6 +388,31 @@ def set_scaled_model(selection: str | None) -> (bool, str | None):
     return True, None
 
 
+def set_subject_weight(weight: float | str | None) -> (bool, str | None):
+    """Save subject/participant weight (in kg) into virtual and local save.
+
+    Args:
+        weight: float or str representing body weight in kg.
+
+    Returns:
+        bool, whether the weight value is valid (>0).
+        str | None, description if invalid.
+    """
+    if weight is None or weight == "":
+        _remove_from_local("subject_weight")
+        save_to_json()
+        return True, None
+    try:
+        val = float(weight)
+        if val <= 0:
+            return False, "Subject weight must be greater than 0 kg."
+        _update_local("subject_weight", val)
+        save_to_json()
+        return True, None
+    except (ValueError, TypeError):
+        return False, "Invalid weight value. Please enter a valid number."
+
+
 # delete paths from the virtual save (require a save in local file).
 
 def delete_output_directory() -> None:
@@ -417,3 +446,47 @@ def delete_raw_directory() -> None:
     Returns: None
     """
     _remove_from_local("raw_directory")
+
+
+def set_use_offset_corrector(value: bool) -> None:
+    """Set the preference for treadmill offset corrector.
+
+    Args:
+        value: True to enable, False to disable.
+    """
+    _update_local("use_offset_corrector", bool(value))
+
+
+def get_use_offset_corrector() -> bool:
+    """Get the preference for treadmill offset corrector.
+
+    Returns:
+        bool: True if enabled or unset (default True), False if disabled.
+    """
+    val = get_local("use_offset_corrector")
+    if val is not None:
+        return bool(val)
+    return True
+
+
+def set_postprocessing_version(version: str) -> None:
+    _update_local("postprocessing_version", str(version).lower())
+
+
+def get_postprocessing_version() -> str:
+    val = get_local("postprocessing_version")
+    if val in ["v1", "v2"]:
+        return str(val).lower()
+    return "v2"
+
+
+def set_use_interactive_gait_selector(value: bool) -> None:
+    _update_local("use_interactive_gait_selector", bool(value))
+
+
+def get_use_interactive_gait_selector() -> bool:
+    val = get_local("use_interactive_gait_selector")
+    if val is not None:
+        return bool(val)
+    return False
+

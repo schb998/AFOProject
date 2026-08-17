@@ -260,7 +260,9 @@ class MOT(FileObject):
         # read the file:
         try:
             with open(filepath, 'r') as file:
-                name = next(file).strip("\n").strip('.mot')
+                name = next(file).strip("\n")
+                if name.endswith(".mot"):
+                    name = name[:-4]
                 header_lines = {}
                 line = next(file).strip("\n")
                 while line != "endheader":
@@ -381,6 +383,14 @@ class MOT(FileObject):
             with open(full_path, 'w') as writer:
                 writer.writelines(content)
                 print(f"File {file_name} written in directory {file_path}.")
+        except PermissionError:
+            # Try with a version suffix if the file is locked
+            alt_file_name = file_name.replace(".mot", "_v2.mot")
+            alt_full_path = os.path.join(file_path, alt_file_name)
+            print(f"Warning: {file_name} is locked. Saving to {alt_file_name} instead.")
+            with open(alt_full_path, 'w') as writer:
+                writer.writelines(content)
+                print(f"File {alt_file_name} written in directory {file_path}.")
         except Exception as e:
             raise OSError(f"Unable to write file {file_name}: {getattr(e, 'message', repr(e))}")
         self.filepath = full_path

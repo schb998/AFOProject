@@ -5,3 +5,12 @@ path_navigation.log
 _ik_marker_errors.sto
 *.pyc
 TreadMetrix/opensim.log
+scratch/
+*.docx
+*.html
+*.log
+*.db
+*.2483538807360
+*.csv
+*.png
+*.txt

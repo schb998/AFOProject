@@ -143,13 +143,47 @@ def configure_opensim() -> None:
     os.environ['PATH'] += os.pathsep + os.path.join(opensim_path, 'bin')
 
 
+WEIGHT_ENTRY = None
+
+
+def get_model_mass_from_osim(osim_filepath: str) -> float | None:
+    """Parses an OpenSim model file and sums body masses to estimate total mass (kg)."""
+    if not osim_filepath or not os.path.exists(osim_filepath):
+        return None
+    try:
+        tree = ET.parse(osim_filepath)
+        total_mass = 0.0
+        found = False
+        for body in tree.getroot().iter('Body'):
+            mass_elem = body.find('mass')
+            if mass_elem is not None and mass_elem.text:
+                try:
+                    total_mass += float(mass_elem.text.strip())
+                    found = True
+                except ValueError:
+                    pass
+        if found and total_mass > 0:
+            return round(total_mass, 2)
+    except Exception:
+        pass
+    return None
+
+
 def select_scaled_model() -> None:
     message = "Please select scaled model file."
     tbox.infobox(message)
     file = tbox.get_osim_file(instruction=message)
-    success, detail = m.set_scaled_model(file.name if file is not None else None)
+    selected_path = file.name if file is not None else None
+    success, detail = m.set_scaled_model(selected_path)
     if not success:
         tbox.infobox(detail)
+    else:
+        if selected_path and WEIGHT_ENTRY is not None:
+            est_mass = get_model_mass_from_osim(selected_path)
+            if est_mass is not None:
+                WEIGHT_ENTRY.delete(0, END)
+                WEIGHT_ENTRY.insert(0, str(est_mass))
+                m.set_subject_weight(est_mass)
     _update_scaled_model_label()
     _update_scaled_model_button()
 
@@ -285,20 +319,49 @@ def main() -> None:
     scaling_button = Button(root, text="Scale a model", command=scale_model)
     selection_button = Button(root, text="Select scaled model", command=select_scaled_model)
 
+    global WEIGHT_ENTRY
+
     label = Label(root, text="Selected scaled model:")
     selected = Label(root, text=tbox.reformat(m.get_local("osim_scaled_model")), background="darkgrey")
     global LABEL
     LABEL = selected
     _update_scaled_model_label()
 
+    weight_label = Label(root, text="Participant weight (kg):")
+    weight_entry = Entry(root, width=15)
+    WEIGHT_ENTRY = weight_entry
+
+    curr_weight = m.get_local("subject_weight")
+    if curr_weight is not None:
+        weight_entry.insert(0, str(curr_weight))
+    else:
+        curr_model = m.get_local("osim_scaled_model")
+        if curr_model:
+            est_m = get_model_mass_from_osim(curr_model)
+            if est_m is not None:
+                weight_entry.insert(0, str(est_m))
+
+    def on_proceed():
+        w_val = weight_entry.get().strip()
+        if w_val:
+            success, err = m.set_subject_weight(w_val)
+            if not success:
+                tbox.infobox(f"Invalid weight: {err}")
+                return
+        root.destroy()
+
     proceed_button = Button(root, text="Proceed", default='active',
-                            command=lambda: {root.destroy()})
+                            command=on_proceed)
 
     label.grid(row=0, column=0, sticky=NW, pady=10)
     selected.grid(row=0, column=1, sticky=NW, pady=10)
-    scaling_button.grid(row=1, column=0, sticky=NE, pady=10)
-    selection_button.grid(row=1, column=1, sticky=NW, pady=10)
-    proceed_button.grid(row=1, column=2, sticky=NW, pady=10)
+
+    weight_label.grid(row=1, column=0, sticky=NW, pady=10)
+    weight_entry.grid(row=1, column=1, sticky=NW, pady=10)
+
+    scaling_button.grid(row=2, column=0, sticky=NE, pady=10)
+    selection_button.grid(row=2, column=1, sticky=NW, pady=10)
+    proceed_button.grid(row=2, column=2, sticky=NW, pady=10)
 
     global BUTTON
     BUTTON = proceed_button
