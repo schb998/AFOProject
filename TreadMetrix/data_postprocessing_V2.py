@@ -215,7 +215,7 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
 # STEP 3 & 4 - Gait Event Detection  (NEW IN V2)
 # ===========================================================================
 
-def detect_stance_phases(fy: np.ndarray, threshold: float = 15,
+def detect_stance_phases(fy: np.ndarray, threshold: float = 20,
                          min_stance_frames: int = 50,
                          min_swing_frames: int = 20) -> list[tuple[int, int]]:
     """Detect contiguous stance windows from a vertical GRF signal.
@@ -233,7 +233,7 @@ def detect_stance_phases(fy: np.ndarray, threshold: float = 15,
 
     Args:
         fy:                 1-D array of vertical GRF (N).
-        threshold:          Force threshold (N) separating swing from stance.
+        threshold:          Force threshold (N) separating swing from stance (default 20 N).
         min_stance_frames:  Minimum number of consecutive frames above
                             threshold to count as a real stance phase.
                             At 1000 Hz, default 50 = 50 ms minimum contact.
@@ -273,7 +273,7 @@ def detect_stance_phases(fy: np.ndarray, threshold: float = 15,
     return stances
 
 
-def detect_toe_offs_V2(mot: MOT, threshold: float = 15,
+def detect_toe_offs_V2(mot: MOT, threshold: float = 20,
                        min_stance_frames: int = 50,
                        min_swing_frames: int = 20) -> dict[str, list[int]]:
     """Detect toe-offs using stance-phase boundary detection (V2).
@@ -284,7 +284,7 @@ def detect_toe_offs_V2(mot: MOT, threshold: float = 15,
 
     Args:
         mot:               MOT object (post-filter, post-baseline-correct).
-        threshold:         Force threshold in N (default 15 N).
+        threshold:         Force threshold in N (default 20 N).
         min_stance_frames: Minimum stance duration in frames.
         min_swing_frames:  Minimum swing gap to separate two stances.
 
@@ -307,7 +307,7 @@ def detect_toe_offs_V2(mot: MOT, threshold: float = 15,
     return toe_offs
 
 
-def detect_heel_strikes_V2(mot: MOT, threshold: float = 15,
+def detect_heel_strikes_V2(mot: MOT, threshold: float = 20,
                            min_stance_frames: int = 50,
                            min_swing_frames: int = 20) -> dict[str, list[int]]:
     """Detect heel strikes using stance-phase boundary detection (V2).
@@ -319,7 +319,7 @@ def detect_heel_strikes_V2(mot: MOT, threshold: float = 15,
 
     Args:
         mot:               MOT object (post-filter, post-baseline-correct).
-        threshold:         Force threshold in N (default 15 N).
+        threshold:         Force threshold in N (default 20 N).
         min_stance_frames: Minimum stance duration in frames.
         min_swing_frames:  Minimum swing gap to separate two stances.
 
@@ -586,7 +586,7 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
 
 def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
             show: bool = True, save_optionals: bool = False,
-            hs_threshold: float = 15.0,
+            hs_threshold: float = 20.0,
             min_stance_frames: int = 50,
             min_swing_frames: int = 20) -> None:
     """Standalone pipeline to process the raw data of a trial (Version 2).
@@ -613,7 +613,7 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
 
     Additional parameters vs V1:
         hs_threshold:       Force threshold (N) for stance/swing boundary.
-                            Default 15 N, same as V1.
+                            Default 20 N.
         min_stance_frames:  Minimum frames above threshold to count as
                             a real stance.  Increase to filter out brief
                             artefact contacts.  Default = 50 frames = 50 ms
@@ -629,7 +629,7 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
         save_segmented_path: Directory for segmented MOT/TRC files.
         show:                Whether to display the interactive plot window.
         save_optionals:      Whether to save plots and corrected GRF.
-        hs_threshold:        Threshold force (N) separating swing from stance.
+        hs_threshold:        Threshold force (N) separating swing from stance (default 20 N).
         min_stance_frames:   Min frames in stance to count as a real contact.
         min_swing_frames:    Min frames in swing to split two stance phases.
     """

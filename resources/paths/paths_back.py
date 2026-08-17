@@ -495,7 +495,7 @@ def set_event_detection_mode(mode: str) -> None:
     """Save the event detection mode preference.
 
     Args:
-        mode: one of 'grf_v1', 'grf_v2', or 'hybrid'.
+        mode: one of 'grf_v1', 'grf_v2', 'hybrid', or 'hybrid_v1'.
     """
     _update_local("event_detection_mode", str(mode).lower())
 
@@ -504,10 +504,10 @@ def get_event_detection_mode() -> str:
     """Get the saved event detection mode preference.
 
     Returns:
-        str: 'grf_v1', 'grf_v2', or 'hybrid'. Defaults to 'hybrid'.
+        str: 'grf_v1', 'grf_v2', 'hybrid', or 'hybrid_v1'. Defaults to 'hybrid'.
     """
     val = get_local("event_detection_mode")
-    if val in ["grf_v1", "grf_v2", "hybrid"]:
+    if val in ["grf_v1", "grf_v2", "hybrid", "hybrid_v1", "hybrid_v2"]:
         return str(val).lower()
     return "hybrid"  # default to hybrid
 

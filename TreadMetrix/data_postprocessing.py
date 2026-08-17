@@ -145,13 +145,13 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
             plt.show()
 
 
-def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 15) -> dict[str, list[int]]:
+def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
     """Detects the gait cycles' "toe off" points.
 
     Args:
         zeroed_mot: data to process.
         fs: sampling frequency.
-        threshold: threshold to use for detection.
+        threshold: threshold to use for detection (default 20 N).
 
     Returns:
         Dictionary of the data's toe offs, listed by side.
@@ -160,7 +160,7 @@ def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 15) -> dict[s
     toe_offs = {'R': [], 'L': []}
     prominence = 5
     distance = int(fs / 10)
-    height = 20
+    height = 200.0
 
     if 'ground_force5_vy' in zeroed_mot.data.columns.tolist():
         rzf = zeroed_mot.data['ground_force5_vy']
@@ -195,20 +195,20 @@ def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 15) -> dict[s
     return toe_offs
 
 
-def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 15) -> dict[str, list[int]]:
+def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
     """Detects the gait cycles' "heel strikes" points.
     Args:
         zeroed_mot: data to process.
         fs: sampling frequency.
-        threshold: threshold to use for detection.
+        threshold: threshold to use for detection (default 20 N).
 
     Returns:
         Dictionary of the data's heel strikes, listed by side.
 
     """
     heel_contacts = {'R': [], 'L': []}
-    distance = int(fs / 3)
-    prominence = 5
+    distance = int(fs / 2)
+    prominence = 15
     height = -100
 
     if 'ground_force5_vy' in zeroed_mot.data.columns.tolist():

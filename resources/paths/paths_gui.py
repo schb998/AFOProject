@@ -268,18 +268,21 @@ def _setup_offset_corrector_toggle(root: Tk):
 
 
 def _setup_event_detection_mode_select(root: Tk):
-    """Event Detection mode: Hybrid (Marker+GRF), GRF V2, or GRF V1."""
+    """Event Detection mode: Hybrid V2, Hybrid V1, GRF V2, or GRF V1."""
     label = Label(root, text="Event Detection:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=5)
 
     _MODE_LABELS = {
-        "hybrid": "Hybrid (Marker + GRF V2)",
+        "hybrid": "Hybrid – V2 (Marker + GRF Stance Boundary)",
+        "hybrid_v1": "Hybrid – V1 (Marker + GRF Peak Detection)",
         "grf_v2": "GRF Only – V2 (Stance Boundary)",
         "grf_v1": "GRF Only – V1 (Peak Detection)",
     }
     _LABEL_TO_MODE = {v: k for k, v in _MODE_LABELS.items()}
 
     current_mode = back.get_event_detection_mode()
+    if current_mode == "hybrid_v2":
+        current_mode = "hybrid"
     mode_var = StringVar(value=_MODE_LABELS.get(current_mode, _MODE_LABELS["hybrid"]))
 
     def on_select(event):
@@ -287,7 +290,7 @@ def _setup_event_detection_mode_select(root: Tk):
         mode = _LABEL_TO_MODE.get(chosen_label, "hybrid")
         back.set_event_detection_mode(mode)
         # Keep postprocessing_version in sync for any legacy code that reads it
-        if mode == "grf_v1":
+        if mode in ("grf_v1", "hybrid_v1"):
             back.set_postprocessing_version("v1")
         else:
             back.set_postprocessing_version("v2")
@@ -295,7 +298,7 @@ def _setup_event_detection_mode_select(root: Tk):
     combo = Combobox(
         root, textvariable=mode_var,
         values=list(_MODE_LABELS.values()),
-        state="readonly", width=36
+        state="readonly", width=42
     )
     combo.bind("<<ComboboxSelected>>", on_select)
     combo.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=5)

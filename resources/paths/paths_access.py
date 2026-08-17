@@ -25,7 +25,7 @@ def call_should_use_offset_corrector() -> bool:
     return ask_question("Apply interactive treadmill offset corrector?", "Offset Corrector preference")
 
 def call_event_detection_mode() -> str:
-    """Return the event detection mode: 'grf_v1', 'grf_v2', or 'hybrid'.
+    """Return the event detection mode: 'grf_v1', 'grf_v2', 'hybrid', or 'hybrid_v1'.
 
     Reads the saved preference from local.json. If not set, defaults to 'hybrid'.
     """
@@ -35,10 +35,10 @@ def call_event_detection_mode() -> str:
 def call_postprocessing_version() -> str:
     """Backward-compat shim: derive GRF post-processing version from event_detection_mode.
 
-    Returns 'v1' only when event_detection_mode is 'grf_v1', otherwise 'v2'.
+    Returns 'v1' when event_detection_mode is 'grf_v1' or 'hybrid_v1', otherwise 'v2'.
     """
     mode = model.get_event_detection_mode()
-    return 'v1' if mode == 'grf_v1' else 'v2'
+    return 'v1' if mode in ('grf_v1', 'hybrid_v1') else 'v2'
 
 
 def get_output_path(trial_name: str = None) -> str:

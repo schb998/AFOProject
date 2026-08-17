@@ -112,9 +112,10 @@ if __name__ == "__main__":
     corrector = TreadmillOffsetCorrector() if use_offset_corrector else None
 
     # Choose post-processing module based on event detection mode
-    # Hybrid and GRF V2 both use the V2 (stance-boundary) module.
-    # GRF V1 uses the older peak-detection module.
-    postproc_version = 'v1' if event_detection_mode == 'grf_v1' else 'v2'
+    # Hybrid (V2) and GRF V2 both use the V2 (stance-boundary) module.
+    # Hybrid V1 and GRF V1 use the older peak-detection module.
+    is_hybrid = event_detection_mode in ('hybrid', 'hybrid_v1', 'hybrid_v2')
+    postproc_version = 'v1' if event_detection_mode in ('grf_v1', 'hybrid_v1') else 'v2'
     post_module = post_processing_v2 if postproc_version == 'v2' else post_processing_v1
     print(f"Using Event Detection: {event_detection_mode.upper()} | "
           f"Post-Processing Module: {'V2 (Stance Boundary)' if postproc_version == 'v2' else 'V1 (Peak Detection)'}")
@@ -150,7 +151,7 @@ if __name__ == "__main__":
 
         # ------------------------------------------------------------------
         # Step 3: Gait event detection
-        #   Hybrid mode  -> Zeni (marker) + GRF V2 -> reconcile -> confirmed/suggested
+        #   Hybrid mode  -> Zeni (marker) + GRF (V1 or V2) -> reconcile -> confirmed/suggested
         #   GRF-only     -> GRF detection only, no suggestions
         # ------------------------------------------------------------------
         print(f"\n--- Event Detection ({event_detection_mode.upper()}) for Trial: {name} ---")
@@ -167,7 +168,7 @@ if __name__ == "__main__":
         grf_hs_t = {s: [float(t_grf[i]) for i in grf_hs[s] if i < len(t_grf)] for s in ['R', 'L']}
         grf_to_t = {s: [float(t_grf[i]) for i in grf_to[s] if i < len(t_grf)] for s in ['R', 'L']}
 
-        if event_detection_mode == 'hybrid' and trial.trc is not None:
+        if is_hybrid and trial.trc is not None:
             # ---- Hybrid: Zeni marker detection + reconciliation ----
             from marker_event_detection import detect_events_from_markers, reconcile_events
             marker_events = detect_events_from_markers(trial.trc)
@@ -189,7 +190,7 @@ if __name__ == "__main__":
 
         else:
             # ---- GRF-only: all events are pre-loaded as active, no suggestions ----
-            if event_detection_mode == 'hybrid':
+            if is_hybrid:
                 print("  [Hybrid] No TRC available -- falling back to GRF-only detection.")
             print(f"  Right: {len(grf_hs_t['R'])} HS, {len(grf_to_t['R'])} TO")
             print(f"  Left:  {len(grf_hs_t['L'])} HS, {len(grf_to_t['L'])} TO")
