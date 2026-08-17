@@ -267,38 +267,38 @@ def _setup_offset_corrector_toggle(root: Tk):
     _update_row()
 
 
-def _setup_postprocessing_version_select(root: Tk):
-    label = Label(root, text="Post-Processing:")
+def _setup_event_detection_mode_select(root: Tk):
+    """Event Detection mode: Hybrid (Marker+GRF), GRF V2, or GRF V1."""
+    label = Label(root, text="Event Detection:")
     label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=5)
 
-    current_val = back.get_postprocessing_version()
-    version_var = StringVar(value="Version 2 (Stance Boundary)" if current_val == "v2" else "Version 1 (Peak Detection)")
+    _MODE_LABELS = {
+        "hybrid": "Hybrid (Marker + GRF V2)",
+        "grf_v2": "GRF Only – V2 (Stance Boundary)",
+        "grf_v1": "GRF Only – V1 (Peak Detection)",
+    }
+    _LABEL_TO_MODE = {v: k for k, v in _MODE_LABELS.items()}
+
+    current_mode = back.get_event_detection_mode()
+    mode_var = StringVar(value=_MODE_LABELS.get(current_mode, _MODE_LABELS["hybrid"]))
 
     def on_select(event):
-        chosen = version_var.get()
-        if "Version 1" in chosen:
+        chosen_label = mode_var.get()
+        mode = _LABEL_TO_MODE.get(chosen_label, "hybrid")
+        back.set_event_detection_mode(mode)
+        # Keep postprocessing_version in sync for any legacy code that reads it
+        if mode == "grf_v1":
             back.set_postprocessing_version("v1")
         else:
             back.set_postprocessing_version("v2")
 
-    combo = Combobox(root, textvariable=version_var, values=["Version 2 (Stance Boundary)", "Version 1 (Peak Detection)"], state="readonly", width=30)
+    combo = Combobox(
+        root, textvariable=mode_var,
+        values=list(_MODE_LABELS.values()),
+        state="readonly", width=36
+    )
     combo.bind("<<ComboboxSelected>>", on_select)
     combo.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=5)
-    _update_row()
-
-
-def _setup_interactive_selector_toggle(root: Tk):
-    label = Label(root, text="Gait Event GUI:")
-    label.grid(row=CURRENT_ROW, column=0, sticky=NW, pady=5)
-
-    val = back.get_use_interactive_gait_selector()
-    selector_var = BooleanVar(value=bool(val))
-
-    def toggle():
-        back.set_use_interactive_gait_selector(selector_var.get())
-
-    chk = Checkbutton(root, text="Enable Interactive Gait Event & TRC/MOT Segmenter GUI", variable=selector_var, command=toggle)
-    chk.grid(row=CURRENT_ROW, column=1, sticky=NW, pady=5)
     _update_row()
 
 
@@ -319,8 +319,8 @@ def main() -> None:
     _setup_raw_trc(root)
 
     _setup_offset_corrector_toggle(root)
-    _setup_postprocessing_version_select(root)
-    _setup_interactive_selector_toggle(root)
+    _setup_event_detection_mode_select(root)
+    # Note: interactive Gait Event GUI always runs (no toggle needed)
 
 
     _update_row()

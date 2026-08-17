@@ -24,19 +24,21 @@ def call_should_use_offset_corrector() -> bool:
         return bool(val)
     return ask_question("Apply interactive treadmill offset corrector?", "Offset Corrector preference")
 
+def call_event_detection_mode() -> str:
+    """Return the event detection mode: 'grf_v1', 'grf_v2', or 'hybrid'.
+
+    Reads the saved preference from local.json. If not set, defaults to 'hybrid'.
+    """
+    return model.get_event_detection_mode()
+
+
 def call_postprocessing_version() -> str:
-    val = model.get_local("postprocessing_version")
-    if val in ["v1", "v2"]:
-        return str(val).lower()
-    use_v2 = ask_question("Use Data Post-Processing V2 (Stance Boundary Detection)? Select 'No' for V1 (Peak Detection).", "Post-Processing Version")
-    return "v2" if use_v2 else "v1"
+    """Backward-compat shim: derive GRF post-processing version from event_detection_mode.
 
-def call_should_use_interactive_selector() -> bool:
-    val = model.get_local("use_interactive_gait_selector")
-    if val is not None:
-        return bool(val)
-    return ask_question("Use interactive Gait Event & TRC/MOT Segmenter GUI?", "Interactive Gait Selector preference")
-
+    Returns 'v1' only when event_detection_mode is 'grf_v1', otherwise 'v2'.
+    """
+    mode = model.get_event_detection_mode()
+    return 'v1' if mode == 'grf_v1' else 'v2'
 
 
 def get_output_path(trial_name: str = None) -> str:

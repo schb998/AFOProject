@@ -99,11 +99,17 @@ class GaitEventSelectorGUI:
         self.r_heel_y = None
         self.l_heel_y = None
 
-        # Event lists (timestamps in seconds)
+        # Active event lists (timestamps in seconds) — used for segmentation output
         self.r_hs_times = list(initial_r_hs) if initial_r_hs is not None else []
         self.l_hs_times = list(initial_l_hs) if initial_l_hs is not None else []
         self.r_to_times = list(initial_r_to) if initial_r_to is not None else []
         self.l_to_times = list(initial_l_to) if initial_l_to is not None else []
+
+        # Suggested (ghost) event lists — shown but NOT output unless promoted
+        self.r_hs_suggested = []
+        self.l_hs_suggested = []
+        self.r_to_suggested = []
+        self.l_to_suggested = []
 
         # View Window
         self.window_size = 10.0
@@ -185,6 +191,16 @@ class GaitEventSelectorGUI:
         # --- Help / Status Label ---
         self.lbl_help = ttk.Label(top_frame, text="Status: Ready", font=("Helvetica", 9, "italic"), foreground="navy")
         self.lbl_help.pack(side=tk.RIGHT, padx=10)
+
+        # --- Hybrid legend (shown when there are suggested events) ---
+        self.lbl_hybrid_legend = tk.Label(
+            top_frame,
+            text="  ● Confirmed   ○ Suggested (click ghost to promote)  ",
+            font=("Helvetica", 8, "italic"), bg="#fffbe6", fg="#555500",
+            relief=tk.GROOVE, bd=1
+        )
+        self.lbl_hybrid_legend.pack(side=tk.RIGHT, padx=6)
+        self.lbl_hybrid_legend.pack_forget()   # hidden until suggestions exist
 
         # --- Time Window Scroll Frame ---
         scroll_frame = ttk.Frame(self.root, padding=4)
@@ -382,6 +398,12 @@ class GaitEventSelectorGUI:
         else:
             return self.l_hs_times if self.active_event_type == "HS" else self.l_to_times
 
+    def _get_suggested_event_list(self):
+        if self.active_side == "Right":
+            return self.r_hs_suggested if self.active_event_type == "HS" else self.r_to_suggested
+        else:
+            return self.l_hs_suggested if self.active_event_type == "HS" else self.l_to_suggested
+
     def _on_canvas_click(self, event):
         if self.active_mode == "Drag":
             return
@@ -394,7 +416,7 @@ class GaitEventSelectorGUI:
 
         target_list = self._get_target_event_list()
 
-        # Right-Click -> Delete nearest event (within 0.5s)
+        # Right-Click -> Delete nearest active event (within 0.5 s)
         if event.button == 3:
             if len(target_list) > 0:
                 diffs = [abs(t - click_t) for t in target_list]
@@ -406,7 +428,23 @@ class GaitEventSelectorGUI:
                     self._update_plot()
             return
 
-        # Left-Click -> Add exact timestamp at click location
+        # Left-Click -> first check if click is near a GHOST (suggested) event
+        suggested_list = self._get_suggested_event_list()
+        if suggested_list:
+            diffs = [abs(t - click_t) for t in suggested_list]
+            nearest_idx = int(np.argmin(diffs))
+            if diffs[nearest_idx] <= 0.3:
+                # Promote: move from suggested to active
+                promoted_t = suggested_list.pop(nearest_idx)
+                target_list.append(promoted_t)
+                target_list.sort()
+                msg = f"Promoted {side} {etype} at t={promoted_t:.3f}s to active"
+                print(msg)
+                self.lbl_help.config(text=msg)
+                self._update_plot()
+                return
+
+        # Left-Click -> add new event at exact click position
         target_list.append(click_t)
         target_list.sort()
         print(f"Added {side} {etype} at t={click_t:.3f}s")
@@ -524,7 +562,7 @@ class GaitEventSelectorGUI:
         self.ax_trc.set_title("Heel Marker Trajectory Verification", fontsize=11, fontweight='bold')
         self.ax_trc.grid(True, linestyle='--', alpha=0.5)
 
-        # Overlay Heel Strike Event Markers
+        # ---- Overlay ACTIVE Heel Strike Event Markers -------------------------
         r_window_hs = [t for t in self.r_hs_times if t_start <= t <= t_end]
         l_window_hs = [t for t in self.l_hs_times if t_start <= t <= t_end]
 
@@ -546,7 +584,7 @@ class GaitEventSelectorGUI:
                 self.ax_grf.axvline(t, color='blue', linestyle='--', linewidth=1.5, alpha=0.8)
                 self.ax_trc.axvline(t, color='blue', linestyle='--', linewidth=1.5, alpha=0.8)
 
-        # Overlay Toe Off Event Markers
+        # ---- Overlay ACTIVE Toe Off Event Markers ------------------------------
         r_window_to = [t for t in self.r_to_times if t_start <= t <= t_end]
         l_window_to = [t for t in self.l_to_times if t_start <= t <= t_end]
 
@@ -567,6 +605,45 @@ class GaitEventSelectorGUI:
             for t in l_window_to:
                 self.ax_grf.axvline(t, color='darkgreen', linestyle=':', linewidth=1.2, alpha=0.8)
                 self.ax_trc.axvline(t, color='darkgreen', linestyle=':', linewidth=1.2, alpha=0.8)
+
+        # ---- Overlay GHOST (suggested) event markers --------------------------
+        _all_suggested = (
+            list(self.r_hs_suggested) + list(self.l_hs_suggested) +
+            list(self.r_to_suggested) + list(self.l_to_suggested)
+        )
+        has_suggestions = len(_all_suggested) > 0
+        # Show/hide the hybrid legend strip
+        try:
+            if has_suggestions:
+                self.lbl_hybrid_legend.pack(side=tk.RIGHT, padx=6)
+            else:
+                self.lbl_hybrid_legend.pack_forget()
+        except Exception:
+            pass
+
+        _ghost_styles = {
+            # (event_list, grf_signal, trc_signal, color, marker, label)
+            'r_hs': (self.r_hs_suggested, self.r_fy_filt, self.r_heel_y, '#ff6666', 'o', 'Right HS (unconfirmed)'),
+            'l_hs': (self.l_hs_suggested, self.l_fy_filt, self.l_heel_y, '#6699ff', '^', 'Left HS (unconfirmed)'),
+            'r_to': (self.r_to_suggested, self.r_fy_filt, self.r_heel_y, '#ffaa44', 'x', 'Right TO (unconfirmed)'),
+            'l_to': (self.l_to_suggested, self.l_fy_filt, self.l_heel_y, '#44bb44', 'x', 'Left TO (unconfirmed)'),
+        }
+        for key, (slist, grf_sig, trc_sig, color, mstyle, lbl) in _ghost_styles.items():
+            window_sugg = [t for t in slist if t_start <= t <= t_end]
+            if len(window_sugg) == 0:
+                continue
+            g_grf_y = np.interp(window_sugg, self.t_grf, grf_sig)
+            g_trc_y = np.interp(window_sugg, self.t_trc, trc_sig)
+            # Hollow markers
+            self.ax_grf.scatter(window_sugg, g_grf_y, s=75, marker=mstyle,
+                                facecolors='none', edgecolors=color, linewidths=1.8,
+                                alpha=0.65, label=lbl, zorder=6)
+            self.ax_trc.scatter(window_sugg, g_trc_y, s=75, marker=mstyle,
+                                facecolors='none', edgecolors=color, linewidths=1.8,
+                                alpha=0.65, zorder=6)
+            for t in window_sugg:
+                self.ax_grf.axvline(t, color=color, linestyle=':', linewidth=1.0, alpha=0.45)
+                self.ax_trc.axvline(t, color=color, linestyle=':', linewidth=1.0, alpha=0.45)
 
         self.ax_grf.set_xlim(t_start, t_end)
         self.ax_trc.set_xlim(t_start, t_end)
@@ -608,19 +685,40 @@ class GaitEventSelectorGUI:
 
 def run_interactive_selector(trial, initial_r_hs=None, initial_l_hs=None,
                              initial_r_to=None, initial_l_to=None,
+                             suggested_r_hs=None, suggested_l_hs=None,
+                             suggested_r_to=None, suggested_l_to=None,
                              speed=0.0, slope=0.0, postproc_version='v2'):
     """
     Launch the GaitEventSelectorGUI in a modal Tk window.
 
+    Args:
+        initial_r/l_hs/to: Confirmed event timestamps (seconds) — pre-loaded
+                           as active events, processed automatically on close.
+        suggested_r/l_hs/to: Suggested (ghost) event timestamps (seconds) —
+                             shown as hollow markers, ignored unless promoted.
+
     Returns:
         tuple: (r_hs_times, l_hs_times, r_to_times, l_to_times, speed, slope)
+               Contains only active (confirmed + promoted) events.
     """
     root = tk.Tk()
-    app = GaitEventSelectorGUI(root, trial=trial, initial_r_hs=initial_r_hs,
-                               initial_l_hs=initial_l_hs, initial_r_to=initial_r_to,
-                               initial_l_to=initial_l_to, speed=speed,
-                               slope=slope, postproc_version=postproc_version)
-    
+    app = GaitEventSelectorGUI(
+        root, trial=trial,
+        initial_r_hs=initial_r_hs, initial_l_hs=initial_l_hs,
+        initial_r_to=initial_r_to, initial_l_to=initial_l_to,
+        speed=speed, slope=slope, postproc_version=postproc_version
+    )
+
+    # Inject suggested events after construction
+    if suggested_r_hs:
+        app.r_hs_suggested = list(suggested_r_hs)
+    if suggested_l_hs:
+        app.l_hs_suggested = list(suggested_l_hs)
+    if suggested_r_to:
+        app.r_to_suggested = list(suggested_r_to)
+    if suggested_l_to:
+        app.l_to_suggested = list(suggested_l_to)
+
     root.protocol("WM_DELETE_WINDOW", app._on_close_window)
     root.mainloop()
 

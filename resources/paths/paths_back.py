@@ -106,8 +106,8 @@ def _delete_invalid_paths():
     for key in list(_LOCAL.keys()):
         content = _LOCAL[key]
 
-        # Skip non-path entries like subject_weight, use_offset_corrector, postprocessing_version, use_interactive_gait_selector
-        if key in ["subject_weight", "use_offset_corrector", "postprocessing_version", "use_interactive_gait_selector"] or not isinstance(content, (str, list)):
+        # Skip non-path entries like subject_weight, use_offset_corrector, postprocessing_version, use_interactive_gait_selector, event_detection_mode
+        if key in ["subject_weight", "use_offset_corrector", "postprocessing_version", "use_interactive_gait_selector", "event_detection_mode"] or not isinstance(content, (str, list)):
             continue
 
         # if we're checking a list, test each element of the list:
@@ -489,4 +489,25 @@ def get_use_interactive_gait_selector() -> bool:
     if val is not None:
         return bool(val)
     return False
+
+
+def set_event_detection_mode(mode: str) -> None:
+    """Save the event detection mode preference.
+
+    Args:
+        mode: one of 'grf_v1', 'grf_v2', or 'hybrid'.
+    """
+    _update_local("event_detection_mode", str(mode).lower())
+
+
+def get_event_detection_mode() -> str:
+    """Get the saved event detection mode preference.
+
+    Returns:
+        str: 'grf_v1', 'grf_v2', or 'hybrid'. Defaults to 'hybrid'.
+    """
+    val = get_local("event_detection_mode")
+    if val in ["grf_v1", "grf_v2", "hybrid"]:
+        return str(val).lower()
+    return "hybrid"  # default to hybrid
 

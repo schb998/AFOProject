@@ -581,7 +581,7 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
 
 
 # ===========================================================================
-# MAIN PIPELINE ENTRY POINT  (IDENTICAL ORDER TO V1, uses V2 event detection)
+# STANDALONE / LEGACY ENTRY POINT  (not called by full_pipeline.py)
 # ===========================================================================
 
 def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
@@ -589,13 +589,24 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
             hs_threshold: float = 15.0,
             min_stance_frames: int = 50,
             min_swing_frames: int = 20) -> None:
-    """Pipeline to process the raw data of a trial (Version 2).
+    """Standalone pipeline to process the raw data of a trial (Version 2).
 
-    Identical step order to data_postprocessing.process():
+    NOTE: This function is kept as a legacy/standalone fallback only.
+    The main pipeline (full_pipeline.py) no longer calls this function.
+    Instead, full_pipeline.py calls each step explicitly in this order:
+      1. Treadmill offset correction  (TreadmillOffsetCorrector)
+      2. filter_grf                   (15 Hz LP filter)
+      3. detect_toe_offs_V2 / detect_heel_strikes_V2
+      4. Interactive Gait Event GUI   (run_interactive_selector)
+      5. baseline_correct_debug       (Right then Left)
+      6. zero_swing_phase
+      7. segment_at_heel_strikes
+
+    This standalone version uses the old step order:
       1. filter_grf
       2. baseline_correct_debug (Right then Left)
-      3. detect_toe_offs_V2     <- stance-boundary detection (NEW)
-      4. detect_heel_strikes_V2 <- stance-boundary detection (NEW)
+      3. detect_toe_offs_V2
+      4. detect_heel_strikes_V2
       5. zero_swing_phase
       6. plot_grf_details
       7. segment_at_heel_strikes

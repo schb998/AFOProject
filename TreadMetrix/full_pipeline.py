@@ -53,8 +53,7 @@ if __name__ == "__main__":
         save = False
         show = False
         use_offset_corrector = False
-        postproc_version = 'v2'
-        use_interactive_selector = False
+        event_detection_mode = 'hybrid'
 
     else:
         # update local paths:
@@ -64,8 +63,7 @@ if __name__ == "__main__":
         save = local.call_should_save()
         show = local.call_should_show()
         use_offset_corrector = local.call_should_use_offset_corrector()
-        postproc_version = local.call_postprocessing_version()
-        use_interactive_selector = local.call_should_use_interactive_selector()
+        event_detection_mode = local.call_event_detection_mode()
 
     # loads files into Trial objects:
     trials = {}
@@ -113,9 +111,13 @@ if __name__ == "__main__":
     # Initialize offset corrector if enabled
     corrector = TreadmillOffsetCorrector() if use_offset_corrector else None
 
-    # Choose post-processing version module
+    # Choose post-processing module based on event detection mode
+    # Hybrid and GRF V2 both use the V2 (stance-boundary) module.
+    # GRF V1 uses the older peak-detection module.
+    postproc_version = 'v1' if event_detection_mode == 'grf_v1' else 'v2'
     post_module = post_processing_v2 if postproc_version == 'v2' else post_processing_v1
-    print(f"Using Data Post-Processing: {'Version 2 (Stance Boundary)' if postproc_version == 'v2' else 'Version 1 (Peak Detection)'}")
+    print(f"Using Event Detection: {event_detection_mode.upper()} | "
+          f"Post-Processing Module: {'V2 (Stance Boundary)' if postproc_version == 'v2' else 'V1 (Peak Detection)'}")
 
     # process the trials:
     for name in trials:
@@ -135,90 +137,147 @@ if __name__ == "__main__":
             print(f"\n--- Skipping Treadmill Offset Corrector for Trial: {name} ---")
             selections = []
 
-        if use_interactive_selector:
-            print(f"\n--- Launching Interactive Gait Event & TRC Segmenter GUI for Trial: {name} ---")
-            # 1. Apply filtering & baseline correction
-            frame_rate = 1 / np.mean(np.diff(trial.grf.data['time']))
-            corrected_grf = trial.grf.copy()
-            corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
-            post_module.filter_grf(corrected_grf, frame_rate)
-            post_module.baseline_correct_debug(corrected_grf, 'ground_force5_vy', ['ground_force5_vx', 'ground_force5_vz'],
-                                               output_path=local.get_corrected_mot_path(name) if save else None, show=False)
-            post_module.baseline_correct_debug(corrected_grf, 'ground_force4_vy', ['ground_force4_vx', 'ground_force4_vz'],
-                                               output_path=local.get_corrected_mot_path(name) if save else None, show=False)
+        # ------------------------------------------------------------------
+        # Step 2: Filter GRF at 15 Hz
+        # ------------------------------------------------------------------
+        print(f"\n--- Filtering GRF (15 Hz) for Trial: {name} ---")
+        corrected_grf = trial.grf.copy()
+        corrected_grf.rename(name=trial.name, filename=trial.name + ".mot")
+        t_grf = corrected_grf.data['time'].values
+        frame_rate = 1 / np.mean(np.diff(t_grf))
+        post_module.filter_grf(corrected_grf, frame_rate)
+        t_grf = corrected_grf.data['time'].values
 
-            # 2. Perform initial automated detection
-            if postproc_version == 'v2':
-                toe_off_moments = post_module.detect_toe_offs_V2(corrected_grf)
-                heel_strike_moments = post_module.detect_heel_strikes_V2(corrected_grf)
-            else:
-                toe_off_moments = post_module.detect_toe_offs(corrected_grf, frame_rate)
-                heel_strike_moments = post_module.detect_heel_strikes(corrected_grf, frame_rate)
+        # ------------------------------------------------------------------
+        # Step 3: Gait event detection
+        #   Hybrid mode  -> Zeni (marker) + GRF V2 -> reconcile -> confirmed/suggested
+        #   GRF-only     -> GRF detection only, no suggestions
+        # ------------------------------------------------------------------
+        print(f"\n--- Event Detection ({event_detection_mode.upper()}) for Trial: {name} ---")
 
-            # post_module.zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'right')
-            # post_module.zero_swing_phase(corrected_grf, toe_off_moments, heel_strike_moments, 'left')
-            trial.add_corrected_grf(corrected_grf=corrected_grf)
+        # Always run GRF-based detection (used for both modes)
+        if postproc_version == 'v2':
+            grf_hs = post_module.detect_heel_strikes_V2(corrected_grf)
+            grf_to = post_module.detect_toe_offs_V2(corrected_grf)
+        else:
+            grf_hs = post_module.detect_heel_strikes(corrected_grf, frame_rate)
+            grf_to = post_module.detect_toe_offs(corrected_grf, frame_rate)
 
-            # Convert frame indices to timestamp lists (seconds)
-            t_grf = corrected_grf.data['time'].values
-            initial_r_hs = [float(t_grf[i]) for i in heel_strike_moments['R'] if i < len(t_grf)]
-            initial_l_hs = [float(t_grf[i]) for i in heel_strike_moments['L'] if i < len(t_grf)]
-            initial_r_to = [float(t_grf[i]) for i in toe_off_moments['R'] if i < len(t_grf)]
-            initial_l_to = [float(t_grf[i]) for i in toe_off_moments['L'] if i < len(t_grf)]
+        # Convert GRF frame indices to seconds
+        grf_hs_t = {s: [float(t_grf[i]) for i in grf_hs[s] if i < len(t_grf)] for s in ['R', 'L']}
+        grf_to_t = {s: [float(t_grf[i]) for i in grf_to[s] if i < len(t_grf)] for s in ['R', 'L']}
 
-            init_speed = selections[0]['speed'] if len(selections) > 0 else 0.0
-            init_slope = selections[0]['slope'] if len(selections) > 0 else 0.0
+        if event_detection_mode == 'hybrid' and trial.trc is not None:
+            # ---- Hybrid: Zeni marker detection + reconciliation ----
+            from marker_event_detection import detect_events_from_markers, reconcile_events
+            marker_events = detect_events_from_markers(trial.trc)
 
-            # Launch Interactive GUI
-            r_hs_times, l_hs_times, r_to_times, l_to_times, gui_speed, gui_slope = run_interactive_selector(
-                trial, initial_r_hs=initial_r_hs, initial_l_hs=initial_l_hs,
-                initial_r_to=initial_r_to, initial_l_to=initial_l_to,
-                speed=init_speed, slope=init_slope, postproc_version=postproc_version
-            )
+            conf_r_hs, sugg_r_hs = reconcile_events(grf_hs_t['R'], marker_events['HS']['R'])
+            conf_l_hs, sugg_l_hs = reconcile_events(grf_hs_t['L'], marker_events['HS']['L'])
+            conf_r_to, sugg_r_to = reconcile_events(grf_to_t['R'], marker_events['TO']['R'])
+            conf_l_to, sugg_l_to = reconcile_events(grf_to_t['L'], marker_events['TO']['L'])
 
-            print(f"\n--- GUI Closed for Trial: {name} ---")
-            print(f"  Right foot: {len(r_hs_times)} Heel Strikes, {len(r_to_times)} Toe Offs")
-            print(f"  Left foot:  {len(l_hs_times)} Heel Strikes, {len(l_to_times)} Toe Offs")
-            print(f"  Trial Speed={gui_speed} mph, Slope={gui_slope}%")
+            print(f"  [Hybrid] Right HS: {len(conf_r_hs)} confirmed, {len(sugg_r_hs)} suggested")
+            print(f"  [Hybrid] Left  HS: {len(conf_l_hs)} confirmed, {len(sugg_l_hs)} suggested")
+            print(f"  [Hybrid] Right TO: {len(conf_r_to)} confirmed, {len(sugg_r_to)} suggested")
+            print(f"  [Hybrid] Left  TO: {len(conf_l_to)} confirmed, {len(sugg_l_to)} suggested")
 
-            # Convert modified timestamps back to frame indices
-            def times_to_indices(times, time_arr):
-                indices = []
-                for t in times:
-                    idx = int(np.argmin(np.abs(time_arr - t)))
-                    indices.append(idx)
-                return sorted(list(set(indices)))
-
-            final_hs_moments = {
-                'R': times_to_indices(r_hs_times, t_grf),
-                'L': times_to_indices(l_hs_times, t_grf)
-            }
-            final_to_moments = {
-                'R': times_to_indices(r_to_times, t_grf),
-                'L': times_to_indices(l_to_times, t_grf)
-            }
-
-            # Re-zero swing phase with interactively modified events
-            post_module.zero_swing_phase(corrected_grf, final_to_moments, final_hs_moments, 'right')
-            post_module.zero_swing_phase(corrected_grf, final_to_moments, final_hs_moments, 'left')
-            trial.add_corrected_grf(corrected_grf=corrected_grf)
-
-            # Update selections if not set from offset corrector
-            if len(selections) == 0:
-                selections = [{'tmin': float(t_grf[0]), 'tmax': float(t_grf[-1]), 'speed': gui_speed, 'slope': gui_slope}]
-
-            # Segment TRC and MOT
-            print("Segmenting MOT and TRC files for gait cycles...")
-            post_module.segment_at_heel_strikes(trial, final_hs_moments, save=local.get_segmented_path(name) if save else None)
-            print("Segmentation complete. Proceeding with IK -> ID -> JP calculations...")
-
-
+            initial_r_hs, initial_l_hs = conf_r_hs, conf_l_hs
+            initial_r_to, initial_l_to = conf_r_to, conf_l_to
+            suggested_r_hs, suggested_l_hs = sugg_r_hs, sugg_l_hs
+            suggested_r_to, suggested_l_to = sugg_r_to, sugg_l_to
 
         else:
-            # Run automated post-processing directly (baseline correction, segmentation, zeroing swing).
-            post_module.process(trial, save_plot_path=local.get_corrected_mot_path(name),
-                                save_segmented_path=local.get_segmented_path(name) if save else None,
-                                show=show, save_optionals=save)
+            # ---- GRF-only: all events are pre-loaded as active, no suggestions ----
+            if event_detection_mode == 'hybrid':
+                print("  [Hybrid] No TRC available -- falling back to GRF-only detection.")
+            print(f"  Right: {len(grf_hs_t['R'])} HS, {len(grf_to_t['R'])} TO")
+            print(f"  Left:  {len(grf_hs_t['L'])} HS, {len(grf_to_t['L'])} TO")
+
+            initial_r_hs, initial_l_hs = grf_hs_t['R'], grf_hs_t['L']
+            initial_r_to, initial_l_to = grf_to_t['R'], grf_to_t['L']
+            suggested_r_hs = suggested_l_hs = suggested_r_to = suggested_l_to = []
+
+        # ------------------------------------------------------------------
+        # Step 4: Interactive Gait Event GUI -- review, promote ghosts, confirm
+        # ------------------------------------------------------------------
+        print(f"\n--- Launching Interactive Gait Event GUI for Trial: {name} ---")
+        trial.add_corrected_grf(corrected_grf=corrected_grf)
+
+        t_grf = corrected_grf.data['time'].values
+
+        init_speed = selections[0]['speed'] if len(selections) > 0 else 0.0
+        init_slope = selections[0]['slope'] if len(selections) > 0 else 0.0
+
+        r_hs_times, l_hs_times, r_to_times, l_to_times, gui_speed, gui_slope = run_interactive_selector(
+            trial,
+            initial_r_hs=initial_r_hs, initial_l_hs=initial_l_hs,
+            initial_r_to=initial_r_to, initial_l_to=initial_l_to,
+            suggested_r_hs=suggested_r_hs, suggested_l_hs=suggested_l_hs,
+            suggested_r_to=suggested_r_to, suggested_l_to=suggested_l_to,
+            speed=init_speed, slope=init_slope, postproc_version=postproc_version
+        )
+
+        print(f"\n--- GUI Closed for Trial: {name} ---")
+        print(f"  Right foot: {len(r_hs_times)} Heel Strikes, {len(r_to_times)} Toe Offs")
+        print(f"  Left foot:  {len(l_hs_times)} Heel Strikes, {len(l_to_times)} Toe Offs")
+        print(f"  Trial Speed={gui_speed} mph, Slope={gui_slope}%")
+
+        # Convert confirmed timestamps back to frame indices
+        def times_to_indices(times, time_arr):
+            indices = []
+            for t in times:
+                idx = int(np.argmin(np.abs(time_arr - t)))
+                indices.append(idx)
+            return sorted(list(set(indices)))
+
+        final_hs_moments = {
+            'R': times_to_indices(r_hs_times, t_grf),
+            'L': times_to_indices(l_hs_times, t_grf)
+        }
+        final_to_moments = {
+            'R': times_to_indices(r_to_times, t_grf),
+            'L': times_to_indices(l_to_times, t_grf)
+        }
+
+        # ------------------------------------------------------------------
+        # Step 5: Baseline correction — applied AFTER events are confirmed
+        # ------------------------------------------------------------------
+        print(f"\n--- Applying Baseline Correction for Trial: {name} ---")
+        post_module.baseline_correct_debug(
+            corrected_grf, 'ground_force5_vy', ['ground_force5_vx', 'ground_force5_vz'],
+            output_path=local.get_corrected_mot_path(name) if save else None, show=False)
+        post_module.baseline_correct_debug(
+            corrected_grf, 'ground_force4_vy', ['ground_force4_vx', 'ground_force4_vz'],
+            output_path=local.get_corrected_mot_path(name) if save else None, show=False)
+
+        # ------------------------------------------------------------------
+        # Step 6: Zero swing phase using finalised events
+        # ------------------------------------------------------------------
+        print(f"\n--- Zeroing Swing Phase for Trial: {name} ---")
+        post_module.zero_swing_phase(corrected_grf, final_to_moments, final_hs_moments, 'right')
+        post_module.zero_swing_phase(corrected_grf, final_to_moments, final_hs_moments, 'left')
+
+        if save:
+            corrected_grf.save(local.get_corrected_mot_path(name))
+            trial.add_corrected_grf(
+                corrected_grf=corrected_grf,
+                path_to_corrected_grf=os.path.join(local.get_corrected_mot_path(name), corrected_grf.filename))
+        else:
+            trial.add_corrected_grf(corrected_grf=corrected_grf)
+
+        # Update selections if offset corrector was not used
+        if len(selections) == 0:
+            selections = [{'tmin': float(t_grf[0]), 'tmax': float(t_grf[-1]), 'speed': gui_speed, 'slope': gui_slope}]
+
+        # ------------------------------------------------------------------
+        # Step 7: Segment MOT and TRC at heel strikes
+        # ------------------------------------------------------------------
+        print(f"\n--- Segmenting MOT and TRC for Trial: {name} ---")
+        post_module.segment_at_heel_strikes(
+            trial, final_hs_moments,
+            save=local.get_segmented_path(name) if save else None)
+        print("Segmentation complete. Proceeding with IK -> ID -> JP calculations...")
 
 
         # ── Route each cycle's IK / ID / JP outputs into a per-speed subfolder ──
