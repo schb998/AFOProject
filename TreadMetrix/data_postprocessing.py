@@ -145,13 +145,13 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
             plt.show()
 
 
-def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
+def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 15) -> dict[str, list[int]]:
     """Detects the gait cycles' "toe off" points.
 
     Args:
         zeroed_mot: data to process.
         fs: sampling frequency.
-        threshold: threshold to use for detection (default 20 N).
+        threshold: threshold to use for detection (default 15 N).
 
     Returns:
         Dictionary of the data's toe offs, listed by side.
@@ -195,12 +195,12 @@ def detect_toe_offs(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[s
     return toe_offs
 
 
-def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 20) -> dict[str, list[int]]:
+def detect_heel_strikes(zeroed_mot: MOT, fs: float, threshold: float = 25) -> dict[str, list[int]]:
     """Detects the gait cycles' "heel strikes" points.
     Args:
         zeroed_mot: data to process.
         fs: sampling frequency.
-        threshold: threshold to use for detection (default 20 N).
+        threshold: threshold to use for detection (default 25 N).
 
     Returns:
         Dictionary of the data's heel strikes, listed by side.

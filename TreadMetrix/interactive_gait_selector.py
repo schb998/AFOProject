@@ -48,7 +48,7 @@ def get_grf_columns(df):
     return r_col, l_col
 
 
-def detect_toe_offs_from_signal(fy_signal, t_array, hs_times, threshold=20.0):
+def detect_toe_offs_from_signal(fy_signal, t_array, hs_times, threshold=15.0):
     """Fallback detector: find first frame after each HS where force drops below threshold."""
     to_times = []
     if len(t_array) < 2 or len(hs_times) == 0:

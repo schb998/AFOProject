@@ -126,22 +126,45 @@ def compute_joint_power(angular_velocity, id_data, gaitcycle):
     # Filter joint moments and strip '_moment' suffix so column names equal the IK joint names.
     # After renaming, id_data_filtered has the same joint-name columns as angular_velocity_filtered.
     id_data_filtered = id_data[matched_id_cols].rename(columns=lambda x: x.replace("_moment", ""))
-    fs_id = 1.0 / float(np.mean(np.diff(id_data_filtered['time'].values)))
+    t_id_full = id_data_filtered['time'].values.astype(float)
+    fs_id = 1.0 / float(np.mean(np.diff(t_id_full))) if len(t_id_full) > 1 else 100.0
     # Spectrum analysis recommendation: 4th-order Butterworth, 6 Hz cutoff, zero-phase
     id_data_filtered.iloc[:, 1:] = filter_signal(id_data_filtered.iloc[:, 1:].values, cutoff=6.0, fs=fs_id, order=4)
 
-    # Trim both DataFrames to the same length before computing power.
-    min_len = min(len(angular_velocity_filtered), len(id_data_filtered))
-    av_trimmed  = angular_velocity_filtered.iloc[:min_len]
-    id_trimmed  = id_data_filtered.iloc[:min_len]
-    time_values = av_trimmed["time"].values
+    # -----------------------------------------------------------------------
+    # Timestamp Alignment using Exact Linear Interpolation
+    # -----------------------------------------------------------------------
+    t_ik = angular_velocity_filtered['time'].values.astype(float)
+    t_id = id_data_filtered['time'].values.astype(float)
+
+    # If one file has absolute trial time (e.g. 15.2s) while the other was reset to 0.0s,
+    # align them by shifting t_id to match t_ik's time origin
+    if abs(t_ik[0] - t_id[0]) > 0.5:
+        dur_ik = t_ik[-1] - t_ik[0]
+        dur_id = t_id[-1] - t_id[0]
+        if abs(dur_ik - dur_id) < 0.2:
+            t_id = t_id - t_id[0] + t_ik[0]
+
+    # Compute overlapping time window
+    t_start = max(t_ik[0], t_id[0])
+    t_end   = min(t_ik[-1], t_id[-1])
+
+    if t_end <= t_start:
+        t_target = t_ik
+        ik_mask = np.ones(len(t_ik), dtype=bool)
+    else:
+        ik_mask = (t_ik >= t_start) & (t_ik <= t_end)
+        t_target = t_ik[ik_mask]
+
+    n_samples = len(t_target)
+    if n_samples < 2:
+        t_target = t_ik
+        ik_mask = np.ones(len(t_ik), dtype=bool)
+        n_samples = len(t_target)
 
     # -----------------------------------------------------------------------
-    # Compute power JOINT-BY-JOINT using NAMED column lookup, NOT positional
-    # indexing.  OpenSim IK and ID .mot files can return joint columns in
-    # different orders (e.g. IK: subtalar, mtp, hip, knee, ankle  vs
-    # ID: hip, knee, ankle, subtalar, mtp).  A direct array multiplication
-    # (av_array * moment_array) would silently pair the wrong signals.
+    # Compute power JOINT-BY-JOINT using NAMED column lookup & timestamp interpolation.
+    # OpenSim IK and ID .mot files can return joint columns in different orders.
     # Looking up each joint by name guarantees the correct pairing regardless
     # of what order either file happens to list its columns.
     # -----------------------------------------------------------------------
@@ -153,25 +176,31 @@ def compute_joint_power(angular_velocity, id_data, gaitcycle):
 
     power_data = {}
     for joint in joint_names:
-        if joint not in av_trimmed.columns:
+        if joint not in angular_velocity_filtered.columns:
             print(f"  [WARNING] Joint '{joint}' missing from angular-velocity DataFrame — skipping.")
-            power_data[joint + "_power"] = np.zeros(min_len)
+            power_data[joint + "_power"] = np.zeros(n_samples)
             continue
-        if joint not in id_trimmed.columns:
+        if joint not in id_data_filtered.columns:
             print(f"  [WARNING] Joint '{joint}' missing from moment DataFrame — skipping.")
-            power_data[joint + "_power"] = np.zeros(min_len)
+            power_data[joint + "_power"] = np.zeros(n_samples)
             continue
-        
-        p = av_trimmed[joint].values * id_trimmed[joint].values
+
+        av_vals = angular_velocity_filtered.loc[ik_mask, joint].values.astype(float)
+        id_vals_raw = id_data_filtered[joint].values.astype(float)
+
+        # Interpolate moments onto exact IK timestamps
+        moment_interp = np.interp(t_target, t_id, id_vals_raw)
+
+        p = av_vals * moment_interp
         if subject_weight is not None and subject_weight > 0:
-            if np.max(np.abs(id_trimmed[joint].values)) > 10.0:
+            if np.max(np.abs(moment_interp)) > 10.0:
                 p = p / subject_weight
         power_data[joint + "_power"] = p
 
     # Time-normalize to exactly 101 points (0 % to 100 % of gait cycle)
     normalized_power = np.zeros((101, len(power_column_names)))
     percentage      = np.linspace(0, 100, 101)
-    orig_percentage = np.linspace(0, 100, min_len)
+    orig_percentage = np.linspace(0, 100, n_samples)
 
     for i, col in enumerate(power_column_names):
         spline = interpolate.InterpolatedUnivariateSpline(orig_percentage, power_data[col], k=3)

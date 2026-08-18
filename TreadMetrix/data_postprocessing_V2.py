@@ -215,12 +215,14 @@ def baseline_correct_debug(mot_object: MOT, fz_col: str, related_cols: list[str]
 # STEP 3 & 4 - Gait Event Detection  (NEW IN V2)
 # ===========================================================================
 
-def detect_stance_phases(fy: np.ndarray, threshold: float = 20,
+def detect_stance_phases(fy: np.ndarray, threshold: float = 25,
+                         to_threshold: float = 15,
                          min_stance_frames: int = 50,
                          min_swing_frames: int = 20) -> list[tuple[int, int]]:
-    """Detect contiguous stance windows from a vertical GRF signal.
+    """Detect contiguous stance windows from a vertical GRF signal with hysteresis.
 
-    A stance window is any contiguous stretch where Fy > threshold.
+    A stance window begins when Fy crosses above `threshold` (default 25 N for Heel Strike)
+    and ends when Fy drops below `to_threshold` (default 15 N for Toe-Off).
     Short artefact bursts (< min_stance_frames) are discarded.
     Short swing gaps (< min_swing_frames) are merged into the surrounding
     stance so that a brief mid-stance dip that just touches the threshold
@@ -233,7 +235,8 @@ def detect_stance_phases(fy: np.ndarray, threshold: float = 20,
 
     Args:
         fy:                 1-D array of vertical GRF (N).
-        threshold:          Force threshold (N) separating swing from stance (default 20 N).
+        threshold:          Force threshold (N) for Heel Strike onset (default 25 N).
+        to_threshold:       Force threshold (N) for Toe-Off release (default 15 N).
         min_stance_frames:  Minimum number of consecutive frames above
                             threshold to count as a real stance phase.
                             At 1000 Hz, default 50 = 50 ms minimum contact.
@@ -244,11 +247,12 @@ def detect_stance_phases(fy: np.ndarray, threshold: float = 20,
 
     Returns:
         List of (onset, offset) index pairs, one per detected stance phase.
-        onset  = first frame where Fy crosses above threshold.
-        offset = first frame where Fy crosses below threshold after onset.
+        onset  = first frame where Fy crosses above threshold (Heel Strike).
+        offset = first frame where Fy crosses below to_threshold after onset (Toe-Off).
     """
     fy = np.asarray(fy)
-    above = (fy > threshold).astype(int)
+    base_thresh = min(threshold, to_threshold) if to_threshold is not None else threshold
+    above = (fy > base_thresh).astype(int)
 
     # ---- merge short swing gaps ----------------------------------------
     # Find starts and ends of below-threshold segments
@@ -268,23 +272,29 @@ def detect_stance_phases(fy: np.ndarray, threshold: float = 20,
     stances = []
     for on, off in zip(onsets, offsets):
         if (off - on) >= min_stance_frames:
-            stances.append((int(on), int(off)))
+            segment = fy[on:off]
+            if np.max(segment) >= threshold:
+                hs_cross = np.where(segment >= threshold)[0]
+                actual_on = on + (hs_cross[0] if len(hs_cross) > 0 else 0)
+                stances.append((int(actual_on), int(off)))
 
     return stances
 
 
-def detect_toe_offs_V2(mot: MOT, threshold: float = 20,
+def detect_toe_offs_V2(mot: MOT, threshold: float = 15,
+                       hs_threshold: float = 25,
                        min_stance_frames: int = 50,
                        min_swing_frames: int = 20) -> dict[str, list[int]]:
     """Detect toe-offs using stance-phase boundary detection (V2).
 
-    Toe-off = the first frame where Fy crosses below threshold after
+    Toe-off = the first frame where Fy crosses below threshold (default 15 N) after
     a complete stance phase.  Mid-stance weight-shifting dips are merged
     into a single stance window and do not generate spurious toe-offs.
 
     Args:
         mot:               MOT object (post-filter, post-baseline-correct).
-        threshold:         Force threshold in N (default 20 N).
+        threshold:         Force threshold in N for toe-off (default 15 N).
+        hs_threshold:      Force threshold in N for stance onset (default 25 N).
         min_stance_frames: Minimum stance duration in frames.
         min_swing_frames:  Minimum swing gap to separate two stances.
 
@@ -296,30 +306,34 @@ def detect_toe_offs_V2(mot: MOT, threshold: float = 20,
 
     if 'ground_force5_vy' in mot.data.columns:
         rzf = mot.data['ground_force5_vy'].values
-        stances = detect_stance_phases(rzf, threshold, min_stance_frames, min_swing_frames)
+        stances = detect_stance_phases(rzf, threshold=hs_threshold, to_threshold=threshold,
+                                       min_stance_frames=min_stance_frames, min_swing_frames=min_swing_frames)
         toe_offs['R'] = [min(off, max_idx) for (on, off) in stances if on > 0]
 
     if 'ground_force4_vy' in mot.data.columns:
         lzf = mot.data['ground_force4_vy'].values
-        stances = detect_stance_phases(lzf, threshold, min_stance_frames, min_swing_frames)
+        stances = detect_stance_phases(lzf, threshold=hs_threshold, to_threshold=threshold,
+                                       min_stance_frames=min_stance_frames, min_swing_frames=min_swing_frames)
         toe_offs['L'] = [min(off, max_idx) for (on, off) in stances if on > 0]
 
     return toe_offs
 
 
-def detect_heel_strikes_V2(mot: MOT, threshold: float = 20,
+def detect_heel_strikes_V2(mot: MOT, threshold: float = 25,
+                           to_threshold: float = 15,
                            min_stance_frames: int = 50,
                            min_swing_frames: int = 20) -> dict[str, list[int]]:
     """Detect heel strikes using stance-phase boundary detection (V2).
 
-    Heel strike = the first frame where Fy crosses above threshold at
+    Heel strike = the first frame where Fy crosses above threshold (default 25 N) at
     the onset of a stance phase.  Multiple humps within a single stance
     phase (caused by mid-stance weight shifting) are treated as one
     continuous stance and do not produce spurious heel strikes.
 
     Args:
         mot:               MOT object (post-filter, post-baseline-correct).
-        threshold:         Force threshold in N (default 20 N).
+        threshold:         Force threshold in N for heel strike (default 25 N).
+        to_threshold:      Force threshold in N for toe-off (default 15 N).
         min_stance_frames: Minimum stance duration in frames.
         min_swing_frames:  Minimum swing gap to separate two stances.
 
@@ -331,12 +345,14 @@ def detect_heel_strikes_V2(mot: MOT, threshold: float = 20,
 
     if 'ground_force5_vy' in mot.data.columns:
         rzf = mot.data['ground_force5_vy'].values
-        stances = detect_stance_phases(rzf, threshold, min_stance_frames, min_swing_frames)
+        stances = detect_stance_phases(rzf, threshold=threshold, to_threshold=to_threshold,
+                                       min_stance_frames=min_stance_frames, min_swing_frames=min_swing_frames)
         heel_contacts['R'] = [min(on, max_idx) for (on, _) in stances if on > 0]
 
     if 'ground_force4_vy' in mot.data.columns:
         lzf = mot.data['ground_force4_vy'].values
-        stances = detect_stance_phases(lzf, threshold, min_stance_frames, min_swing_frames)
+        stances = detect_stance_phases(lzf, threshold=threshold, to_threshold=to_threshold,
+                                       min_stance_frames=min_stance_frames, min_swing_frames=min_swing_frames)
         heel_contacts['L'] = [min(on, max_idx) for (on, _) in stances if on > 0]
 
     return heel_contacts
@@ -586,7 +602,8 @@ def segment_at_heel_strikes(trial: Trial, heel_strike_moments: dict[str, list[in
 
 def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
             show: bool = True, save_optionals: bool = False,
-            hs_threshold: float = 20.0,
+            hs_threshold: float = 25.0,
+            to_threshold: float = 15.0,
             min_stance_frames: int = 50,
             min_swing_frames: int = 20) -> None:
     """Standalone pipeline to process the raw data of a trial (Version 2).
@@ -612,8 +629,8 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
       7. segment_at_heel_strikes
 
     Additional parameters vs V1:
-        hs_threshold:       Force threshold (N) for stance/swing boundary.
-                            Default 20 N.
+        hs_threshold:       Force threshold (N) for heel strike boundary (default 25 N).
+        to_threshold:       Force threshold (N) for toe-off boundary (default 15 N).
         min_stance_frames:  Minimum frames above threshold to count as
                             a real stance.  Increase to filter out brief
                             artefact contacts.  Default = 50 frames = 50 ms
@@ -629,7 +646,8 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
         save_segmented_path: Directory for segmented MOT/TRC files.
         show:                Whether to display the interactive plot window.
         save_optionals:      Whether to save plots and corrected GRF.
-        hs_threshold:        Threshold force (N) separating swing from stance (default 20 N).
+        hs_threshold:        Threshold force (N) for heel strike (default 25 N).
+        to_threshold:        Threshold force (N) for toe-off (default 15 N).
         min_stance_frames:   Min frames in stance to count as a real contact.
         min_swing_frames:    Min frames in swing to split two stance phases.
     """
@@ -663,7 +681,7 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
     # Step 3 - Detect Toe-Offs  (V2: stance-boundary detection)
     # ------------------------------------------------------------------
     toe_off_moments = detect_toe_offs_V2(
-        corrected_grf, threshold=hs_threshold,
+        corrected_grf, threshold=to_threshold, hs_threshold=hs_threshold,
         min_stance_frames=min_stance_frames,
         min_swing_frames=min_swing_frames)
     print(f"  Right toe-offs  detected: {len(toe_off_moments['R'])}")
@@ -673,7 +691,7 @@ def process(trial: Trial, save_plot_path: str, save_segmented_path: str = None,
     # Step 4 - Detect Heel Strikes  (V2: stance-boundary detection)
     # ------------------------------------------------------------------
     heel_strike_moments = detect_heel_strikes_V2(
-        corrected_grf, threshold=hs_threshold,
+        corrected_grf, threshold=hs_threshold, to_threshold=to_threshold,
         min_stance_frames=min_stance_frames,
         min_swing_frames=min_swing_frames)
     print(f"  Right heel strikes detected: {len(heel_strike_moments['R'])}")
